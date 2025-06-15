@@ -1,0 +1,19 @@
+{
+    "name": "monte/wp-easyscripts-payment-api",
+    "description": "the api to handle payments in the easyscripts site",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+             "App\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "pribm",
+            "email": "monteiro.paulovinicius@gmail.com"
+        }
+    ],
+    "require": {
+        "stripe/stripe-php": "^17.3"
+    }
+}
