@@ -2,7 +2,6 @@
 
 if (!defined('ABSPATH')) exit;
 
-use App\Config\ModuleConfig;
 use Elementor\Widget_Base;
 use Elementor\Controls_Manager;
 
@@ -95,7 +94,11 @@ class Cliniko_Stripe_Widget extends Widget_Base {
           headers: { "Content-Type": "application/json" },
         });
 
+
         const data = await res.json();
+
+                console.log(data)
+
         const { clientSecret, name, duration, price, description } = data;
 
         document.getElementById('summary-name').textContent = name ?? 'N/A';

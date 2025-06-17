@@ -11,7 +11,8 @@ class StripeService
     public function __construct()
     {
         $api_key = get_option('wp_stripe_secret_key');
-        $this->stripe = Stripe::setApiKey($api_key);
+        $this->stripe = new Stripe();
+        $this->stripe::setApiKey($api_key);
     }
 
     public function createPaymentIntent(int $amount, string $description): string

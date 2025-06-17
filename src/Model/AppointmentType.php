@@ -1,80 +1,165 @@
 <?php
 namespace App\Model;
-if (!defined('ABSPATH')) exit;
 
-use App\Model\LinkedResource;
+use App\Client\ClinikoClient;
+use App\DTO\AppointmentTypeBillableItemDTO;
+use App\DTO\AppointmentTypeDTO;
+use App\DTO\PractitionerDTO;
 
 class AppointmentType
 {
-    public string $id;
-    public string $name;
-    public ?string $description;
-    public ?string $category;
-    public string $color;
-    public int $durationInMinutes;
-    public int $maxAttendees;
-    public ?string $depositPrice;
-    public ?string $archivedAt;
-    public string $createdAt;
-    public string $updatedAt;
+    protected AppointmentTypeDTO $dto;
+    protected ?BillableItem $billableItem = null;
+    protected ?array $appointmentTypeBillableItems = null;
 
-    public bool $addDepositToAccountCredit;
-    public bool $showInOnlineBookings;
-    public bool $telehealthEnabled;
-    public bool $onlinePaymentsEnabled;
-    public ?string $onlinePaymentsMode;
-    public ?int $onlineBookingsLeadTimeHours;
+    protected ?array $practitioners = null;
 
-    /** @var string[] */
-    public array $confirmationTemplateIds;
-    /** @var string[] */
-    public array $reminderTemplateIds;
-    /** @var string[] */
-    public array $followUpTemplateIds;
+    protected ClinikoClient $client;
 
-    public ?LinkedResource $billableItem;
-    public ?LinkedResource $billableItems;
-    public ?LinkedResource $products;
-    public ?LinkedResource $product;
-    public ?LinkedResource $practitioners;
-    public ?LinkedResource $treatmentNoteTemplate;
-    public ?LinkedResource $selfLink;
-
-    public static function fromArray(array $data): self
+    public function __construct(AppointmentTypeDTO $dto)
     {
-        $obj = new self();
-
-        $obj->id = $data['id'];
-        $obj->name = $data['name'];
-        $obj->description = $data['description'] ?? null;
-        $obj->category = $data['category'] ?? null;
-        $obj->color = $data['color'];
-        $obj->durationInMinutes = $data['duration_in_minutes'];
-        $obj->maxAttendees = $data['max_attendees'];
-        $obj->depositPrice = $data['deposit_price'] ?? null;
-        $obj->archivedAt = $data['archived_at'] ?? null;
-        $obj->createdAt = $data['created_at'];
-        $obj->updatedAt = $data['updated_at'];
-
-        $obj->addDepositToAccountCredit = $data['add_deposit_to_account_credit'] ?? false;
-        $obj->showInOnlineBookings = $data['show_in_online_bookings'] ?? false;
-        $obj->telehealthEnabled = $data['telehealth_enabled'] ?? false;
-        $obj->onlinePaymentsEnabled = $data['online_payments_enabled'] ?? false;
-        $obj->onlinePaymentsMode = $data['online_payments_mode'] ?? null;
-        $obj->onlineBookingsLeadTimeHours = $data['online_bookings_lead_time_hours'] ?? null;
-
-        $obj->confirmationTemplateIds = $data['appointment_confirmation_template_ids'] ?? [];
-        $obj->reminderTemplateIds = $data['appointment_reminder_template_ids'] ?? [];
-        $obj->followUpTemplateIds = $data['appointment_follow_up_template_ids'] ?? [];
-
-        $obj->billableItem = isset($data['billable_item']['links']['self']) ? new LinkedResource($data['billable_item']['links']['self']) : null;
-        $obj->billableItems = isset($data['appointment_type_billable_items']['links']['self']) ? new LinkedResource($data['appointment_type_billable_items']['links']['self']) : null;
-        $obj->products = isset($data['appointment_type_products']['links']['self']) ? new LinkedResource($data['appointment_type_products']['links']['self']) : null;
-        $obj->product = isset($data['product']['links']['self']) ? new LinkedResource($data['product']['links']['self']) : null;
-        $obj->practitioners = isset($data['practitioners']['links']['self']) ? new LinkedResource($data['practitioners']['links']['self']) : null;
-        $obj->treatmentNoteTemplate = isset($data['treatment_note_template']['links']['self']) ? new LinkedResource($data['treatment_note_template']['links']['self']) : null;
-        $obj->selfLink = isset($data['links']['self']) ? new LinkedResource($data['links']['self']) : null;
-
-        return $obj;
+        $this->dto = $dto;
+        $this->client = ClinikoClient::getInstance();
     }
+
+    public static function find(string $id, ClinikoClient $client): ?self
+    {
+        $data = $client->get("appointment_types/{$id}");
+
+        if (!$data)
+            return null;
+
+        return new self(AppointmentTypeDTO::fromArray($data));
+    }
+
+    /**
+     * @return AppointmentType[]
+     */
+    public static function all(ClinikoClient $client)
+    {
+        $response = $client->get("appointment_types");
+
+        $items = [];
+
+        foreach ($response['appointment_types'] ?? [] as $data) {
+            $items[] = new self(AppointmentTypeDTO::fromArray($data));
+        }
+
+        return $items;
+    }
+
+    public static function create(array $data, ClinikoClient $client): self
+    {
+        $created = $client->post('appointment_types', $data);
+
+        return new self(AppointmentTypeDTO::fromArray($created));
+    }
+
+    public function getId(): string
+    {
+        return $this->dto->id;
+    }
+    public function getName(): string
+    {
+        return $this->dto->name;
+    }
+    public function getDescription(): string
+    {
+        return $this->dto->description;
+    }
+    public function getDurationInMinutes(): int
+    {
+        return $this->dto->durationInMinutes;
+    }
+    public function isTelehealth(): bool
+    {
+        return $this->dto->telehealthEnabled;
+    }
+    public function isArchived(): bool
+    {
+        return !empty($this->dto->archivedAt);
+    }
+
+    public function getBillableItem(): ?BillableItem
+    {
+        if (!$this->dto->billableItemUrl)
+            return null;
+        if ($this->billableItem)
+            return $this->billableItem;
+
+        $data = $this->client->get($this->dto->billableItemUrl);
+        $this->billableItem = new BillableItem(
+            BillableItem::buildDTO($data),
+            $this->client
+        );
+
+        return $this->billableItem;
+    }
+
+    /**
+     * @return AppointmentTypeBillableItem[]
+     */
+    public function getAppointmentTypeBillableItems()
+    {
+        if (!$this->dto->billableItemsUrl) {
+            return [];
+        }
+
+        $response = $this->client->get($this->dto->billableItemsUrl);
+
+        $this->appointmentTypeBillableItems = array_map(
+            fn($item) => new AppointmentTypeBillableItem(
+                AppointmentTypeBillableItemDTO::fromArray($item),
+                $this->client
+            ),
+            $response['appointment_type_billable_items'] ?? []
+        );
+
+        return $this->appointmentTypeBillableItems;
+    }
+
+    /**
+     * @return Practitioner[]
+     */
+    public function getPractitioners(){
+        if (!$this->dto->practitionersUrl) {
+            return [];
+        }
+
+        $response = $this->client->get($this->dto->practitionersUrl);
+
+        $this->practitioners = array_map(
+            fn($item) => new Practitioner(
+                PractitionerDTO::fromArray($item),
+                $this->client
+            ),
+            $response['practitioners'] ?? []
+        );
+
+        return $this->practitioners;
+    }
+
+    private function sumPrices($carry, $item): int
+    {
+        $carry += $item;
+        return $carry;
+    }
+
+    public function getBillableItemsFinalPrice(): int
+    {
+        $billableItems = $this->getAppointmentTypeBillableItems();
+
+        $finalPrice = array_reduce($billableItems, function ($carry, $item) {
+            return $carry + $item->getBillableItem()->getPriceInCents();
+            ;
+        }, 0);
+
+        return $finalPrice;
+    }
+
+        public static function findFromUrl(string $url, ClinikoClient $client): ?self
+        {
+            $data = $client->get($url);
+            return new self(AppointmentTypeDTO::fromArray($data));
+        }
 }

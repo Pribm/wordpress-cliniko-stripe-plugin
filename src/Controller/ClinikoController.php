@@ -1,7 +1,19 @@
 <?php
 namespace App\Controller;
 
-if (!defined('ABSPATH')) exit;
+use App\Client\ClinikoClient;
+use App\DTO\CreatePatientDTO;
+use App\DTO\PatientDTO;
+use App\Model\AppointmentType;
+use App\Model\IndividualAppointment;
+use App\Model\Patient;
+use App\Model\Practitioner;
+use DateInterval;
+use DateTime;
+use DateTimeZone;
+
+if (!defined('ABSPATH'))
+    exit;
 
 use App\Service\ClinikoService;
 use App\Service\StripeService;
@@ -53,11 +65,13 @@ class ClinikoController
             $missingFields[] = 'moduleId';
         }
 
+        $client = ClinikoClient::getInstance();
+        $appointmentType = AppointmentType::find($payload['moduleId'], $client);
+
         if (empty($payload['patient']) || !is_array($payload['patient'])) {
             $missingFields[] = 'patient';
         } else {
-            // Verificação de campos esperados no paciente
-            foreach (['first_name', 'last_name', 'email', 'appointment_type_id'] as $field) {
+            foreach (['first_name', 'last_name', 'email'] as $field) {
                 if (empty($payload['patient'][$field])) {
                     $missingFields[] = "patient.$field";
                 }
@@ -72,18 +86,65 @@ class ClinikoController
             ], 400);
         }
 
-        try {
-            $appointment = $this->clinikoService->createAppointmentWithPatient($payload['patient']);
+        // Criar paciente via DTO
+        $dto = new CreatePatientDTO();
+        $dto->firstName = $payload['patient']["first_name"];
+        $dto->lastName = $payload['patient']["last_name"];
+        $dto->email = $payload['patient']["email"];
 
-            return new WP_REST_Response([
-                'status' => 'success',
-                'appointment' => $appointment,
-            ]);
-        } catch (\Throwable $e) {
+        $patient = Patient::create($dto, $client);
+
+        // Horário disponível
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('Australia/Sydney'));
+        $to = $now->add(new \DateInterval('P7D'));
+
+        $practitionerId = $appointmentType->getPractitioners()[0]->getId();
+        $appointmentTypeId = $appointmentType->getId();
+        $businessId = get_option('wp_cliniko_business_id');
+
+        $nextAvailableDTO = $this->clinikoService->getNextAvailableTime(
+            $businessId,
+            $practitionerId,
+            $appointmentTypeId,
+            $now->format('Y-m-d'),
+            $to->format('Y-m-d'),
+            $client
+        );
+
+        if (!$nextAvailableDTO || empty($nextAvailableDTO->appointmentStart)) {
             return new WP_REST_Response([
                 'status' => 'error',
-                'message' => $e->getMessage(),
-            ], 500);
+                'message' => 'No available appointment time found.'
+            ], 404);
         }
+
+        $startDateTime = new \DateTimeImmutable($nextAvailableDTO->appointmentStart);
+        $endDateTime = $startDateTime->add(new \DateInterval("PT{$appointmentType->getDurationInMinutes()}M"));
+
+        $createdAppointment = IndividualAppointment::create([
+            "appointment_type_id" => $appointmentTypeId,
+            "business_id" => $businessId,
+            "starts_at" => $startDateTime->format(DATE_ATOM),
+            "ends_at" => $endDateTime->format(DATE_ATOM),
+            "notes" => "Created via API after Stripe payment",
+            "patient_id" => $patient->getId(),
+            "practitioner_id" => $practitionerId
+        ], $client);
+
+        return new WP_REST_Response([
+            'status' => 'success',
+            'appointment' => [
+                'id' => $createdAppointment->getId(),
+                'starts_at' => $createdAppointment->getStartsAt(),
+                'ends_at' => $createdAppointment->getEndsAt(),
+                'telehealth_url' => $createdAppointment->getTelehealthUrl(),
+            ],
+            'patient' => [
+                'id' => $patient->getId(),
+                'name' => $patient->getFullName(),
+                'email' => $patient->getEmail(),
+            ]
+        ], 201);
     }
+
 }

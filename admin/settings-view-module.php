@@ -1,7 +1,8 @@
 <?php
-if (!defined('ABSPATH')) exit;
 
-use App\Config\ModuleConfig;
+use App\Client\ClinikoClient;
+use App\Model\AppointmentType;
+if (!defined('ABSPATH')) exit;
 
 // Adiciona submenu para visualizar os módulos
 add_action('admin_menu', function () {
@@ -17,7 +18,8 @@ add_action('admin_menu', function () {
 
 // Renderiza a tabela de módulos
 function render_cliniko_modules_page() {
-  $modules = \App\Config\ModuleConfig::getModules();
+  $client = ClinikoClient::getInstance();
+  $modules = AppointmentType::all($client);
   ?>
   <div class="wrap">
     <h1>Cliniko Appointment Types (Modules)</h1>
@@ -39,9 +41,9 @@ function render_cliniko_modules_page() {
           <?php foreach ($modules as $id => $mod): ?>
             <tr>
               <td><?php echo esc_html($id); ?></td>
-              <td><?php echo esc_html($mod['name']); ?></td>
-              <td><?php echo esc_html($mod['duration']); ?></td>
-              <td><?php echo esc_html($mod['price']); ?></td>
+              <td><?php echo esc_html($mod->getName()); ?></td>
+              <td><?php echo esc_html($mod->getDurationInMinutes()); ?></td>
+              <td><?php echo esc_html($mod->getBillableItemsFinalPrice()); ?></td>
             </tr>
           <?php endforeach; ?>
         <?php endif; ?>

@@ -1,7 +1,9 @@
 <?php
+
+use App\Client\ClinikoClient;
+use App\Model\AppointmentType;
 if (!defined('ABSPATH')) exit;
 use Elementor\Controls_Manager;
-use App\Config\ModuleConfig;
 
 function register_content_controls($widget) {
   $widget->start_controls_section('section_content', [
@@ -10,16 +12,17 @@ function register_content_controls($widget) {
   ]);
 
   $module_options = ['' => 'Select an appointment type'];
-  $modules = ModuleConfig::getModules();
-  foreach ($modules as $id => $mod) {
-    $module_options[$id] = $mod['name'] . ' (' . $mod['duration'] . ' min)';
+  $client = ClinikoClient::getInstance();
+  $modules = AppointmentType::all($client);
+  foreach ($modules as $mod) {
+    $module_options[$mod->getId()] = $mod->getName() . ' (' . $mod->getDurationInMinutes() . ' min)';
   }
 
   $widget->add_control('module_id', [
     'label' => 'Appointment Type',
     'type' => Controls_Manager::SELECT,
     'options' => $module_options,
-    'default' => '',
+    'default' => '2',
     'description' => 'Select the appointment type for this payment form'
   ]);
 

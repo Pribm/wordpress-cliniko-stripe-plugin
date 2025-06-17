@@ -1,14 +1,13 @@
 <?php
 namespace App\Controller;
+
+use App\Client\ClinikoClient;
+use App\Model\AppointmentType;
 if (!defined('ABSPATH')) exit;
 
-
-use App\Config\ModuleConfig;
 use App\Service\StripeService;
-use App\Validator\ModuleValidator;
 
 use WP_REST_Request;
-use WP_REST_Response;
 
 class StripeController
 {
@@ -21,35 +20,33 @@ class StripeController
 
     public function getClientSecret(WP_REST_Request $payload): array
     {
-   
-        $modules = ModuleConfig::getModules();
-        $moduleId = $payload['moduleId'] ?? null;
-        $answers = $payload['answers'] ?? [];
 
-        if (!isset($modules[$moduleId])) {
+        $moduleId = $payload['moduleId'] ?? null;
+
+        if (!$moduleId) {
             return ['error' => [
                 'params' => [
                     'name' => 'moduleId',
                     'type' => 'string'
                 ],
-                'message' => 'Módulo inválido'
+                'message' => 'Inexisting module, the module is null'
             ]];
         }
         
-        $module = $modules[$moduleId];
-
-        
+        $client = ClinikoClient::getInstance();
+        $module = AppointmentType::find($moduleId, $client);
+   
         $clientSecret = $this->stripe->createPaymentIntent(
-            $module['price'],
-            $module['name'],
+            $module->getBillableItemsFinalPrice(),
+            $module->getName(),
         );
 
         return [
             'clientSecret' => $clientSecret,
-            'price' => $module['price'],
-            'name' => $module['name'],
-            'duration' => $module['duration'],
-            'description' => $module['description'],
+            'price' => $module->getBillableItemsFinalPrice(),
+            'name' => $module->getName(),
+            'duration' => $module->getDurationInMinutes(),
+            'description' => $module->getDescription(),
         ];
     }
 }

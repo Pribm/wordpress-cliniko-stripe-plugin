@@ -1,46 +1,63 @@
 <?php
 namespace App\Model;
-if (!defined('ABSPATH')) exit;
 
-use App\Model\LinkedResource;
+use App\Client\ClinikoClient;
+use App\DTO\BillableItemDTO;
 
 class BillableItem
 {
-    public string $id;
-    public string $name;
-    public string $itemCode;
-    public string $itemType;
-    public float $price;
+    protected ?Tax $tax = null;
 
-    public ?string $archivedAt = null;
-    public string $createdAt;
-    public string $updatedAt;
+    public function __construct(
+        protected BillableItemDTO $dto,
+        protected ClinikoClient $client
+    ) {}
 
-    public ?LinkedResource $selfLink = null;
-    public ?LinkedResource $tax = null;
-
-    public static function fromArray(array $data): self
+    public static function find(string $id, ClinikoClient $client): ?self
     {
-        $item = new self();
+        $data = $client->get("billable_items/{$id}");
+        return new self(BillableItemDTO::fromArray($data), $client);
+    }
 
-        $item->id = $data['id'];
-        $item->name = $data['name'];
-        $item->itemCode = $data['item_code'] ?? '';
-        $item->itemType = $data['item_type'] ?? '';
-        $item->price = isset($data['price']) ? (float) $data['price'] : 0.0;
+    /**
+     * @return BillableItem[]
+     */
+    public static function all(ClinikoClient $client): array
+    {
+        $response = $client->get("billable_items");
 
-        $item->archivedAt = $data['archived_at'] ?? null;
-        $item->createdAt = $data['created_at'];
-        $item->updatedAt = $data['updated_at'];
+        $items = [];
 
-        $item->selfLink = isset($data['links']['self']) 
-            ? new LinkedResource($data['links']['self']) 
-            : null;
+        foreach ($response['billable_items'] ?? [] as $item) {
+            $items[] = new self(BillableItemDTO::fromArray($item), $client);
+        }
 
-        $item->tax = isset($data['tax']['links']['self']) 
-            ? new LinkedResource($data['tax']['links']['self']) 
-            : null;
+        return $items;
+    }
 
-        return $item;
+    public static function buildDTO(array $data): BillableItemDTO
+    {
+        return BillableItemDTO::fromArray($data);
+    }
+
+    // Getters
+
+    public function getId(): string { return $this->dto->id; }
+    public function getName(): string { return $this->dto->name; }
+    public function getItemCode(): string { return $this->dto->itemCode; }
+    public function getItemType(): string { return $this->dto->itemType; }
+    public function getPrice(): float { return $this->dto->price; }
+    public function getPriceInCents(): int { return (int) round($this->dto->price * 100); }
+    public function isArchived(): bool { return $this->dto->archivedAt !== null; }
+
+    public function getTax(): ?Tax
+    {
+        if (!$this->dto->taxUrl) return null;
+        if ($this->tax !== null) return $this->tax;
+
+        $data = $this->client->get($this->dto->taxUrl);
+        $this->tax = new Tax(Tax::buildDTO($data), $this->client);
+
+        return $this->tax;
     }
 }
