@@ -15,5 +15,8 @@
     ],
     "require": {
         "stripe/stripe-php": "^17.3"
+    },
+    "require-dev": {
+        "vlucas/phpdotenv": "^5.6"
     }
 }

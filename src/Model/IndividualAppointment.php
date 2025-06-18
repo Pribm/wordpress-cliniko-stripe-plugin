@@ -43,6 +43,7 @@ class IndividualAppointment
      */
     public static function create(array $data, ClinikoClient $client): self
     {
+        
         $response = $client->post('individual_appointments', $data);
         return new self(IndividualAppointmentDTO::fromArray($response), $client);
     }

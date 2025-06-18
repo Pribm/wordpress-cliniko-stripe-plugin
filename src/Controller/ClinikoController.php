@@ -51,7 +51,7 @@ class ClinikoController
 
         $stripeService = new StripeService();
         $paymentIntent = $stripeService->retrievePaymentIntent($paymentIntentId);
-
+    
         if (!$paymentIntent || $paymentIntent->status !== 'succeeded') {
             return new WP_REST_Response([
                 'status' => 'error',
@@ -67,6 +67,7 @@ class ClinikoController
 
         $client = ClinikoClient::getInstance();
         $appointmentType = AppointmentType::find($payload['moduleId'], $client);
+
 
         if (empty($payload['patient']) || !is_array($payload['patient'])) {
             $missingFields[] = 'patient';
@@ -86,13 +87,12 @@ class ClinikoController
             ], 400);
         }
 
-        // Criar paciente via DTO
         $dto = new CreatePatientDTO();
         $dto->firstName = $payload['patient']["first_name"];
         $dto->lastName = $payload['patient']["last_name"];
         $dto->email = $payload['patient']["email"];
 
-        $patient = Patient::create($dto, $client);
+        $patient = $this->clinikoService->findOrCreatePatient($dto);
 
         // Horário disponível
         $now = new \DateTimeImmutable('now', new \DateTimeZone('Australia/Sydney'));
@@ -126,9 +126,9 @@ class ClinikoController
             "business_id" => $businessId,
             "starts_at" => $startDateTime->format(DATE_ATOM),
             "ends_at" => $endDateTime->format(DATE_ATOM),
-            "notes" => "Created via API after Stripe payment",
+            "notes" => $payload['notes'],
             "patient_id" => $patient->getId(),
-            "practitioner_id" => $practitionerId
+            "practitioner_id" => $practitionerId,
         ], $client);
 
         return new WP_REST_Response([
@@ -138,6 +138,9 @@ class ClinikoController
                 'starts_at' => $createdAppointment->getStartsAt(),
                 'ends_at' => $createdAppointment->getEndsAt(),
                 'telehealth_url' => $createdAppointment->getTelehealthUrl(),
+                'payment_reference' => $paymentIntent->id,
+                'payment_method' => $paymentIntent->payment_method,
+                
             ],
             'patient' => [
                 'id' => $patient->getId(),

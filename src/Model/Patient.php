@@ -30,6 +30,19 @@ class Patient
         return new self(PatientDTO::fromArray($data), $client);
     }
 
+    public static function query(string $query, ClinikoClient $client)
+    {
+        $data = $client->get("patients".$query);
+
+        $filteredPatients = $data["patients"];
+
+        $firstFiltered = $filteredPatients[0];
+
+        if(!$firstFiltered) return null;
+
+        return new self(PatientDTO::fromArray($firstFiltered), $client);
+    }
+
     // Getters
 
     public function getId(): string { return $this->dto->id; }
@@ -51,4 +64,6 @@ class Patient
     public function getGender(): ?string { return $this->dto->gender; }
     public function getOccupation(): ?string { return $this->dto->occupation; }
     public function getNotes(): ?string { return $this->dto->notes; }
+
+    public function getDTO(){return $this->dto;}
 }

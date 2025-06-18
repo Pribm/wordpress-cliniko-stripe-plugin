@@ -55,6 +55,10 @@ class AppointmentType
         return new self(AppointmentTypeDTO::fromArray($created));
     }
 
+    public function getDTO(){
+        return $this->dto;
+    }
+
     public function getId(): string
     {
         return $this->dto->id;

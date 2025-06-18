@@ -9,7 +9,8 @@ $summary_price_color = esc_attr($settings['summary_price_color']);
 $gap_between_columns = esc_attr($settings['gap_between_columns']['size']);
 ?>
 
-<div id="cliniko-stripe-container"
+<div
+id="payment_form"
   style="display: flex; flex-wrap: wrap; gap: <?php echo $gap_between_columns; ?>px; justify-content: space-between; font-family: <?php echo $font_family; ?>; background: <?php echo $color_background; ?>; color: <?php echo $color_text; ?>; border: 1px solid #dcdcdc; border-radius: <?php echo $border_radius; ?>px; padding: 20px;">
 
   <!-- LEFT COLUMN: Stripe Payment -->

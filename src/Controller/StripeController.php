@@ -40,6 +40,7 @@ class StripeController
             $module->getBillableItemsFinalPrice(),
             $module->getName(),
         );
+        
 
         return [
             'clientSecret' => $clientSecret,

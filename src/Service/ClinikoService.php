@@ -2,7 +2,9 @@
 namespace App\Service;
 
 use App\DTO\AvailableTimeResultDTO;
+use App\DTO\CreatePatientDTO;
 use App\DTO\NextAvailableTimeDTO;
+use App\Model\Patient;
 
 if (!defined('ABSPATH')) exit;
 
@@ -24,6 +26,21 @@ class ClinikoService
         return AppointmentType::all($client);
     }
 
+    public function findOrCreatePatient(CreatePatientDTO $createPatientDTO){
+        $patientData = Patient::query(
+            "?q[]=email:=".$createPatientDTO->email.
+            "&q[]=first_name:=".$createPatientDTO->firstName.
+            "&q[]=last_name:=".$createPatientDTO->lastName, $this->client);
+
+            if($patientData){
+                return $patientData;
+            }
+
+            $createPatientDTO;
+
+        return Patient::create($createPatientDTO, $this->client);
+    }
+
     public function findPatientByNameAndEmail(string $firstName, string $lastName, string $email): ?array
     {
         $query = "{$firstName} {$lastName} {$email}";
@@ -40,71 +57,6 @@ class ClinikoService
         }
 
         return null;
-    }
-
-    public function createPatient(array $data): ?array
-    {
-        return $this->client->post('patients', $data);
-    }
-
-    public function createAppointmentWithPatient(array $data): ?array
-    {
-        $firstName = $data['first_name'] ?? '';
-        $lastName = $data['last_name'] ?? '';
-        $email = $data['email'] ?? '';
-
-        $existing = $this->findPatientByNameAndEmail($firstName, $lastName, $email);
-
-        if ($existing && !empty($existing['id'])) {
-            $patientId = $existing['id'];
-        } else {
-            $patient = $this->createPatient($data);
-            $patientId = $patient['id'] ?? null;
-        }
-
-        if (!$patientId) {
-            throw new \RuntimeException('Failed to identify or create the patient.');
-        }
-
-        $slot = $this->findNextAvailableSlot($data['appointment_type_id']);
-
-        if (!$slot) {
-            throw new \RuntimeException('No available appointment slots found.');
-        }
-
-        $appointmentPayload = [
-            'patient_id' => $patientId,
-            'appointment_type_id' => $data['appointment_type_id'],
-            'start_time' => $slot['start_time'],
-            'practitioner_id' => $slot['practitioner_id'],
-        ];
-
-        return $this->client->post('appointments', $appointmentPayload);
-    }
-
-    public function listAvailableTimes(
-        string $businessId,
-        string $practitionerId,
-        string $appointmentTypeId,
-        string $from,
-        string $to,
-        ClinikoClient $client,
-        int $page = 1,
-        int $perPage = 100
-    ): AvailableTimeResultDTO
-    {
-        $query = http_build_query([
-            'from' => $from,
-            'to' => $to,
-            'page' => $page,
-            'per_page' => $perPage
-        ]);
-
-        $endpoint = "businesses/{$businessId}/practitioners/{$practitionerId}/appointment_types/{$appointmentTypeId}/available_times?$query";
-
-        $response = $client->get($endpoint);
-
-        return AvailableTimeResultDTO::fromArray($response);
     }
 
      public function getNextAvailableTime(

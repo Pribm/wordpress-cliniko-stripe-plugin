@@ -1,6 +1,7 @@
 <?php
 namespace App\Service;
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH'))
+    exit;
 
 use Stripe\Stripe;
 use Stripe\PaymentIntent;
@@ -15,31 +16,38 @@ class StripeService
         $this->stripe::setApiKey($api_key);
     }
 
-    public function createPaymentIntent(int $amount, string $description): string
+    public function createPaymentIntent(int $amount, string $description, array $metadata = [])
     {
-        $intent = PaymentIntent::create([
-            'amount' =>  $amount,
+
+        $params = [
+            'amount' => $amount,
             'currency' => 'aud',
             'payment_method_types' => ['card'],
             'description' => $description
-        ]);
-        
+        ];
+
+        if (!empty($metadata)) {
+            $params['metadata'] = $metadata;
+        }
+
+        $intent = PaymentIntent::create($params);
 
         return $intent->client_secret;
     }
 
-    public function retrievePaymentIntent(string $id): ?\Stripe\PaymentIntent
+    public function retrievePaymentIntent(string $id): PaymentIntent|null
     {
         try {
-            \Stripe\Stripe::setApiKey(get_option('wp_stripe_secret_key'));
-            return \Stripe\PaymentIntent::retrieve($id);
+            Stripe::setApiKey(get_option('wp_stripe_secret_key'));
+            return PaymentIntent::retrieve($id);
         } catch (\Exception $e) {
             error_log('[StripeService] Failed to retrieve PaymentIntent: ' . $e->getMessage());
             return null;
         }
     }
 
-    public function getStripe(){
+    public function getStripe()
+    {
         return $this->stripe;
     }
-} 
+}
