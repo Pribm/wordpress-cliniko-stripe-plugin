@@ -1,12 +1,14 @@
 <?php
+namespace App\Widgets;
 
 if (!defined('ABSPATH'))
-  exit;
+exit;
+
 
 use Elementor\Widget_Base;
 use Elementor\Controls_Manager;
 
-class Cliniko_Stripe_Widget extends Widget_Base
+class ClinikoStripeWidget extends Widget_Base
 {
   public function get_name()
   {
@@ -22,6 +24,8 @@ class Cliniko_Stripe_Widget extends Widget_Base
   {
     return 'eicon-lock-user';
   }
+
+  
 
   public function get_categories()
   {
@@ -58,7 +62,7 @@ class Cliniko_Stripe_Widget extends Widget_Base
     $button_padding = esc_attr($settings['button_padding']);
     $button_css = esc_attr($settings['button_css']);
 
-    $template = $settings['booking_html_template'] ?? '';
+    $template = ltrim($settings['booking_html_template'])  ?? '';
 
     $style_input = "width: 100%; padding: 10px; border: {$input_border}; border-radius: {$border_radius}px; font-family: {$font_family}; color: {$color_text}; background: {$color_background};";
     $style_label = "font-weight: bold; display: block; margin-bottom: 4px; color: {$color_text}; font-family: {$font_family};";
@@ -239,13 +243,24 @@ class Cliniko_Stripe_Widget extends Widget_Base
 
 
             const template = window.bookingHtmlTemplate || '';
+
+            const ignoreMatches = [...template.matchAll(/\[ignore_field=([^\]]+)\]/g)];
+            const ignoreFields = ignoreMatches.map(m => m[1]);
+
+            // Remove os marcadores do template antes de usá-lo
+            let bookingHtml = template.replace(/\[ignore_field=[^\]]+\]/g, '');
+
             const isPlainText = <?php echo json_encode($settings['booking_plaintext_notes'] === 'yes'); ?>;
 
-            let bookingHtml = template;
+            // let bookingHtml = template;
 
             const allFieldsBlock = Object.entries(cleanedData)
-              .map(([key, value]) => `${key}: ${value}`)
-              .join(isPlainText ? '\n' : '<br>');
+              .filter(([key]) => !ignoreFields.includes(key))
+              .map(([key, value]) => {
+                const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                return isPlainText ? `• ${label}:\n${value}\n` : `${label}: ${value}`;
+              })
+              .join(isPlainText ? '---------------------------------------\n' : '<br>');
 
             bookingHtml = bookingHtml.replaceAll('[all_fields]', allFieldsBlock);
 
@@ -254,25 +269,24 @@ class Cliniko_Stripe_Widget extends Widget_Base
               bookingHtml = bookingHtml.replaceAll(tag, value);
             }
 
-            // Se for plainText, converta tudo para \n
+            // Aplica transformações finais para texto puro
             if (isPlainText) {
               bookingHtml = bookingHtml
                 .replace(/<br\s*\/?>/gi, '\n')
                 .replace(/<\/p>/gi, '\n')
-                .replace(/<[^>]+>/g, '') // remove qualquer tag HTML restante
-                .replace(/\n{2,}/g, '\n'); // normaliza múltiplas quebras
+                .replace(/<[^>]+>/g, '').trimStart(); // remove tags HTML restantes (sem normalizar quebras)
             }
 
-            // Substitui [all_fields] por uma lista de todos os campos
-            if (bookingHtml.includes('[all_fields]')) {
-              let allFieldsHtml = '<ul style="list-style: none; padding: 0;">';
-              for (const [key, value] of Object.entries(cleanedData)) {
-                const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                allFieldsHtml += `<li><strong>${label}:</strong> ${value}</li>`;
-              }
-              allFieldsHtml += '</ul>';
-              bookingHtml = bookingHtml.replaceAll('[all_fields]', allFieldsHtml);
-            }
+            //TEST
+            // if (bookingHtml.includes('[all_fields]')) {
+            //   let allFieldsHtml = '<ul style="list-style: none; padding: 0;">';
+            //   for (const [key, value] of Object.entries(cleanedData)) {
+            //     const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            //     allFieldsHtml += `<li><strong>${label}:</strong> ${value}</li>`;
+            //   }
+            //   allFieldsHtml += '</ul>';
+            //   bookingHtml = bookingHtml.replaceAll('[all_fields]', allFieldsHtml);
+            // }
 
             const { error, paymentIntent } = await stripe.confirmPayment({
               elements,

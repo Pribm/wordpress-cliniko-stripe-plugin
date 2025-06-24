@@ -23,6 +23,7 @@ class ClinikoClient implements ApiClientInterface
     {
 
         $apiKey = get_option('wp_cliniko_api_key');
+  
         $this->authHeader = 'Basic ' . base64_encode($apiKey . ':');
         $this->baseUrl = $this->buildBaseUrlFromToken($apiKey);
     }

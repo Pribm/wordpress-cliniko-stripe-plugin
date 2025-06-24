@@ -1,8 +1,10 @@
 <?php
 
+use App\Widgets\ClinikoStripeWidget;
+
 /**
  * Plugin Name: WP Easyscripts Payment API
- * Version: 0.0.1
+ * Version: 0.0.2
  * Author: Paulo Monteiro
  */
 
@@ -27,8 +29,8 @@ function pagamento_api_add_settings_link($links) {
 // require_once plugin_dir_path(__FILE__) . 'src/admin-settings.php';
 
 add_action('elementor/widgets/register', function ($widgets_manager) {
-  require_once plugin_dir_path(__FILE__) . 'src/widgets/class-widget-cliniko-stripe.php';
-  $widgets_manager->register(new \Cliniko_Stripe_Widget());
+  //require_once plugin_dir_path(__FILE__) . 'src/Widgets/class-widget-cliniko-stripe.php';
+  $widgets_manager->register(new ClinikoStripeWidget());
 });
 
 App\Bootstrap::init();

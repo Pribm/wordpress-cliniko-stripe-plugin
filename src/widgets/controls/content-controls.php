@@ -168,7 +168,7 @@ function register_content_controls($widget)
             'label' => 'Booking HTML Template',
             'type' => Controls_Manager::WYSIWYG,
             'default' => '<h2>Novo agendamento</h2><p><strong>Nome:</strong> [nome]</p><p><strong>Telefone:</strong> [telefone]</p><p>[all_fields]</p>',
-            'description' => 'Use os shortcodes como [nome], [telefone] ou [all_fields] para incluir automaticamente os dados do formulário.',
+            'description' => 'Use os shortcodes como [nome], [telefone], [all_fields] para incluir automaticamente os dados do formulário ou [ignore_field=field] para ignorar campos',
         ]
     );
 

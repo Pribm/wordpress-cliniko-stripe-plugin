@@ -1,6 +1,7 @@
 <?php
 namespace App\Model;
 
+use App\DTO\CreatePatientCaseDTO;
 use App\DTO\PatientCaseCreateDTO;
 use App\DTO\PatientCaseDTO;
 use App\Client\ClinikoClient;
@@ -40,7 +41,7 @@ class PatientCase
         return $items;
     }
 
-    public static function create(PatientCaseCreateDTO $dto, ClinikoClient $client)
+    public static function create(CreatePatientCaseDTO $dto, ClinikoClient $client)
     {
         $data = $client->post('patient_cases', $dto->toArray());
         return new self(PatientCaseDTO::fromArray($data), $client);

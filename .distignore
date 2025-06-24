@@ -6,4 +6,5 @@ tests/
 composer.*
 phpunit.*
 .git/
+.env
 .github/

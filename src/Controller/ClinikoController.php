@@ -2,14 +2,12 @@
 namespace App\Controller;
 
 use App\Client\ClinikoClient;
+use App\DTO\CreatePatientCaseDTO;
 use App\DTO\CreatePatientDTO;
-use App\DTO\PatientDTO;
 use App\Model\AppointmentType;
 use App\Model\IndividualAppointment;
-use App\Model\Patient;
-use App\Model\Practitioner;
+use App\Model\PatientCase;
 use DateInterval;
-use DateTime;
 use DateTimeZone;
 
 if (!defined('ABSPATH'))
@@ -121,14 +119,22 @@ class ClinikoController
         $startDateTime = new \DateTimeImmutable($nextAvailableDTO->appointmentStart);
         $endDateTime = $startDateTime->add(new \DateInterval("PT{$appointmentType->getDurationInMinutes()}M"));
 
+
+        $createPatientCaseDTO = new CreatePatientCaseDTO();
+        $createPatientCaseDTO->name = $appointmentType->getName();
+        $createPatientCaseDTO->issueDate = $now->format('Y-m-d');
+        $createPatientCaseDTO->patientId = $patient->getId();
+        $createPatientCaseDTO->notes = $payload['notes'];
+        $patientCase = PatientCase::create($createPatientCaseDTO, $client);
+
         $createdAppointment = IndividualAppointment::create([
             "appointment_type_id" => $appointmentTypeId,
             "business_id" => $businessId,
             "starts_at" => $startDateTime->format(DATE_ATOM),
             "ends_at" => $endDateTime->format(DATE_ATOM),
-            "notes" => $payload['notes'],
             "patient_id" => $patient->getId(),
             "practitioner_id" => $practitionerId,
+            "patient_case_id" => $patientCase->getId()
         ], $client);
 
         return new WP_REST_Response([
