@@ -1,6 +1,6 @@
 <?php
 namespace App\Model;
-
+if (!defined('ABSPATH')) exit;
 use App\DTO\BusinessDTO;
 use App\Client\ClinikoClient;
 use App\DTO\IndividualAppointmentDTO;

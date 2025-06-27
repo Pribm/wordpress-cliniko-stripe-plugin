@@ -19,24 +19,25 @@ class PatientFormTemplateDTO
     public static function fromArray(array $data): self
     {
         $dto = new self();
-        $dto->id = $data['id'];
-        $dto->name = $data['name'];
-        $dto->emailToPatientOnCompletion = $data['email_to_patient_on_completion'];
-        $dto->restrictedToPractitioner = $data['restricted_to_practitioner'];
+        $dto->id = $data['id'] ?? "";
+        $dto->name = $data['name'] ?? "";
+        $dto->emailToPatientOnCompletion = $data['email_to_patient_on_completion'] ?? false;
+        $dto->restrictedToPractitioner = $data['restricted_to_practitioner'] ?? "";
         $dto->archivedAt = $data['archived_at'] ?? null;
         $dto->createdAt = $data['created_at'] ?? null;
         $dto->updatedAt = $data['updated_at'] ?? null;
-        $dto->selfLink = $data['links']['self'];
+        $dto->selfLink = $data['links']['self'] ?? "";
 
         $dto->sections = array_map(function ($sectionData) {
             $section = new PatientFormTemplateSectionDTO();
             $section->name = $sectionData['name'];
-            $section->description = $sectionData['description'];
+            $section->description = isset($sectionData['description']) ? $sectionData['description'] : "";
             $section->questions = array_map(function ($questionData) {
                 $question = new PatientFormTemplateQuestionDTO();
                 $question->name = $questionData['name'];
                 $question->type = $questionData['type'];
                 $question->required = $questionData['required'];
+                $question->answers = $questionData['answers'] ?? [];
                 return $question;
             }, $sectionData['questions']);
 

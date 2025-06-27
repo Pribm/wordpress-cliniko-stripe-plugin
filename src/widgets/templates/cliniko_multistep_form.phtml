@@ -1,0 +1,226 @@
+<?php if (!defined('ABSPATH'))
+  exit;
+
+use App\Model\PatientFormTemplate;
+use App\Client\ClinikoClient;
+
+$settings = $this->get_settings();
+$form_template_id = $settings['cliniko_form_template_id'] ?? null;
+
+$client = ClinikoClient::getInstance();
+$template = PatientFormTemplate::find($form_template_id, $client);
+$sections = $template ? $template->getSections() : [];
+
+$bg = esc_attr($settings['form_background_color']);
+$text = esc_attr($settings['form_text_color']);
+$font = esc_attr($settings['form_font_family']);
+$label = esc_attr($settings['form_label_color']);
+$input_border = esc_attr($settings['form_input_border']);
+$border_radius = esc_attr($settings['form_border_radius']['size']);
+$btn_bg = esc_attr($settings['form_button_color']);
+$btn_text = esc_attr($settings['form_button_text_color']);
+$btn_pad = esc_attr($settings['form_button_padding']);
+?>
+
+<?php if (!empty($sections)): ?>
+  <form id="prepayment-form"
+    style="background: <?= $bg ?>; color: <?= $text ?>; font-family: <?= $font ?>; padding: 20px; border-radius: <?= $border_radius ?>px;">
+
+    <div id="form-progress-indicator" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 10px;">
+      <?php foreach ($sections as $index => $section): ?>
+        <div class="progress-step" data-index="<?= $index ?>" style="
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #ccc;
+            color: #fff;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;">
+          <?= $index + 1 ?>
+        </div>
+      <?php endforeach; ?>
+
+      <!-- Extra progress step for "Your Details" -->
+      <div class="progress-step" data-index="<?= count($sections) ?>" style="
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #ccc;
+  color: #fff;
+  font-weight: bold;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s;">
+        <?= count($sections) + 1 ?>
+      </div>
+
+    </div>
+
+    <div id="cliniko-form-steps">
+      <?php foreach ($sections as $index => $section): ?>
+        <div class="form-step" data-step="<?= $index ?>" style="<?= $index > 0 ? 'display: none;' : '' ?>">
+          <h3><?= esc_html($section->name) ?></h3>
+
+          <?php if (!empty($section->description)): ?>
+            <p><?= wp_kses_post($section->description) ?></p>
+          <?php endif; ?>
+
+          <?php foreach ($section->questions as $question): ?>
+            <?php
+            $input_name = esc_attr($question->name);
+            $required = !empty($question->required) ? 'required' : '';
+            $is_required = !empty($question->required);
+            ?>
+            <div style="margin-bottom: 16px;">
+              <label style="font-weight: bold; display: block; margin-bottom: 4px; color: <?= $label ?>;">
+                <?= esc_html($question->name) ?>
+                <?php if ($is_required): ?>
+                  <span style="color: red">*</span>
+                <?php endif; ?>
+              </label>
+
+              <?php switch ($question->type):
+                case 'textarea': ?>
+                  <textarea name="<?= $input_name ?>" <?= $required ?>
+                    style="width: 100%; padding: 10px; border: <?= $input_border ?>; border-radius: <?= $border_radius ?>px;"></textarea>
+                  <?php break;
+
+                case 'radiobuttons':
+                  foreach ($question->answers as $opt): ?>
+                    <label style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
+                      <input type="radio" name="<?= $input_name ?>" value="<?= esc_attr($opt['value']) ?>" <?= $required ?> style="
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border: 2px solid <?= $btn_bg ?>;
+          border-radius: 50%;
+          position: relative;
+          cursor: pointer;
+        " onfocus="this.style.boxShadow='0 0 0 3px rgba(0, 0, 0, 0.1)'" onblur="this.style.boxShadow='none'" onclick="
+          let siblings = this.parentNode.parentNode.querySelectorAll('input[name=\'<?= $input_name ?>\']');
+          siblings.forEach(el => el.style.backgroundColor = 'transparent');
+          this.style.backgroundColor = '<?= $btn_bg ?>';
+        ">
+                      <span><?= esc_html($opt['value']) ?></span>
+                    </label>
+                  <?php endforeach;
+                  break;
+
+
+                case 'checkboxes':
+                  foreach ($question->answers as $opt): ?>
+                    <label style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
+                      <input type="checkbox" name="<?= $input_name ?>[]" value="<?= esc_attr($opt['value']) ?>" style="
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border: 2px solid <?= $btn_bg ?>;
+          border-radius: 4px;
+          position: relative;
+          cursor: pointer;
+        " onfocus="this.style.boxShadow='0 0 0 3px rgba(0, 0, 0, 0.1)'" onblur="this.style.boxShadow='none'"
+                        onclick="this.style.backgroundColor = this.checked ? '<?= $btn_bg ?>' : 'transparent'">
+                      <span><?= esc_html($opt['value']) ?></span>
+                    </label>
+                  <?php endforeach;
+                  break;
+
+                case 'date': ?>
+                  <input type="date" name="<?= $input_name ?>" <?= $required ?>
+                    style="width: 100%; padding: 10px; border: <?= $input_border ?>; border-radius: <?= $border_radius ?>px;">
+                  <?php break;
+
+                default: ?>
+                  <input type="text" name="<?= $input_name ?>" <?= $required ?>
+                    style="width: 100%; padding: 10px; border: <?= $input_border ?>; border-radius: <?= $border_radius ?>px;">
+              <?php endswitch; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endforeach; ?>
+
+      <!-- Final Step: Extra Patient Details -->
+      <div class="form-step" data-step="<?= count($sections) ?>">
+        <h3>Patient Details</h3>
+
+        <style>
+          .patient-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 16px;
+          }
+
+          <?php for ($i = 1; $i <= 12; $i++): ?>
+            .col-span-<?= $i ?> {
+              grid-column: span
+                <?= $i ?>
+              ;
+            }
+
+            @media (max-width: 768px) {
+              .col-span-<?= $i ?> {
+                grid-column: span 12 !important;
+              }
+            }
+
+          <?php endfor; ?>
+        </style>
+
+        <div class="patient-grid">
+          <?php
+          $fields = [
+            ['first_name', 'First Name', 'text', 6, true],
+            ['last_name', 'Last Name', 'text', 6, true],
+            ['email', 'Email', 'email', 8, true],
+            ['phone', 'Phone Number', 'text', 4, true],
+            ['address_1', 'Address Line 1', 'text', 12, true],
+            ['city', 'City', 'text', 6, true],
+            ['state', 'State', 'text', 2, true],
+            ['post_code', 'Post Code', 'text', 4, true],
+            ['country', 'Country', 'text', 6, true],
+            ['date_of_birth', 'Date of Birth', 'date', 6, true],
+          ];
+
+          foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
+            <div class="col-span-<?= $colSpan ?>" style="display: flex; flex-direction: column;">
+              <label style="font-weight: bold; margin-bottom: 4px; color: <?= $label ?>;">
+                <?= esc_html($label_text) ?>    <?= $required ? ' <span style="color: red">*</span>' : '' ?>
+              </label>
+              <input type="<?= esc_attr($type) ?>" name="patient[<?= esc_attr($name) ?>]" <?= $required ? 'required' : '' ?>
+                data-required="<?= $required ? 'true' : 'false' ?>"
+                style="padding: 10px; border: <?= $input_border ?>; border-radius: <?= $border_radius ?>px; width: 100%;">
+            </div>
+          <?php endforeach; ?>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <label style="color: <?= $label ?>; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" name="patient[accepted_privacy_policy]" value="1" required data-required="true"
+              style="width: 18px; height: 18px; cursor: pointer; border: 2px solid <?= $btn_bg ?>;">
+            I agree to the privacy policy <span style="color: red">*</span>
+          </label>
+        </div>
+      </div>
+
+
+    </div>
+
+    <div style="margin-top: 20px;">
+      <button type="button" id="step-prev"
+        style="margin-right: 8px; background: <?= $btn_bg ?>; color: <?= $btn_text ?>; padding: <?= $btn_pad ?>; border: none; border-radius: <?= $border_radius ?>px;">Back</button>
+      <button type="button" id="step-next"
+        style="background: <?= $btn_bg ?>; color: <?= $btn_text ?>; padding: <?= $btn_pad ?>; border: none; border-radius: <?= $border_radius ?>px;">Next</button>
+    </div>
+  </form>
+
+
+
+<?php else: ?>
+  <p style="color: red;">No sections found in the Cliniko form template.</p>
+<?php endif; ?>

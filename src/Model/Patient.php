@@ -1,6 +1,6 @@
 <?php
 namespace App\Model;
-
+if (!defined('ABSPATH')) exit;
 use App\DTO\CreatePatientDTO;
 use App\DTO\PatientDTO;
 use App\Client\ClinikoClient;
@@ -32,6 +32,7 @@ class Patient
 
     public static function query(string $query, ClinikoClient $client)
     {
+        $t = "patients".$query;
         $data = $client->get("patients".$query);
 
         $filteredPatients = $data["patients"];

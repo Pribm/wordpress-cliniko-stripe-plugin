@@ -1,6 +1,6 @@
 <?php
 namespace App\Model;
-
+if (!defined('ABSPATH')) exit;
 use App\Client\ClinikoClient;
 use App\DTO\AppointmentTypeBillableItemDTO;
 use App\Client\ClinikoApiClient;

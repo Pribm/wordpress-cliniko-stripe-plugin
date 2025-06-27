@@ -15,7 +15,6 @@ class CreatePatientCaseDTO
         return [
             'issue_date' => $this->issueDate,
             'name' => $this->name,
-            'notes' => $this->notes,
             'patient_id' => $this->patientId
         ];
     }

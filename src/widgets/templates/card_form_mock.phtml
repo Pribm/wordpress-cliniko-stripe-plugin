@@ -1,23 +1,22 @@
 <?php
-if (!defined('ABSPATH')) exit;
-$details_background = esc_attr($settings['details_background']);
-$details_border_color = esc_attr($settings['details_border_color']);
-$details_border_radius = esc_attr($settings['details_border_radius']['size']);
-$summary_heading_color = esc_attr($settings['summary_heading_color']);
-$summary_text_color = esc_attr($settings['summary_text_color']);
-$summary_price_color = esc_attr($settings['summary_price_color']);
-$gap_between_columns = esc_attr($settings['gap_between_columns']['size']);
+if (!defined('ABSPATH'))
+exit;
+
+include_once __DIR__ . "/control-variables.php";
 
 $style_input = "width: 100%; padding: 10px; border: {$input_border}; border-radius: {$border_radius}px; font-family: {$font_family}; color: {$color_text}; background: {$color_background};";
 $style_label = "font-weight: bold; display: block; margin-bottom: 4px; color: {$color_text}; font-family: {$font_family};";
 $style_button = "margin-top: 16px; width: 100%; background: {$color_primary}; color: {$button_text_color}; padding: {$button_padding}; font-size: {$button_font_size}px; border: none; border-radius: {$border_radius}px; font-family: {$font_family}; {$button_css}";
 ?>
 
-<div style="display: flex; flex-wrap: wrap; gap: <?php echo $gap_between_columns; ?>px; justify-content: space-between; font-family: <?php echo $font_family; ?>; background: <?php echo $color_background; ?>; color: <?php echo $color_text; ?>; border: 1px solid #dcdcdc; border-radius: <?php echo $border_radius; ?>px; padding: 20px;">
+<div
+id="payment_form"
+  style="display: none; flex-wrap: wrap; gap: <?php echo $gap_between_columns; ?>px; justify-content: space-between; font-family: <?php echo $font_family; ?>; background: <?php echo $color_background; ?>; color: <?php echo $color_text; ?>; border: 1px solid #dcdcdc; border-radius: <?php echo $border_radius; ?>px; padding: 20px;">
 
   <!-- COLUMN: Payment -->
   <div style="flex: 1 1 300px; min-width: 280px;">
-    <div style="border: 1px solid <?php echo $details_border_color; ?>; border-radius: <?php echo $details_border_radius; ?>px; padding: 12px; margin-bottom: 20px; background: <?php echo $details_background; ?>;">
+    <div
+      style="border: 1px solid <?php echo $details_border_color; ?>; border-radius: <?php echo $details_border_radius; ?>px; padding: 12px; margin-bottom: 20px; background: <?php echo $details_background; ?>;">
       <strong style="font-size: 14px; display: flex; align-items: center; gap: 6px;">
         🔒 Secure, 1-click checkout with <span style="color: #005fcc;">Link</span>
       </strong>
@@ -56,20 +55,25 @@ $style_button = "margin-top: 16px; width: 100%; background: {$color_primary}; co
     <h3 class="summary-heading" style="margin-top: 0; color: <?php echo $summary_heading_color; ?>;">
       Order Summary
     </h3>
-    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Product:</strong> <span id="summary-name">Product Name</span></p>
-    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Description:</strong> <span id="summary-description">A short product description goes here.</span></p>
-    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Duration:</strong> <span id="summary-duration">--</span></p>
-    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Price:</strong> $<span id="summary-price">99.00</span> AUD</p>
+    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Product:</strong> <span
+        id="summary-name">Product Name</span></p>
+    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Description:</strong> <span
+        id="summary-description">A short product description goes here.</span></p>
+    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Duration:</strong> <span
+        id="summary-duration">--</span></p>
+    <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Price:</strong> $<span
+        id="summary-price">99.00</span> AUD</p>
     <p class="summary-text" style="color: <?php echo $summary_text_color; ?>;"><strong>Tax:</strong> Included</p>
-    <p class="summary-price" style="font-size: 18px; color: <?php echo $summary_price_color; ?>;"><strong>Total:</strong> $<span id="summary-price">99.00</span> AUD</p>
-      <!-- BACK BUTTON -->
+    <p class="summary-price" style="font-size: 18px; color: <?php echo $summary_price_color; ?>;">
+      <strong>Total:</strong> $<span id="summary-price">99.00</span> AUD</p>
+    <!-- BACK BUTTON -->
     <?php if (!empty($settings['show_back_button']) && $settings['show_back_button'] === 'yes'): ?>
-      <div style="text-align: <?php echo esc_attr($settings['back_button_align'] ?? 'center'); ?>; margin-top: <?php echo esc_attr($settings['back_button_margin_top']['size'] ?? 30); ?>px;">
+      <div
+        style="text-align: <?php echo esc_attr($settings['back_button_align'] ?? 'center'); ?>; margin-top: <?php echo esc_attr($settings['back_button_margin_top']['size'] ?? 30); ?>px;">
         <button id="go-back-button"
           style="background-color: transparent; color: <?php echo esc_attr($settings['back_button_color'] ?? '#005fcc'); ?>; border: 1px solid <?php echo esc_attr($settings['back_button_color'] ?? '#005fcc'); ?>; border-radius: 4px; padding: 10px 20px; font-size: 14px; cursor: pointer; transition: all 0.3s ease;"
           onmouseover="this.style.backgroundColor='<?php echo esc_attr($settings['back_button_bg'] ?? '#005fcc'); ?>'; this.style.color='<?php echo esc_attr($settings['back_button_hover_text'] ?? '#ffffff'); ?>';"
-          onmouseout="this.style.backgroundColor='transparent'; this.style.color='<?php echo esc_attr($settings['back_button_color'] ?? '#005fcc'); ?>';"
-        >
+          onmouseout="this.style.backgroundColor='transparent'; this.style.color='<?php echo esc_attr($settings['back_button_color'] ?? '#005fcc'); ?>';">
           ← Go Back
         </button>
       </div>
@@ -77,5 +81,3 @@ $style_button = "margin-top: 16px; width: 100%; background: {$color_primary}; co
   </div>
 
 </div>
-
-

@@ -14,6 +14,7 @@ defined('ABSPATH') || exit;
 require_once __DIR__ . '/admin/menu.php';
 require_once __DIR__ . '/admin/settings-credentials.php';
 require_once __DIR__ . '/admin/settings-view-module.php';
+require_once __DIR__ . '/admin/patient-form-view-module.php';
 
 require_once __DIR__ . '/vendor/autoload.php';
 

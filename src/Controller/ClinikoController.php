@@ -7,6 +7,7 @@ use App\DTO\CreatePatientDTO;
 use App\Model\AppointmentType;
 use App\Model\IndividualAppointment;
 use App\Model\PatientCase;
+use App\Validation\AppointmentRequestValidator;
 use DateInterval;
 use DateTimeZone;
 
@@ -32,58 +33,27 @@ class ClinikoController
     {
         $payload = json_decode($request->get_body(), true);
 
-        if (!is_array($payload)) {
+         $errors =  AppointmentRequestValidator::validate($payload);
+
+        if (!empty($errors)) {
             return new WP_REST_Response([
                 'status' => 'error',
-                'message' => 'Invalid JSON body received.'
-            ], 400);
-        }
-
-        $paymentIntentId = $payload['paymentIntentId'] ?? null;
-        if (!$paymentIntentId) {
-            return new WP_REST_Response([
-                'status' => 'error',
-                'message' => 'Missing paymentIntentId.',
-            ], 400);
-        }
-
-        $stripeService = new StripeService();
-        $paymentIntent = $stripeService->retrievePaymentIntent($paymentIntentId);
-    
-        if (!$paymentIntent || $paymentIntent->status !== 'succeeded') {
-            return new WP_REST_Response([
-                'status' => 'error',
-                'message' => 'Payment not confirmed or invalid.',
-            ], 403);
-        }
-
-        $missingFields = [];
-
-        if (empty($payload['moduleId'])) {
-            $missingFields[] = 'moduleId';
+                'message' => 'Missing or invalid fields.',
+                'errors' => $errors
+            ], 422);
         }
 
         $client = ClinikoClient::getInstance();
         $appointmentType = AppointmentType::find($payload['moduleId'], $client);
 
+        $stripeService = new StripeService();
 
-        if (empty($payload['patient']) || !is_array($payload['patient'])) {
-            $missingFields[] = 'patient';
-        } else {
-            foreach (['first_name', 'last_name', 'email'] as $field) {
-                if (empty($payload['patient'][$field])) {
-                    $missingFields[] = "patient.$field";
-                }
-            }
-        }
-
-        if (!empty($missingFields)) {
-            return new WP_REST_Response([
-                'status' => 'error',
-                'message' => 'Missing or invalid required fields.',
-                'missing' => $missingFields
-            ], 400);
-        }
+        $paymentIntent = $stripeService->createChargeFromToken(
+            $payload['stripeToken'],
+            $appointmentType->getBillableItemsFinalPrice(),
+            $appointmentType->getName(),
+            $payload['patient']
+        );
 
         $dto = new CreatePatientDTO();
         $dto->firstName = $payload['patient']["first_name"];
@@ -124,7 +94,7 @@ class ClinikoController
         $createPatientCaseDTO->name = $appointmentType->getName();
         $createPatientCaseDTO->issueDate = $now->format('Y-m-d');
         $createPatientCaseDTO->patientId = $patient->getId();
-        $createPatientCaseDTO->notes = $payload['notes'];
+        //  $createPatientCaseDTO->notes = $payload['notes'];
         $patientCase = PatientCase::create($createPatientCaseDTO, $client);
 
         $createdAppointment = IndividualAppointment::create([
@@ -146,7 +116,7 @@ class ClinikoController
                 'telehealth_url' => $createdAppointment->getTelehealthUrl(),
                 'payment_reference' => $paymentIntent->id,
                 'payment_method' => $paymentIntent->payment_method,
-                
+
             ],
             'patient' => [
                 'id' => $patient->getId(),

@@ -1,8 +1,7 @@
 <?php
 namespace App\Model;
-
+if (!defined('ABSPATH')) exit;
 use App\DTO\CreatePatientCaseDTO;
-use App\DTO\PatientCaseCreateDTO;
 use App\DTO\PatientCaseDTO;
 use App\Client\ClinikoClient;
 

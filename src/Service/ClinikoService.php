@@ -36,8 +36,6 @@ class ClinikoService
                 return $patientData;
             }
 
-            $createPatientDTO;
-
         return Patient::create($createPatientDTO, $this->client);
     }
 

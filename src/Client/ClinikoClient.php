@@ -23,7 +23,7 @@ class ClinikoClient implements ApiClientInterface
     {
 
         $apiKey = get_option('wp_cliniko_api_key');
-  
+
         $this->authHeader = 'Basic ' . base64_encode($apiKey . ':');
         $this->baseUrl = $this->buildBaseUrlFromToken($apiKey);
     }
@@ -86,6 +86,25 @@ class ClinikoClient implements ApiClientInterface
 
         return json_decode(wp_remote_retrieve_body($response), true);
     }
+
+    public function delete(string $endpoint): bool
+    {
+        $url = $this->baseUrl . ltrim($endpoint, '/');
+
+        $response = wp_remote_request($url, [
+            'method' => 'DELETE',
+            'headers' => $this->getDefaultHeaders(),
+        ]);
+
+        if (is_wp_error($response)) {
+            error_log("[ClinikoClient] DELETE request failed: " . $response->get_error_message());
+            return false;
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        return $status === 204; // Cliniko returns 204 No Content on successful delete
+    }
+
 
     private function getDefaultHeaders(): array
     {
