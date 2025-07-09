@@ -3,11 +3,11 @@ namespace App\DTO;
 
 class CreatePatientCaseDTO
 {
-    public string $issueDate;
-    public string $name;
-    public string $notes;
+    public string $issueDate = "";
+    public string $name = "";
+    public string $notes = "";
 
-    public string $patientId;
+    public string $patientId = "";
    
 
     public function toArray(): array

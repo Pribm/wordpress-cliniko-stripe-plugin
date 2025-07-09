@@ -45,6 +45,7 @@ class PatientFormDTO
                 $qDTO->type = $q['type'];
                 $qDTO->required = $q['required'] ?? false;
                 $qDTO->answer = $q['answer'] ?? '';
+                $qDTO->answers = $q['answers'] ?? [];
                 $sectionDTO->questions[] = $qDTO;
             }
 

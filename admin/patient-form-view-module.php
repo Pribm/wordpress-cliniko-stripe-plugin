@@ -18,7 +18,7 @@ add_action('admin_menu', function () {
     );
 
     add_submenu_page(
-        null, // Página oculta (sem exibição no menu)
+        "", // Página oculta (sem exibição no menu)
         'View Patient Form',
         'View Patient Form',
         'manage_options',

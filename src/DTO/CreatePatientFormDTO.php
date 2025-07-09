@@ -4,16 +4,16 @@ namespace App\DTO;
 
 class CreatePatientFormDTO
 {
-    public string $attendee_id;
-    public string $business_id;
+    public string $attendee_id = "";
+    public string $business_id = "";
     public bool $completed = false;
 
     public ?string $name = null;
     public ?string $appointment_id = null;
 
-    public bool $email_to_patient_on_completion;
-    public string $patient_id;
-    public string $patient_form_template_id;
+    public bool $email_to_patient_on_completion = false;
+    public string $patient_id = "";
+    public string $patient_form_template_id = "";
 
     /** @var PatientFormTemplateSectionDTO[] */
     public array $content_sections = [];

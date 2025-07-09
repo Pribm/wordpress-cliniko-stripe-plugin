@@ -20,23 +20,6 @@ class IndividualAppointment
 
     /**
      * Create an individual appointment in Cliniko.
-     *
-     * @param array{
-     *   appointment_type_id: string,
-     *   business_id: string,
-     *   ends_at: string,
-     *   notes: string,
-     *   patient_id: string,
-     *   patient_case_id: string,
-     *   practitioner_id: string,
-     *   starts_at: string,
-     *   repeat_rule?: array{
-     *     number_of_repeats: int,
-     *     repeat_type: string,
-     *     repeating_interval: int
-     *   }|null
-     * } $data Associative array containing appointment data as required by Cliniko.
-     *
      * @param ClinikoClient $client Instance of the Cliniko API client.
      *
      * @return self Instantiated IndividualAppointment model containing the created appointment's data.

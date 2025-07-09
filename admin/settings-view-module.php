@@ -42,8 +42,8 @@ function render_cliniko_modules_page() {
             <tr>
               <td><?php echo esc_html($id); ?></td>
               <td><?php echo esc_html($mod->getName()); ?></td>
-              <td><?php echo esc_html($mod->getDurationInMinutes()); ?></td>
-              <td><?php echo esc_html($mod->getBillableItemsFinalPrice()); ?></td>
+              <td><?php echo esc_html($mod->getDurationInMinutes().""); ?></td>
+              <td><?php echo esc_html($mod->getBillableItemsFinalPrice().""); ?></td>
             </tr>
           <?php endforeach; ?>
         <?php endif; ?>

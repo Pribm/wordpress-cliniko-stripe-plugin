@@ -7,7 +7,9 @@ class PatientFormTemplateQuestionDTO
     public string $type = 'text';
     public bool $required = false;
 
-    public array $answers;
+    public array $answers = [];
+
+    public string $answer = "";
 
     public function toArray(): array
     {

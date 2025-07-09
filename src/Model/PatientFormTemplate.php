@@ -1,13 +1,12 @@
 <?php
 
 namespace App\Model;
-if (!defined('ABSPATH'))
-    exit;
+if (!defined('ABSPATH')) exit;
 
 use App\Client\ClinikoClient;
 use App\DTO\PatientFormTemplateDTO;
 use App\DTO\CreatePatientFormTemplateDTO;
-
+use App\Exception\ApiException;
 
 class PatientFormTemplate
 {
@@ -22,46 +21,64 @@ class PatientFormTemplate
 
     public static function create(CreatePatientFormTemplateDTO $dto, ClinikoClient $client): self
     {
-        $response = $client->post('patient_form_templates', $dto->toArray());
-
-        return new self(PatientFormTemplateDTO::fromArray($response), $client);
+        try {
+            $response = $client->post('patient_form_templates', $dto->toArray());
+            return new self(PatientFormTemplateDTO::fromArray($response), $client);
+        } catch (\Throwable $e) {
+            throw new ApiException('Failed to create patient form template.', ['dto' => $dto], 0, $e);
+        }
     }
 
     public static function find(string $id, ClinikoClient $client): ?self
     {
-        $data = $client->get("patient_form_templates/{$id}");
+        try {
+            $data = $client->get("patient_form_templates/{$id}");
 
-        if (!$data)
-            return null;
+            if (!$data) {
+                return null;
+            }
 
-        return new self(PatientFormTemplateDTO::fromArray($data), $client);
+            return new self(PatientFormTemplateDTO::fromArray($data), $client);
+        } catch (\Throwable $e) {
+            throw new ApiException("Failed to find patient form template: {$id}.", ['id' => $id], 0, $e);
+        }
     }
 
     /**
-     * @return PatientFormTemplate[]
+     * @return PatientFormTemplate[]|null
      */
-    public static function all(ClinikoClient $client): array
+    public static function all(ClinikoClient $client): array|null
     {
-        $response = $client->get('patient_form_templates');
+        try {
+            $response = $client->get('patient_form_templates');
 
-        return array_map(
-            fn($item) => new self(PatientFormTemplateDTO::fromArray($item), $client),
-            $response['patient_form_templates'] ?? []
-        );
+            return array_map(
+                fn($item) => new self(PatientFormTemplateDTO::fromArray($item), $client),
+                $response['patient_form_templates'] ?? []
+            );
+        } catch (\Throwable $e) {
+            throw new ApiException('Failed to fetch all patient form templates.', [], 0, $e);
+        }
     }
 
     public static function findFromUrl(string $url, ClinikoClient $client): ?self
     {
-        $data = $client->get($url);
-        return new self(PatientFormTemplateDTO::fromArray($data), $client);
+        try {
+            $data = $client->get($url);
+            return new self(PatientFormTemplateDTO::fromArray($data), $client);
+        } catch (\Throwable $e) {
+            throw new ApiException("Failed to find patient form template from URL: {$url}", ['url' => $url], 0, $e);
+        }
     }
 
-    public static function delete(string $id, ClinikoClient $client)
+    public static function delete(string $id, ClinikoClient $client): mixed
     {
-        $data = $client->post("patient_form_templates/$id/archive", []);
-        return $data;
+        try {
+            return $client->post("patient_form_templates/{$id}/archive", []);
+        } catch (\Throwable $e) {
+            throw new ApiException("Failed to archive patient form template: {$id}.", ['id' => $id], 0, $e);
+        }
     }
-
 
     public function getDTO(): PatientFormTemplateDTO
     {
@@ -88,7 +105,6 @@ class PatientFormTemplate
         return $this->dto->emailToPatientOnCompletion;
     }
 
-    
     /**
      * @return \App\DTO\PatientFormTemplateSectionDTO[]
      */
@@ -96,6 +112,7 @@ class PatientFormTemplate
     {
         return $this->dto->sections;
     }
+
     public function isArchived(): bool
     {
         return !empty($this->dto->archivedAt);

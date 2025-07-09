@@ -65,11 +65,6 @@ class PatientForm
         return $this->dto->url;
     }
 
-    public function getContent(): array
-    {
-        return $this->dto->content;
-    }
-
     public function getSections(): array
     {
         return $this->dto->content['sections'] ?? [];

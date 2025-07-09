@@ -23,7 +23,7 @@ class BillableItemDTO
             $data['name'] ?? '',
             $data['item_code'] ?? '',
             $data['item_type'] ?? '',
-            (float) $data['price'] ?? 0.0,
+            $data['price'] ? (float) $data['price'] : 0.0,
             $data['created_at'],
             $data['updated_at'],
             $data['archived_at'] ?? null,

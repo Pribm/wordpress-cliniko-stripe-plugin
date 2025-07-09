@@ -3,9 +3,9 @@ namespace App\DTO;
 
 class CreatePatientDTO
 {
-    public string $firstName;
-    public string $lastName;
-    public string $email;
+    public string $firstName = "";
+    public string $lastName = "";
+    public string $email = "";
 
     public ?string $address1 = null;
     public ?string $countryCode = null;

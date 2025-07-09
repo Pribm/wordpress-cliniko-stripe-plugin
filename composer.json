@@ -8,7 +8,8 @@
         }
     },
     "scripts": {
-        "build": "bash build.sh"
+        "build": "bash build.sh",
+         "analyse": "phpstan analyse --configuration=phpstan.neon --memory-limit=1024M"
     },
     "authors": [
         {
@@ -23,6 +24,14 @@
     },
     "require-dev": {
         "vlucas/phpdotenv": "^5.6",
-        "php-stubs/wordpress-stubs": "^6.8"
+        "php-stubs/wordpress-stubs": "^6.8",
+        "phpstan/phpstan": "^2.1",
+        "arifpavel/elementor-stubs": "^3.1",
+        "phpro/grumphp": "^1.16"
+    },
+    "config": {
+        "allow-plugins": {
+            "phpro/grumphp": true
+        }
     }
 }

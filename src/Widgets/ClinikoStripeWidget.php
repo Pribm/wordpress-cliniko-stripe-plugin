@@ -48,8 +48,8 @@ class ClinikoStripeWidget extends Widget_Base
 
   public function render()
   {
-    $settings = $this->get_settings();
-    $is_editor = \Elementor\Plugin::$instance->editor->is_edit_mode();
+    $settings = $this->get_settings_for_display(); 
+    $is_editor = \Elementor\Plugin::$instance->editor->is_edit_mode(); 
     $form_template_id = $settings['cliniko_form_template_id'] ?? null;
 
 wp_enqueue_script(
