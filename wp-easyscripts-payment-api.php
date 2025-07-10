@@ -6,13 +6,14 @@ use App\Widgets\ClinikoStripeWidget;
  * Plugin Name: Cliniko Stripe Integration
  * Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
  * Description: Integrates Stripe payments with Cliniko appointments in WordPress.
- * Version: 0.1.5
+ * Version: 0.1.6
  * Author: Paulo Monteiro
  * Author URI: https://github.com/Pribm
  * GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
  * Requires at least: 5.0
  * Tested up to: 6.5
  * Requires PHP: 7.4
+ * Release Asset: true
  */
 
 defined('ABSPATH') || exit;
