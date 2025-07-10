@@ -28,10 +28,10 @@ jobs:
       - name: Prepare ZIP
         run: |
           PLUGIN_SLUG="cliniko-stripe-integration"
-          mkdir -p build/$PLUGIN_SLUG
-          rsync -av --exclude=.git --exclude=build --exclude=.github --exclude=tests . build/$PLUGIN_SLUG/
+          mkdir -p build
+          rsync -av --exclude=.git --exclude=build --exclude=.github --exclude=tests . build/
           cd build
-          zip -r ../$PLUGIN_SLUG.zip $PLUGIN_SLUG
+          zip -r ../$PLUGIN_SLUG.zip .
           cd ..
 
       - name: Create GitHub Release
