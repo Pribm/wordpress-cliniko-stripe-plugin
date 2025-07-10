@@ -14,15 +14,16 @@ async function initStripe() {
       headers: { "Content-Type": "application/json" },
     });
 
-    const data = await res.json();
-    const { name, duration, price, description } = data;
+    //MOUNT THIS IN THE BACKEND
+    // const data = await res.json();
+    // const { name, duration, price, description } = data;
 
-    document.getElementById("summary-name").textContent = name ?? "N/A";
-    document.getElementById("summary-description").textContent =
-      description ?? "N/A";
-    document.getElementById("summary-duration").textContent = duration ?? "--";
-    document.getElementById("summary-price").textContent =
-      (price / 100).toFixed(2) ?? "--";
+    // document.getElementById("summary-name").textContent = name ?? "N/A";
+    // document.getElementById("summary-description").textContent =
+    //   description ?? "N/A";
+    // document.getElementById("summary-duration").textContent = duration ?? "--";
+    // document.getElementById("summary-price").textContent =
+    //   (price / 100).toFixed(2) ?? "--";
 
     const elements = stripe.elements();
 

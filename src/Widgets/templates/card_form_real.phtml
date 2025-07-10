@@ -1,5 +1,14 @@
-<?php if (!defined('ABSPATH')) exit; ?>
-<?php include_once __DIR__ . "/control-variables.php"; ?>
+<?php if (!defined('ABSPATH')) exit;
+
+use App\Client\ClinikoClient; 
+
+
+include_once __DIR__ . "/control-variables.php";
+
+
+$client = ClinikoClient::getInstance();
+$payment_details = App\Model\AppointmentType::find($settings['module_id'], $client);
+?>
 
 <div id="payment_form"
   style="
@@ -53,13 +62,13 @@
   >
     <h3 style="margin-top: 0; font-size: 20px; color: <?php echo $summary_heading_color; ?>;">Order Summary</h3>
 
-    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Service:</strong> <span id="summary-name">Loading...</span></p>
-    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Description:</strong> <span id="summary-description">Loading...</span></p>
-    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Duration:</strong> <span id="summary-duration">--</span> minutes</p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Service:</strong> <span id="summary-name"><?= $payment_details->getName() ?></span></p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Description:</strong> <span id="summary-description"><?= $payment_details->getDescription() ?></span></p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Duration:</strong> <?= $payment_details->getDurationInMinutes() ?> Minutes </p>
     <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Tax:</strong> Included</p>
 
     <p style="margin-top: 20px; font-size: 18px; font-weight: bold; color: <?php echo $summary_price_color; ?>;">
-      Total: $<span id="summary-price">--</span> AUD
+      Total: $<span id="summary-price"><?= $payment_details->getBillableItemsFinalPrice() ?></span> AUD
     </p>
 
     <!-- BACK BUTTON -->
