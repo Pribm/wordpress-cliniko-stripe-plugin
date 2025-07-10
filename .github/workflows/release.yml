@@ -1,0 +1,39 @@
+name: Build Plugin and Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build ZIP and Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --no-progress --no-suggest
+
+      - name: Prepare ZIP
+        run: |
+          PLUGIN_SLUG="cliniko-stripe-integration"
+          mkdir -p build/$PLUGIN_SLUG
+          rsync -av --exclude=.git --exclude=build --exclude=.github --exclude=tests . build/$PLUGIN_SLUG/
+          cd build
+          zip -r ../$PLUGIN_SLUG.zip $PLUGIN_SLUG
+          cd ..
+
+      - name: Create Release with ZIP
+        uses: softprops/action-gh-release@v1
+        with:
+          files: cliniko-stripe-integration.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
