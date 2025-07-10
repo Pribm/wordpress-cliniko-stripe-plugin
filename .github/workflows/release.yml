@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write  # 👈 ESSENCIAL para criar release
+
 jobs:
   build:
     name: Build ZIP and Create Release
@@ -31,9 +34,7 @@ jobs:
           zip -r ../$PLUGIN_SLUG.zip $PLUGIN_SLUG
           cd ..
 
-      - name: Create Release with ZIP
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: cliniko-stripe-integration.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
