@@ -49,8 +49,9 @@ function register_cliniko_form_style_controls($widget) {
   $widget->add_control('form_button_color', [
     'label' => 'Button Background',
     'type' => Controls_Manager::COLOR,
-    'default' => '#4CAF50',
+    'default' => 'var(--e-global-color-primary)'
   ]);
+
 
   $widget->add_control('form_button_text_color', [
     'label' => 'Button Text Color',

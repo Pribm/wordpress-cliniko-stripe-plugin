@@ -32,7 +32,7 @@ function register_style_controls($widget) {
   $widget->add_control('color_primary', [
     'label' => 'Primary Color',
     'type' => Controls_Manager::COLOR,
-    'default' => '#000000',
+    'default' => 'var(--e-global-color-primary)'
   ]);
 
   $widget->add_control('color_text', [
