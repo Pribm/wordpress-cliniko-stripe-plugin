@@ -29,11 +29,15 @@ jobs:
           mkdir plugin-build
           rsync -av \
             --exclude=".git*" \
+            --exclude=".distignore" \
             --exclude=".github" \
             --exclude="tests" \
             --exclude="composer.*" \
             --exclude="phpstan.*" \
             --exclude="*.neon" \
+            --exclude="*.yml" \
+            --exclude="stubs" \
+            --exclude="scripts" \
             --exclude="*.xml" \
             ./ ./plugin-build/
 
