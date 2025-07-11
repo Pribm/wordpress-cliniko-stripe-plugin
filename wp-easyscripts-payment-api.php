@@ -6,9 +6,7 @@ Description: Integração entre Stripe e Cliniko via WordPress.
 Author: Paulo Monteiro
 Author URI: https://github.com/Pribm
 GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
-Release Asset: true
-Primary Branch: main
- * Version: 1.0.2
+Version: 1.0.3
 */
 
 use App\Widgets\ClinikoStripeWidget;
