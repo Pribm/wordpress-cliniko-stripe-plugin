@@ -54,14 +54,14 @@ function register_content_controls($widget)
     $widget->add_control('back_button_color', [
         'label' => 'Text Color',
         'type' => Controls_Manager::COLOR,
-        'default' => '#005fcc',
+       'default' => 'var(--e-global-color-primary)',
         'condition' => ['show_back_button' => 'yes'],
     ]);
 
     $widget->add_control('back_button_bg', [
         'label' => 'Background on Hover',
         'type' => Controls_Manager::COLOR,
-        'default' => '#005fcc',
+        'default' => 'var(--e-global-color-primary)',
         'condition' => ['show_back_button' => 'yes'],
     ]);
 

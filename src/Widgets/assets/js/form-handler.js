@@ -116,8 +116,13 @@ function parseFormToStructuredBody(formEl) {
   }
 
   function showStep(i) {
+    window.scrollTo({top: 0, behavior: "smooth"})
     steps.forEach((step, index) => {
-      step.style.display = index === i ? "block" : "none";
+      if(index === i){
+        step.style.display = "block"
+      }else{
+        step.style.display = "none"
+      }
     });
     prevBtn.style.display = i === 0 ? "none" : "inline-block";
     nextBtn.textContent = i === steps.length - 1 ? "Submit" : "Next";
@@ -201,6 +206,7 @@ function setupSignatureCanvas() {
   ctx.lineWidth = 2;
   ctx.lineCap = "round";
 
+  // Desktop: mouse
   canvas.addEventListener("mousedown", (e) => {
     drawing = true;
     ctx.beginPath();
@@ -227,6 +233,29 @@ function setupSignatureCanvas() {
     }
   });
 
+  // Mobile: touch
+  canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    drawing = true;
+    const touch = e.touches[0];
+    ctx.beginPath();
+    ctx.moveTo(getTouchX(touch), getTouchY(touch));
+  });
+
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    if (!drawing) return;
+    const touch = e.touches[0];
+    ctx.lineTo(getTouchX(touch), getTouchY(touch));
+    ctx.stroke();
+  });
+
+  canvas.addEventListener("touchend", () => {
+    drawing = false;
+    ctx.closePath();
+    signatureDataInput.value = canvas.toDataURL("image/png");
+  });
+
   clearBtn.addEventListener("click", () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     signatureDataInput.value = "";
@@ -240,5 +269,15 @@ function setupSignatureCanvas() {
   function getY(e) {
     const rect = canvas.getBoundingClientRect();
     return e.clientY - rect.top;
+  }
+
+  function getTouchX(touch) {
+    const rect = canvas.getBoundingClientRect();
+    return touch.clientX - rect.left;
+  }
+
+  function getTouchY(touch) {
+    const rect = canvas.getBoundingClientRect();
+    return touch.clientY - rect.top;
   }
 }
