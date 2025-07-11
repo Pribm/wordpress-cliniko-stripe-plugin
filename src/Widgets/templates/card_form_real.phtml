@@ -1,0 +1,97 @@
+<?php if (!defined('ABSPATH')) exit;
+
+use App\Client\ClinikoClient; 
+
+
+include_once __DIR__ . "/control-variables.php";
+
+
+$client = ClinikoClient::getInstance();
+$payment_details = App\Model\AppointmentType::find($settings['module_id'], $client);
+?>
+
+<div id="payment_form"
+  style="
+    display: none;
+    gap: <?php echo $gap_between_columns; ?>px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 32px;
+    font-family: <?php echo $font_family; ?>;
+    background: <?php echo $color_background; ?>;
+    color: <?php echo $color_text; ?>;
+    border: 1px solid #e2e2e2;
+    border-radius: <?php echo $border_radius; ?>px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  "
+>
+<div id="loader-target"></div>
+  <!-- LEFT COLUMN: Payment Details -->
+  <div style="flex: 1 1 300px; min-width: 280px; padding-right: 20px;">
+    <h2 style="margin-top: 0; font-size: 22px; color: <?php echo $summary_heading_color; ?>;">Complete Your Payment</h2>
+    <p style="margin-bottom: 16px; color: <?php echo $summary_text_color; ?>;">
+      Enter your card details below to confirm your booking.
+    </p>
+
+    <div id="payment-element"
+      style="
+        background: #fff;
+        border: 1px solid #dcdcdc;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+      "
+    ></div>
+
+    <button id="payment-button"
+      style="<?php echo $style_button; ?>; width: 100%; font-size: 16px; padding: 12px 0;">
+      <?php echo $button_label; ?>
+    </button>
+  </div>
+
+  <!-- RIGHT COLUMN: Order Summary -->
+  <div style="
+      flex: 1 1 300px;
+      min-width: 280px;
+      background: <?php echo $details_background; ?>;
+      border: 1px solid <?php echo $details_border_color; ?>;
+      border-radius: <?php echo $details_border_radius; ?>px;
+      padding: 24px;
+    "
+    id="order-summary"
+  >
+    <h3 style="margin-top: 0; font-size: 20px; color: <?php echo $summary_heading_color; ?>;">Order Summary</h3>
+
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Service:</strong> <span id="summary-name"><?= $payment_details->getName() ?></span></p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Description:</strong> <span id="summary-description"><?= $payment_details->getDescription() ?></span></p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Duration:</strong> <?= $payment_details->getDurationInMinutes() ?> Minutes </p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;"><strong>Tax:</strong> Included</p>
+
+    <p style="margin-top: 20px; font-size: 18px; font-weight: bold; color: <?php echo $summary_price_color; ?>;">
+      Total: $<span id="summary-price"><?= $payment_details->getBillableItemsFinalPrice() ?></span> AUD
+    </p>
+
+    <!-- BACK BUTTON -->
+    <?php if (!empty($settings['show_back_button']) && $settings['show_back_button'] === 'yes'): ?>
+      <div style="text-align: <?php echo esc_attr($settings['back_button_align'] ?? 'center'); ?>; margin-top: <?php echo esc_attr($settings['back_button_margin_top']['size'] ?? 30); ?>px;">
+        <button id="go-back-button"
+          style="
+            background-color: transparent;
+            color: <?php echo esc_attr($settings['back_button_color'] ?? '#005fcc'); ?>;
+            border: 1px solid <?php echo esc_attr($settings['back_button_color'] ?? '#005fcc'); ?>;
+            border-radius: 4px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+          "
+          onmouseover="this.style.backgroundColor='<?php echo esc_attr($settings['back_button_bg'] ?? '#005fcc'); ?>'; this.style.color='<?php echo esc_attr($settings['back_button_hover_text'] ?? '#ffffff'); ?>';"
+          onmouseout="this.style.backgroundColor='transparent'; this.style.color='<?php echo esc_attr($settings['back_button_color'] ?? '#005fcc'); ?>';"
+        >
+          ← Go Back
+        </button>
+      </div>
+    <?php endif; ?>
+    <!-- END BACK BUTTON -->
+  </div>
+</div>

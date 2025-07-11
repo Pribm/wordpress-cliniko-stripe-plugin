@@ -1,0 +1,10 @@
+.vscode/
+*.log
+*.zip
+node_modules/
+tests/
+composer.*
+phpunit.*
+.git/
+.env
+.github/
