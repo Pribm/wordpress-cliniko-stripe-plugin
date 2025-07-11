@@ -1,0 +1,53 @@
+name: Build Plugin and Create Release on Tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --no-interaction
+
+      - name: Extract version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Prepare plugin ZIP
+        run: |
+          mkdir plugin-build
+          rsync -av \
+            --exclude=".git*" \
+            --exclude=".github" \
+            --exclude="tests" \
+            --exclude="composer.*" \
+            --exclude="phpstan.*" \
+            --exclude="*.neon" \
+            --exclude="*.xml" \
+            ./ ./plugin-build/
+          cd plugin-build
+          zip -r ../cliniko-stripe-integration-${{ steps.get_version.outputs.version }}.zip .
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: cliniko-stripe-integration-${{ steps.get_version.outputs.version }}.zip
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Release v${{ steps.get_version.outputs.version }}
+          body: "Automated release for version v${{ steps.get_version.outputs.version }}"

@@ -3,12 +3,12 @@
 Plugin Name: Cliniko Stripe Integration
 Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Description: Integração entre Stripe e Cliniko via WordPress.
-Version: 1.0.5
 Author: Paulo Monteiro
 Author URI: https://github.com/Pribm
 GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Release Asset: true
 Primary Branch: main
+ * Version: 1.0.1
 */
 
 use App\Widgets\ClinikoStripeWidget;
@@ -26,7 +26,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'pagamento_api_add_settings_link');
 
-function pagamento_api_add_settings_link($links) {
+function pagamento_api_add_settings_link($links): array {
   $settings_link = '<a href="' . admin_url('admin.php?page=pagamento-api-settings') . '">Settings</a>';
   array_unshift($links, $settings_link);
   return $links;

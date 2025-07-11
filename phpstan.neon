@@ -1,28 +1,8 @@
-includes:
-  - vendor/phpstan/phpstan/conf/bleedingEdge.neon
-
 parameters:
   level: 5
+
   paths:
     - src
-    - admin
-    - stubs
 
-  bootstrapFiles:
-    - phpstan-bootstrap.php
-
-  inferPrivatePropertyTypeFromConstructor: true
-  checkUninitializedProperties: false
-  reportUnmatchedIgnoredErrors: false
-  
   excludePaths:
-    - %currentWorkingDirectory%/src/Widgets
-
-  ignoreErrors:
-    - identifier: method.unused
-    - '#Call to unknown function elementor_.*#'
-    - '#Call to an undefined method Elementor\\.*#'
-    - '#Access to an undefined property Elementor\\.*#'
-    - '#Access to undefined constant Elementor\\Controls_Manager::TAB_CONTENT#'
-    - '#Access to undefined constant Elementor\\Controls_Manager::SWITCHER#'
-    - '#Access to undefined constant Elementor\\Controls_Manager::CHOOSE#'
+    - src/Widgets/*

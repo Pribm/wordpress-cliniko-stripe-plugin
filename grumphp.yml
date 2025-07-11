@@ -1,6 +1,6 @@
 grumphp:
   tasks:
     phpstan:
-      level: 5
-      memory_limit: 512M
+      level: max
       configuration: phpstan.neon
+      memory_limit: "-1"

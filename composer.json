@@ -8,8 +8,8 @@
         }
     },
     "scripts": {
-        "build": "bash build.sh",
-         "analyse": "phpstan analyse --configuration=phpstan.neon --memory-limit=1024M"
+        "analyse": "phpstan analyse --configuration=phpstan.neon --memory-limit=1024M",
+          "release": "php scripts/release-plugin.php"
     },
     "authors": [
         {

@@ -1,0 +1,47 @@
+name: Build Plugin and Push to Deploy Branch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v3
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist --no-interaction
+
+      - name: Prepare plugin for deployment
+        run: |
+          mkdir plugin-build
+          rsync -av \
+            --exclude=".git*" \
+            --exclude=".github" \
+            --exclude="tests" \
+            --exclude="composer.*" \
+            --exclude="phpstan.*" \
+            --exclude="*.neon" \
+            --exclude="*.xml" \
+            ./ ./plugin-build/
+
+      - name: Deploy to deploy branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          publish_dir: ./plugin-build
+          publish_branch: deploy
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "Deploy plugin build from main"
