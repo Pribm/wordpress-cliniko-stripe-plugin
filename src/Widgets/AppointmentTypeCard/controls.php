@@ -293,6 +293,22 @@ $this->add_control('button_icon', [
   ],
 ]);
 
+$this->add_control('button_margin', [
+  'label' => __('Button Margin', 'plugin-name'),
+  'type' => Controls_Manager::DIMENSIONS,
+  'default' => [
+    'top' => 0,
+    'right' => 0,
+    'bottom' => 0,
+    'left' => 0,
+    'unit' => 'px',
+  ],
+  'selectors' => [
+    '{{WRAPPER}} .appointment-action-button' =>
+      'margin: {{TOP}}{{UNIT}} {{RIGHT}}{{UNIT}} {{BOTTOM}}{{UNIT}} {{LEFT}}{{UNIT}};',
+  ],
+]);
+
 
 $this->add_control('button_padding', [
   'label' => __('Padding', 'plugin-name'),
@@ -319,6 +335,13 @@ $this->add_control('button_border_radius', [
   'selectors' => [
     '{{WRAPPER}} .appointment-action-button' => 'border-radius: {{SIZE}}{{UNIT}};',
   ],
+]);
+
+$this->add_control('button_custom_class', [
+  'label' => __('Button Custom Class', 'plugin-name'),
+  'type' => Controls_Manager::TEXT,
+  'placeholder' => 'ex: my-hover-class',
+  'description' => __('You can define a custom CSS class to target the button in your stylesheet.'),
 ]);
 
 $this->end_controls_section();

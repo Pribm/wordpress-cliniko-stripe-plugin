@@ -19,14 +19,15 @@ $price = $type['price'] ?? '';
 
   .appointment-card-icon svg {}
 
-  .appointment-action-button{
+  .appointment-action-button {
     margin-top: auto;
   }
 
-  .appointment-card-title{
+  .appointment-card-title {
     margin-top: auto;
   }
-  .appointment-card-description{
+
+  .appointment-card-description {
     margin-bottom: auto;
   }
 </style>
@@ -34,17 +35,20 @@ $price = $type['price'] ?? '';
 <div class="appointment-card">
 
   <?php if (!empty($price)): ?>
-<p class="appointment-card-price <?php echo esc_attr($settings['price_position']); ?>">
-  <strong><?php echo esc_html($settings['price_label']); ?></strong>
-  $<?php echo esc_html($type['price']); ?>
-</p>
+    <?php
+    $price_class = esc_attr($settings['price_position'] ?? 'top-right');
+    ?>
+
+    <div class="appointment-card-price <?= $price_class ?>">
+      <?= esc_html($settings['price_label']) . ' $' . $type['price'] ?>
+    </div>
   <?php endif; ?>
 
-<?php if (!empty($settings['card_icon']['value'])): ?>
-  <div class="appointment-card-icon">
-    <?php Icons_Manager::render_icon($settings['card_icon'], ['aria-hidden' => 'true']); ?>
-  </div>
-<?php endif; ?>
+  <?php if (!empty($settings['card_icon']['value'])): ?>
+    <div class="appointment-card-icon">
+      <?php Icons_Manager::render_icon($settings['card_icon'], ['aria-hidden' => 'true']); ?>
+    </div>
+  <?php endif; ?>
 
   <h3 class="appointment-card-title"><?php echo esc_html($type['name']); ?></h3>
   <p class="appointment-card-description"><?php echo esc_html($type['description']); ?></p>
@@ -52,7 +56,11 @@ $price = $type['price'] ?? '';
 
 
   <?php if (!empty($settings['button_text']) && !empty($settings['button_link']['url'])): ?>
-    <a href="<?php echo esc_url($settings['button_link']['url']); ?>" class="appointment-action-button" <?php echo $settings['button_link']['is_external'] ? 'target="_blank"' : ''; ?>   <?php echo $settings['button_link']['nofollow'] ? 'rel="nofollow"' : ''; ?>>
+    <?php
+    $custom_class = !empty($settings['button_custom_class']) ? esc_attr($settings['button_custom_class']) : '';
+    ?>
+    <a href="<?php echo esc_url($settings['button_link']['url']); ?>"
+      class="appointment-action-button <?= $custom_class ?>" <?php echo $settings['button_link']['is_external'] ? 'target="_blank"' : ''; ?>   <?php echo $settings['button_link']['nofollow'] ? 'rel="nofollow"' : ''; ?>>
       <?php echo esc_html($settings['button_text']); ?>
 
       <?php if (!empty($settings['button_show_icon']) && !empty($settings['button_icon']['value'])): ?>
