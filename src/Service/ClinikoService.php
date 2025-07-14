@@ -1,6 +1,7 @@
 <?php
 namespace App\Service;
 
+use App\Contracts\ApiClientInterface;
 use App\DTO\AvailableTimeResultDTO;
 use App\DTO\CreatePatientDTO;
 use App\DTO\NextAvailableTimeDTO;
@@ -8,22 +9,16 @@ use App\Model\Patient;
 
 if (!defined('ABSPATH')) exit;
 
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
 use App\Model\AppointmentType;
 
 class ClinikoService
 {
-    protected ClinikoClient $client;
+    protected ApiClientInterface $client;
 
     public function __construct()
     {
-        $this->client = ClinikoClient::getInstance();
-    }
-
-    public function getAppointmentTypes()
-    {
-        $client = ClinikoClient::getInstance();
-        return AppointmentType::all($client);
+        $this->client = Client::getInstance();
     }
 
     public function findOrCreatePatient(CreatePatientDTO $createPatientDTO){
@@ -39,31 +34,13 @@ class ClinikoService
         return Patient::create($createPatientDTO, $this->client);
     }
 
-    public function findPatientByNameAndEmail(string $firstName, string $lastName, string $email): ?array
-    {
-        $query = "{$firstName} {$lastName} {$email}";
-        $endpoint = 'patients?search=' . urlencode($query);
-
-        $response = $this->client->get($endpoint);
-
-        if (!$response) {
-            return null;
-        }
-
-        if (!empty($response['patients'])) {
-            return $response['patients'][0];
-        }
-
-        return null;
-    }
-
      public function getNextAvailableTime(
         string $businessId,
         string $practitionerId,
         string $appointmentTypeId,
         string $from,
         string $to,
-        ClinikoClient $client
+        ApiClientInterface $client
     ): ?NextAvailableTimeDTO
     {
         $query = http_build_query([
@@ -72,7 +49,7 @@ class ClinikoService
         ]);
 
         $endpoint = "businesses/{$businessId}/practitioners/{$practitionerId}/appointment_types/{$appointmentTypeId}/next_available_time?{$query}";
-        $data = $client->get($endpoint);
+        $data = $client->get($endpoint)->data;
         if (!isset($data['appointment_start'])) return null;
         return NextAvailableTimeDTO::fromArray($data);
     }

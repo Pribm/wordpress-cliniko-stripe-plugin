@@ -1,7 +1,9 @@
 <?php
 namespace App\Model;
+
+use App\Contracts\ApiClientInterface;
 if (!defined('ABSPATH')) exit;
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
 use App\DTO\AppointmentTypeBillableItemDTO;
 use App\DTO\AppointmentTypeDTO;
 use App\DTO\PractitionerDTO;
@@ -11,51 +13,58 @@ class AppointmentType
     protected AppointmentTypeDTO $dto;
     protected ?BillableItem $billableItem = null;
     protected ?array $appointmentTypeBillableItems = null;
-
     protected ?array $practitioners = null;
-
-    protected ClinikoClient $client;
+    protected ApiClientInterface $client;
 
     public function __construct(AppointmentTypeDTO $dto)
     {
         $this->dto = $dto;
-        $this->client = ClinikoClient::getInstance();
+        $this->client = Client::getInstance();
     }
 
-    public static function find(string $id, ClinikoClient $client): ?self
+    public static function find(string $id, ApiClientInterface $client): ?self
     {
-        $data = $client->get("appointment_types/{$id}");
+        $response = $client->get("appointment_types/{$id}");
 
-        if (!$data)
+        if (!$response->isSuccessful()) {
             return null;
+        }
 
-        return new self(AppointmentTypeDTO::fromArray($data));
+        return new self(AppointmentTypeDTO::fromArray($response->data));
     }
 
     /**
      * @return AppointmentType[]
      */
-    public static function all(ClinikoClient $client)
+    public static function all(ApiClientInterface $client): array
     {
         $response = $client->get("appointment_types");
 
-        $items = [];
+        if (!$response->isSuccessful()) {
+            return [];
+        }
 
-        foreach ($response['appointment_types'] ?? [] as $data) {
+        $items = [];
+        foreach ($response->data['appointment_types'] ?? [] as $data) {
             $items[] = new self(AppointmentTypeDTO::fromArray($data));
         }
 
         return $items;
     }
 
-    public static function create(array $data, ClinikoClient $client): self
+    public static function create(array $data, ApiClientInterface $client): ?self
     {
-        $created = $client->post('appointment_types', $data);
+        $response = $client->post('appointment_types', $data);
 
-        return new self(AppointmentTypeDTO::fromArray($created));
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(AppointmentTypeDTO::fromArray($response->data));
     }
 
-    public function getDTO(){
+    public function getDTO(): AppointmentTypeDTO
+    {
         return $this->dto;
     }
 
@@ -63,22 +72,27 @@ class AppointmentType
     {
         return $this->dto->id;
     }
+
     public function getName(): string
     {
         return $this->dto->name;
     }
+
     public function getDescription(): string
     {
         return $this->dto->description;
     }
+
     public function getDurationInMinutes(): int
     {
         return $this->dto->durationInMinutes;
     }
+
     public function isTelehealth(): bool
     {
         return $this->dto->telehealthEnabled;
     }
+
     public function isArchived(): bool
     {
         return !empty($this->dto->archivedAt);
@@ -86,14 +100,22 @@ class AppointmentType
 
     public function getBillableItem(): ?BillableItem
     {
-        if (!$this->dto->billableItemUrl)
+        if (!$this->dto->billableItemUrl) {
             return null;
-        if ($this->billableItem)
-            return $this->billableItem;
+        }
 
-        $data = $this->client->get($this->dto->billableItemUrl);
+        if ($this->billableItem) {
+            return $this->billableItem;
+        }
+
+        $response = $this->client->get($this->dto->billableItemUrl);
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
         $this->billableItem = new BillableItem(
-            BillableItem::buildDTO($data),
+            BillableItem::buildDTO($response->data),
             $this->client
         );
 
@@ -103,7 +125,7 @@ class AppointmentType
     /**
      * @return AppointmentTypeBillableItem[]
      */
-    public function getAppointmentTypeBillableItems()
+    public function getAppointmentTypeBillableItems(): array
     {
         if (!$this->dto->billableItemsUrl) {
             return [];
@@ -111,12 +133,16 @@ class AppointmentType
 
         $response = $this->client->get($this->dto->billableItemsUrl);
 
+        if (!$response->isSuccessful()) {
+            return [];
+        }
+
         $this->appointmentTypeBillableItems = array_map(
             fn($item) => new AppointmentTypeBillableItem(
                 AppointmentTypeBillableItemDTO::fromArray($item),
                 $this->client
             ),
-            $response['appointment_type_billable_items'] ?? []
+            $response->data['appointment_type_billable_items'] ?? []
         );
 
         return $this->appointmentTypeBillableItems;
@@ -125,45 +151,49 @@ class AppointmentType
     /**
      * @return Practitioner[]
      */
-    public function getPractitioners(){
+    public function getPractitioners(): array
+    {
         if (!$this->dto->practitionersUrl) {
             return [];
         }
 
         $response = $this->client->get($this->dto->practitionersUrl);
 
+        if (!$response->isSuccessful()) {
+            return [];
+        }
+
         $this->practitioners = array_map(
             fn($item) => new Practitioner(
                 PractitionerDTO::fromArray($item),
                 $this->client
             ),
-            $response['practitioners'] ?? []
+            $response->data['practitioners'] ?? []
         );
 
         return $this->practitioners;
-    }
-
-    private function sumPrices($carry, $item): int
-    {
-        $carry += $item;
-        return $carry;
     }
 
     public function getBillableItemsFinalPrice(): int
     {
         $billableItems = $this->getAppointmentTypeBillableItems();
 
-        $finalPrice = array_reduce($billableItems, function ($carry, $item) {
-            return $carry + $item->getBillableItem()->getPriceInCents();
-            ;
-        }, 0);
+        if (count($billableItems) === 0) return 0;
 
-        return $finalPrice;
+        return array_reduce($billableItems, function ($carry, $item) {
+            return $carry + $item->getBillableItem()->getPriceInCents();
+        }, 0);
     }
 
-        public static function findFromUrl(string $url, ClinikoClient $client): ?self
-        {
-            $data = $client->get($url);
-            return new self(AppointmentTypeDTO::fromArray($data));
+    public static function findFromUrl(string $url, ApiClientInterface $client): ?self
+    {
+        $response = $client->get($url);
+
+        if (!$response->isSuccessful()) {
+            return null;
         }
+
+        return new self(AppointmentTypeDTO::fromArray($response->data));
+    }
 }
+

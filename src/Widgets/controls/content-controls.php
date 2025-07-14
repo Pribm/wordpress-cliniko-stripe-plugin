@@ -2,7 +2,7 @@
 if (!defined('ABSPATH'))
     exit;
 use App\Model\PatientFormTemplate;
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
 use App\Model\AppointmentType;
 use Elementor\Controls_Manager;
 use Elementor\Repeater;
@@ -87,7 +87,7 @@ function register_content_controls($widget)
 
 function get_cliniko_form_templates()
 {
-    $client = ClinikoClient::getInstance();
+    $client = Client::getInstance();
     $patientFormTemplates = PatientFormTemplate::all($client);
 
     $templates = [];
@@ -121,7 +121,7 @@ function register_cliniko_form_controls($widget)
 
         // Appointment Types
     $module_options = ['' => 'Select an appointment type'];
-    $client = ClinikoClient::getInstance();
+    $client = Client::getInstance();
     $modules = AppointmentType::all($client);
     foreach ($modules as $mod) {
         $module_options[$mod->getId()] = $mod->getName() . ' (' . $mod->getDurationInMinutes() . ' min)';

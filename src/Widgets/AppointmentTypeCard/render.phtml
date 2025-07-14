@@ -1,0 +1,63 @@
+<?php
+
+use Elementor\Icons_Manager;
+if (!defined('ABSPATH'))
+  exit;
+$price = $type['price'] ?? '';
+?>
+
+<style>
+  .appointment-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .appointment-card-price {
+    margin: 0;
+  }
+
+  .appointment-card-icon svg {}
+
+  .appointment-action-button{
+    margin-top: auto;
+  }
+
+  .appointment-card-title{
+    margin-top: auto;
+  }
+  .appointment-card-description{
+    margin-bottom: auto;
+  }
+</style>
+
+<div class="appointment-card">
+
+  <?php if (!empty($price)): ?>
+<p class="appointment-card-price <?php echo esc_attr($settings['price_position']); ?>">
+  <strong><?php echo esc_html($settings['price_label']); ?></strong>
+  $<?php echo esc_html($type['price']); ?>
+</p>
+  <?php endif; ?>
+
+<?php if (!empty($settings['card_icon']['value'])): ?>
+  <div class="appointment-card-icon">
+    <?php Icons_Manager::render_icon($settings['card_icon'], ['aria-hidden' => 'true']); ?>
+  </div>
+<?php endif; ?>
+
+  <h3 class="appointment-card-title"><?php echo esc_html($type['name']); ?></h3>
+  <p class="appointment-card-description"><?php echo esc_html($type['description']); ?></p>
+
+
+
+  <?php if (!empty($settings['button_text']) && !empty($settings['button_link']['url'])): ?>
+    <a href="<?php echo esc_url($settings['button_link']['url']); ?>" class="appointment-action-button" <?php echo $settings['button_link']['is_external'] ? 'target="_blank"' : ''; ?>   <?php echo $settings['button_link']['nofollow'] ? 'rel="nofollow"' : ''; ?>>
+      <?php echo esc_html($settings['button_text']); ?>
+
+      <?php if (!empty($settings['button_show_icon']) && !empty($settings['button_icon']['value'])): ?>
+        <i class="<?php echo esc_attr($settings['button_icon']['value']); ?>" style="margin-left: 6px;"></i>
+      <?php endif; ?>
+    </a>
+  <?php endif; ?>
+</div>

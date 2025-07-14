@@ -1,28 +1,41 @@
 <?php
 namespace App\Model;
-if (!defined('ABSPATH')) exit;
+
+use App\Contracts\ApiClientInterface;
 use App\DTO\BusinessDTO;
-use App\Client\ClinikoClient;
-use App\DTO\IndividualAppointmentDTO;
 use App\DTO\PractitionerDTO;
+use App\DTO\IndividualAppointmentDTO;
+use App\Client\Cliniko\Client;
+
+if (!defined('ABSPATH')) exit;
 
 class Business
 {
     public function __construct(
         protected BusinessDTO $dto,
-        protected ClinikoClient $client
+        protected ApiClientInterface $client
     ) {}
 
-    public static function find(string $id, ClinikoClient $client): ?self
+    public static function find(string $id, ApiClientInterface $client): ?self
     {
-        $data = $client->get("businesses/{$id}");
-        return new self(BusinessDTO::fromArray($data), $client);
+        $response = $client->get("businesses/{$id}");
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(BusinessDTO::fromArray($response->data), $client);
     }
 
-    public static function findFromUrl(string $url, ClinikoClient $client): ?self
+    public static function findFromUrl(string $url, ApiClientInterface $client): ?self
     {
-        $data = $client->get($url);
-        return new self(BusinessDTO::fromArray($data), $client);
+        $response = $client->get($url);
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(BusinessDTO::fromArray($response->data), $client);
     }
 
     public function getId(): string { return $this->dto->id; }
@@ -38,26 +51,39 @@ class Business
     public function getAppointmentTypeIds(): array { return $this->dto->appointmentTypeIds; }
     public function isOnline(): bool { return $this->dto->showInOnlineBookings; }
 
-    // Lazy loading futuro
     public function getPractitioners(): array
     {
-        if (!$this->dto->practitionersUrl) return [];
+        if (!$this->dto->practitionersUrl) {
+            return [];
+        }
+
         $response = $this->client->get($this->dto->practitionersUrl);
 
-        return array_map(fn($item) =>
-            new Practitioner(PractitionerDTO::fromArray($item), $this->client),
-            $response['practitioners'] ?? []
+        if (!$response->isSuccessful()) {
+            return [];
+        }
+
+        return array_map(
+            fn($item) => new Practitioner(PractitionerDTO::fromArray($item), $this->client),
+            $response->data['practitioners'] ?? []
         );
     }
 
     public function getAppointments(): array
     {
-        if (!$this->dto->appointmentsUrl) return [];
+        if (!$this->dto->appointmentsUrl) {
+            return [];
+        }
+
         $response = $this->client->get($this->dto->appointmentsUrl);
 
-        return array_map(fn($item) =>
-            new IndividualAppointment(IndividualAppointmentDTO::fromArray($item), $this->client),
-            $response['appointments'] ?? []
+        if (!$response->isSuccessful()) {
+            return [];
+        }
+
+        return array_map(
+            fn($item) => new IndividualAppointment(IndividualAppointmentDTO::fromArray($item), $this->client),
+            $response->data['appointments'] ?? []
         );
     }
 }

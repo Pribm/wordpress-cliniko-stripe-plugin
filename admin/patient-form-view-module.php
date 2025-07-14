@@ -1,6 +1,6 @@
 <?php
 
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 
@@ -35,7 +35,7 @@ add_action('admin_menu', function () {
     $id = sanitize_text_field($_GET['id']);
 
     try {
-        $client = ClinikoClient::getInstance();
+        $client = Client::getInstance();
       PatientFormTemplate::delete($id, $client);
       wp_safe_redirect(admin_url('admin.php?page=wp-cliniko-patient-forms&deleted=1'));
       exit;
@@ -51,7 +51,7 @@ add_action('admin_menu', function () {
 function render_cliniko_patient_forms_page()
 {
     try {
-        $client = ClinikoClient::getInstance();
+        $client = Client::getInstance();
         $forms = PatientFormTemplate::all($client);
     } catch (\Throwable $e) {
         throw new ApiException($e->getMessage());
@@ -124,7 +124,7 @@ function render_cliniko_patient_form_view_page()
     }
 
     $id = sanitize_text_field($_GET['id']);
-    $client = ClinikoClient::getInstance();
+    $client = Client::getInstance();
 
     $form = PatientFormTemplate::find($id, $client);
 

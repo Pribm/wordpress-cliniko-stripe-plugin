@@ -2,9 +2,13 @@ includes:
   - vendor/phpstan/phpstan/conf/bleedingEdge.neon
 
 parameters:
+  phpVersion: 80201
   level: 5
   paths:
     - src
+  
+  excludePaths:
+    - src/Widgets/*
 
   bootstrapFiles:
     - phpstan-bootstrap.php

@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
 use App\DTO\CreatePatientCaseDTO;
 use App\DTO\CreatePatientDTO;
 use App\DTO\CreatePatientFormDTO;
@@ -54,12 +54,13 @@ class ClinikoController
             ], 422);
         }
 
-        $client = ClinikoClient::getInstance();
+        $client = Client::getInstance();
         $stripeService = new StripeService();
 
         try {
             // Step 1: Find Appointment Type
             $appointmentType = AppointmentType::find($payload['moduleId'], $client);
+            
 
             // Step 2: Process Payment
             $paymentIntent = $stripeService->createChargeFromToken(
