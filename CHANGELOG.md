@@ -1,3 +1,19 @@
+# 📦 Cliniko Stripe Integration — v1.1.1
+
+**Release Date:** 2025-07-14
+
+## ✨ Enhancements
+
+- **Custom Button Class**: Added control to assign dynamic CSS classes to the booking button.
+- **Hover Slide Effect**: Enabled optional right-to-left hover background transition using Elementor global colors (`--e-global-color-primary` → `--e-global-color-secondary`).
+- **Improved Flexibility**: Users can now apply custom animations, Tailwind classes, or raw CSS using the dynamic class feature.
+
+## 🧰 Developer Notes
+
+- Updated button HTML in `render.phtml` to support dynamic class injection.
+- Added CSS guidance and usage examples for hover transitions based on global variables.
+
+
 # 📦 Cliniko Stripe Integration — v1.1.0
 
 **Release Date:** 2025-07-14
