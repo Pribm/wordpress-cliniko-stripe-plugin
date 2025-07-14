@@ -3,7 +3,6 @@
 
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
-use App\Client\ClinikoClient;
 
 $settings = $this->get_settings();
 $form_template_id = $settings['cliniko_form_template_id'] ?? null;
@@ -14,8 +13,7 @@ if (empty($form_template_id)) {
 }
 
 try {
-  $client = ClinikoClient::getInstance();
-  $template = PatientFormTemplate::find($form_template_id, $client);
+  $template = PatientFormTemplate::find($form_template_id, cliniko_client(true));
   $sections = $template ? $template->getSections() : [];
 } catch (\Throwable $e) {
   throw new ApiException($e->getMessage());

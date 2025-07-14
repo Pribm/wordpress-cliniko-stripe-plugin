@@ -1,7 +1,6 @@
 <?php
 namespace App\Widgets;
 
-use App\Client\ClinikoClient;
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 if (!defined('ABSPATH'))
@@ -48,50 +47,57 @@ class ClinikoStripeWidget extends Widget_Base
 
   public function render()
   {
-    $settings = $this->get_settings_for_display(); 
-    $is_editor = \Elementor\Plugin::$instance->editor->is_edit_mode(); 
+    $settings = $this->get_settings_for_display();
+    $is_editor = \Elementor\Plugin::$instance->editor->is_edit_mode();
     $form_template_id = $settings['cliniko_form_template_id'] ?? null;
 
-wp_enqueue_script(
-  'loading-overlay',
-  'https://cdn.jsdelivr.net/npm/gasparesganga-jquery-loading-overlay@2.1.7/dist/loadingoverlay.min.js',
-  ['jquery'],
-  null,
-  ["strategy" => "defer"]
-);
+    wp_enqueue_script(
+      'loading-overlay',
+      'https://cdn.jsdelivr.net/npm/gasparesganga-jquery-loading-overlay@2.1.7/dist/loadingoverlay.min.js',
+      ['jquery'],
+      null,
+      ["strategy" => "defer"]
+    );
 
     wp_enqueue_style(
       'cliniko-stripe-style',
-      plugin_dir_url(__DIR__) . '/Widgets/assets/css/cliniko-stripe.css',
-      ["jquery"],
-      '1.0.0'
+      plugin_dir_url(__FILE__) . 'assets/css/cliniko-stripe.css',
+      [],
+      null
     );
 
-    wp_enqueue_script('stripe-js', 'https://js.stripe.com/v3/', [], null, true);
+    wp_enqueue_script(
+      'stripe-js',
+      'https://js.stripe.com/v3/',
+      [],
+      null,
+      ['strategy' => 'async']
+    );
 
 
-    $client = ClinikoClient::getInstance();
+
     try {
-  $template = PatientFormTemplate::find($form_template_id, $client);
-  $sections = $template ? $template->getSections() : [];
-} catch (\Exception $e) {
-  new ApiException($e->getMessage());
-}
+      $template = PatientFormTemplate::find($form_template_id, cliniko_client(true));
+
+      $sections = $template ? $template->getSections() : [];
+    } catch (\Exception $e) {
+      new ApiException($e->getMessage());
+    }
 
     wp_enqueue_script(
       'form-handler-js',
-      plugin_dir_url(__DIR__) . '/Widgets/assets/js/form-handler.js',
+      plugin_dir_url(__FILE__) . 'assets/js/form-handler.js',
       [],
       null,
-      ["strategy" => "defer"]
+      []
     );
 
     wp_enqueue_script(
       'cliniko-stripe-js',
-      plugin_dir_url(__DIR__) . '/Widgets/assets/js/cliniko-stripe.js',
+      plugin_dir_url(__FILE__) . 'assets/js/cliniko-stripe.js',
       ["jquery"],
       null,
-      ["strategy" => "defer"]
+      []
     );
 
     $template = isset($settings['booking_html_template']) ? ltrim($settings['booking_html_template']) : '';
@@ -135,7 +141,7 @@ wp_enqueue_script(
       'logo_url' => $logo_url,
     ]);
 
-    
+
 
     wp_localize_script(
       'form-handler-js',
@@ -150,6 +156,7 @@ wp_enqueue_script(
     );
 
     require_once __DIR__ . '/templates/cliniko_multistep_form.phtml';
+
 
     if ($is_editor) {
       require __DIR__ . '/templates/card_form_mock.phtml';

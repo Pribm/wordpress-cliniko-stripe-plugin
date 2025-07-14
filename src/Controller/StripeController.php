@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
 use App\Model\AppointmentType;
 if (!defined('ABSPATH')) exit;
 
@@ -33,7 +33,7 @@ class StripeController
             ]];
         }
         
-        $client = ClinikoClient::getInstance();
+        $client = Client::getInstance();
         $module = AppointmentType::find($moduleId, $client);
    
         $clientSecret = $this->stripe->createPaymentIntent(

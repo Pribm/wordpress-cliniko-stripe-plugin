@@ -1,14 +1,12 @@
-<?php if (!defined('ABSPATH'))
+<?php
+if (!defined('ABSPATH'))
   exit;
 
-use App\Client\ClinikoClient;
-
+use App\Model\AppointmentType;
 
 include_once __DIR__ . "/control-variables.php";
 
-
-$client = ClinikoClient::getInstance();
-$payment_details = App\Model\AppointmentType::find($settings['module_id'], $client);
+$payment_details = AppointmentType::find($settings['module_id'], cliniko_client(true));
 ?>
 
 <div id="payment_form" style="

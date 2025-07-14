@@ -1,52 +1,76 @@
 <?php
 namespace App\Model;
-if (!defined('ABSPATH')) exit;
+
+use App\Contracts\ApiClientInterface;
 use App\DTO\CreatePatientDTO;
 use App\DTO\PatientDTO;
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
+
+if (!defined('ABSPATH')) exit;
 
 class Patient
 {
     public function __construct(
         protected PatientDTO $dto,
-        protected ClinikoClient $client
+        protected ApiClientInterface $client
     ) {}
 
-    public static function find(string $id, ClinikoClient $client): ?self
+    public static function find(string $id, ApiClientInterface $client): ?self
     {
-        $data = $client->get("patients/{$id}");
-        return new self(PatientDTO::fromArray($data), $client);
+        $response = $client->get("patients/{$id}");
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientDTO::fromArray($response->data), $client);
     }
 
-    public static function create(CreatePatientDTO $dto, ClinikoClient $client): self
+    public static function create(CreatePatientDTO $dto, ApiClientInterface $client): ?self
     {
         $response = $client->post('patients', $dto->toArray());
-        return new self(PatientDTO::fromArray($response), $client);
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientDTO::fromArray($response->data), $client);
     }
 
-    public static function findFromUrl(string $url, ClinikoClient $client): ?self
+    public static function findFromUrl(string $url, ApiClientInterface $client): ?self
     {
-        $data = $client->get($url);
-        return new self(PatientDTO::fromArray($data), $client);
+        $response = $client->get($url);
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientDTO::fromArray($response->data), $client);
     }
 
-    public static function query(string $query, ClinikoClient $client)
+    public static function query(string $query, ApiClientInterface $client): ?self
     {
-        $t = "patients".$query;
-        $data = $client->get("patients".$query);
+        $response = $client->get("patients" . $query);
 
-        $filteredPatients = $data["patients"];
+        if (!$response->isSuccessful()) {
+            return null;
+        }
 
-        $firstFiltered = $filteredPatients[0];
+        $patients = $response->data["patients"] ?? [];
 
-        if(!$firstFiltered) return null;
+        if (empty($patients)) {
+            return null;
+        }
 
-        return new self(PatientDTO::fromArray($firstFiltered), $client);
+        return new self(PatientDTO::fromArray($patients[0]), $client);
     }
 
     // Getters
 
-    public function getId(): string { return $this->dto->id; }
+    public function getId(): string
+    {
+        return $this->dto->id;
+    }
 
     public function getFullName(): string
     {
@@ -66,5 +90,8 @@ class Patient
     public function getOccupation(): ?string { return $this->dto->occupation; }
     public function getNotes(): ?string { return $this->dto->notes; }
 
-    public function getDTO(){return $this->dto;}
+    public function getDTO(): PatientDTO
+    {
+        return $this->dto;
+    }
 }

@@ -2,51 +2,66 @@
 
 namespace App\Model;
 
-use App\Exception\ApiException;
-if (!defined('ABSPATH'))
-    exit;
-
+use App\Contracts\ApiClientInterface;
 use App\DTO\PatientFormDTO;
 use App\DTO\CreatePatientFormDTO;
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
+use App\Exception\ApiException;
+
+if (!defined('ABSPATH')) exit;
 
 class PatientForm
 {
     protected PatientFormDTO $dto;
-    protected ClinikoClient $client;
+    protected ApiClientInterface $client;
 
-    public function __construct(PatientFormDTO $dto, ClinikoClient $client)
+    public function __construct(PatientFormDTO $dto, ApiClientInterface $client)
     {
         $this->dto = $dto;
         $this->client = $client;
     }
 
-    public static function find(string $id, ClinikoClient $client): ?self
+    public static function find(string $id, ApiClientInterface $client): ?self
     {
-        $data = $client->get("patient_forms/{$id}");
-        if (!$data)
-            return null;
+        $response = $client->get("patient_forms/{$id}");
 
-        return new self(PatientFormDTO::fromArray($data), $client);
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientFormDTO::fromArray($response->data), $client);
     }
 
-    public static function create(CreatePatientFormDTO $dto, ClinikoClient $client): self
+    public static function create(CreatePatientFormDTO $dto, ApiClientInterface $client): self
     {
+        $response = $client->post("patient_forms", $dto->toArray());
 
-        $data = $client->post("patient_forms", $dto->toArray());
-        if (isset($data['errors'])) {
-            throw new ApiException("Api Validation error", [
-                "errors" => $data["errors"],
+        if (!$response->isSuccessful()) {
+            throw new ApiException("Request to create patient form failed.", [
+                "error" => $response->error,
                 "serialized_obj" => $dto->toArray()
             ]);
         }
-        return new self(PatientFormDTO::fromArray($data), $client);
+
+        if (isset($response->data['errors'])) {
+            throw new ApiException("API Validation error", [
+                "errors" => $response->data["errors"],
+                "serialized_obj" => $dto->toArray()
+            ]);
+        }
+
+        return new self(PatientFormDTO::fromArray($response->data), $client);
     }
 
-    public static function findFromUrl(string $url, ClinikoClient $client): ?self
+    public static function findFromUrl(string $url, ApiClientInterface $client): ?self
     {
-        $data = $client->get($url);
-        return new self(PatientFormDTO::fromArray($data), $client);
+        $response = $client->get($url);
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientFormDTO::fromArray($response->data), $client);
     }
 
     // Getters
@@ -85,28 +100,46 @@ class PatientForm
         return $this->dto->restricted_to_practitioner;
     }
 
-    public function getPatient()
+    public function getPatient(): array
     {
-        return $this->client->get($this->dto->links['patient']['self'] ?? '');
+        return $this->safeGetLinkedEntity($this->dto->links['patient']['self'] ?? '');
     }
 
-    public function getBusiness()
+    public function getBusiness(): array
     {
-        return $this->client->get($this->dto->links['business']['self'] ?? '');
+        return $this->safeGetLinkedEntity($this->dto->links['business']['self'] ?? '');
     }
 
-    public function getAttendee()
+    public function getAttendee(): array
     {
-        return $this->client->get($this->dto->links['attendee']['self'] ?? '');
+        return $this->safeGetLinkedEntity($this->dto->links['attendee']['self'] ?? '');
     }
 
-    public function getBooking()
+    public function getBooking(): array
     {
-        return $this->client->get($this->dto->links['booking']['self'] ?? '');
+        return $this->safeGetLinkedEntity($this->dto->links['booking']['self'] ?? '');
     }
 
-    public function getSignatures()
+    public function getSignatures(): array
     {
-        return $this->client->get($this->dto->links['signatures']['self'] ?? '');
+        return $this->safeGetLinkedEntity($this->dto->links['signatures']['self'] ?? '');
+    }
+
+    /**
+     * Shared handler for linked entity fetches
+     */
+    protected function safeGetLinkedEntity(string $url): array
+    {
+        if (!$url) {
+            return [];
+        }
+
+        $response = $this->client->get($url);
+
+        if (!$response->isSuccessful()) {
+            return [];
+        }
+
+        return $response->data;
     }
 }

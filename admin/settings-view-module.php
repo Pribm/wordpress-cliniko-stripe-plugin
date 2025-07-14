@@ -1,6 +1,6 @@
 <?php
 
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
 use App\Model\AppointmentType;
 if (!defined('ABSPATH')) exit;
 
@@ -18,7 +18,7 @@ add_action('admin_menu', function () {
 
 // Renderiza a tabela de módulos
 function render_cliniko_modules_page() {
-  $client = ClinikoClient::getInstance();
+  $client = Client::getInstance();
   $modules = AppointmentType::all($client);
   ?>
   <div class="wrap">

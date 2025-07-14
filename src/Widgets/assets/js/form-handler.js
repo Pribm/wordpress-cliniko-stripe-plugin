@@ -95,7 +95,10 @@ function parseFormToStructuredBody(formEl) {
   return structured;
 }
 
+
+
 (function () {
+ 
   setupSignatureCanvas();
   let currentStep = 0;
   let stripeInitStarted = false;

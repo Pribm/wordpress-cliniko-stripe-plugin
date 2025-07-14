@@ -1,58 +1,79 @@
 <?php
 namespace App\Model;
-if (!defined('ABSPATH')) exit;
+
+use App\Contracts\ApiClientInterface;
 use App\DTO\CreatePatientCaseDTO;
 use App\DTO\PatientCaseDTO;
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
+
+if (!defined('ABSPATH')) exit;
 
 class PatientCase
 {
     protected PatientCaseDTO $dto;
-    protected ClinikoClient $client;
+    protected ApiClientInterface $client;
 
-    public function __construct(PatientCaseDTO $dto, ClinikoClient $client)
+    public function __construct(PatientCaseDTO $dto, ApiClientInterface $client)
     {
         $this->dto = $dto;
         $this->client = $client;
     }
 
-    public static function find(string $id, ClinikoClient $client): ?self
+    public static function find(string $id, ApiClientInterface $client): ?self
     {
-        $data = $client->get("patient_cases/{$id}");
-        if (!$data)
-            return null;
+        $response = $client->get("patient_cases/{$id}");
 
-        return new self(PatientCaseDTO::fromArray($data), $client);
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientCaseDTO::fromArray($response->data), $client);
     }
 
     /**
      * @return PatientCase[]
      */
-    public static function all(ClinikoClient $client): array
+    public static function all(ApiClientInterface $client): array
     {
         $response = $client->get("patient_cases");
+
+        if (!$response->isSuccessful()) {
+            return [];
+        }
+
         $items = [];
 
-        foreach ($response['patient_cases'] ?? [] as $item) {
+        foreach ($response->data['patient_cases'] ?? [] as $item) {
             $items[] = new self(PatientCaseDTO::fromArray($item), $client);
         }
 
         return $items;
     }
 
-    public static function create(CreatePatientCaseDTO $dto, ClinikoClient $client)
+    public static function create(CreatePatientCaseDTO $dto, ApiClientInterface $client): ?self
     {
-        $data = $client->post('patient_cases', $dto->toArray());
-        return new self(PatientCaseDTO::fromArray($data), $client);
+        $response = $client->post('patient_cases', $dto->toArray());
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientCaseDTO::fromArray($response->data), $client);
     }
 
-    public static function findFromUrl(string $url, ClinikoClient $client): ?self
+    public static function findFromUrl(string $url, ApiClientInterface $client): ?self
     {
-        $data = $client->get($url);
-        return new self(PatientCaseDTO::fromArray($data), $client);
+        $response = $client->get($url);
+
+        if (!$response->isSuccessful()) {
+            return null;
+        }
+
+        return new self(PatientCaseDTO::fromArray($response->data), $client);
     }
 
     // Getters
+
     public function getId(): string
     {
         return $this->dto->id;
@@ -73,16 +94,19 @@ class PatientCase
         return $this->dto->closed;
     }
 
-
     public function isReferral(): bool
     {
         return $this->dto->referral;
     }
 
-
     public function getBookings(): array
     {
-        return $this->client->get($this->dto->bookingsUrl);
-    }
+        $response = $this->client->get($this->dto->bookingsUrl);
 
+        if (!$response->isSuccessful()) {
+            return [];
+        }
+
+        return $response->data['bookings'] ?? [];
+    }
 }

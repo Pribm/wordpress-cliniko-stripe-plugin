@@ -1,16 +1,17 @@
 <?php
 namespace App\Service;
 
-use App\Client\ClinikoClient;
+use App\Client\Cliniko\Client;
+use App\Contracts\ApiClientInterface;
 use App\Exception\ApiException;
 
 class ClinikoAttachmentService
 {
-    protected ClinikoClient $client;
+    protected ApiClientInterface $client;
 
     public function __construct()
     {
-        $this->client = ClinikoClient::getInstance();
+        $this->client = Client::getInstance();
     }
 
     /**
@@ -18,7 +19,7 @@ class ClinikoAttachmentService
      */
     public function getPresignedPost(int $patientId): array
     {
-        $response = $this->client->get("patients/{$patientId}/attachment_presigned_post");
+        $response = $this->client->get("patients/{$patientId}/attachment_presigned_post")->data;
 
         if (empty($response['url']) || empty($response['fields'])) {
             throw new ApiException("Invalid response from presigned URL request", ['response' => $response]);
@@ -92,7 +93,7 @@ class ClinikoAttachmentService
             'patient_id' => $patientId,
             'upload_url' => $uploadUrl,
             'description' => $description
-        ]);
+        ])->data;
     }
 
     /**
