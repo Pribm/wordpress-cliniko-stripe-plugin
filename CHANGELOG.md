@@ -1,3 +1,17 @@
+## [1.1.2] - 2025-07-14
+
+### Added
+- Styled error message display below payment form (instead of alert)
+- Graceful fallback if Stripe fails to initialize.
+
+### Changed
+- All backend and frontend errors now properly hide the loading overlay
+- Improved user feedback for booking errors from backend or Stripe
+
+### Fixed
+- Loader would not hide on token or submission failures
+- Alerts were replaced with inline error messages for better user experience
+
 # 📦 Cliniko Stripe Integration — v1.1.1
 
 **Release Date:** 2025-07-14
