@@ -31,6 +31,8 @@ jobs:
             --exclude=".git*" \
             --exclude=".distignore" \
             --exclude=".github" \
+            --exclude="CHANGELOG.md"
+            --exclude="README.md"
             --exclude="tests" \
             --exclude="composer.*" \
             --exclude="phpstan.*" \
