@@ -1,22 +1,22 @@
 <?php
-/*
-Plugin Name: Cliniko Stripe Integration
-Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
-Description: Integração entre Stripe e Cliniko via WordPress.
-Author: Paulo Monteiro
-Author URI: https://github.com/Pribm
-GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
-Version: 1.1.2
-*/
 
+use App\Widgets\ClinikoForm\Widget;
 
 defined('ABSPATH') || exit;
 
+/*
+Plugin Name: Cliniko Stripe Integration
+Description: Integração entre Stripe e Cliniko via WordPress.
+Author: Paulo Monteiro
+Author URI: https://github.com/Pribm
+Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
+GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
+Version: 1.1.3
+*/
 
-
-use App\Widgets\AppointmentTypeCard\Widget as AppointmentTypeCard;
-use App\Widgets\ClinikoStripeWidget;
 use Elementor\Plugin;
+use App\Widgets\ClinikoForm\Widget as ClinikoStripeForm;
+use App\Widgets\AppointmentTypeCard\Widget as AppointmentTypeCard;
 
 require_once __DIR__ . '/admin/menu.php';
 require_once __DIR__ . '/admin/settings-credentials.php';
@@ -36,9 +36,8 @@ function pagamento_api_add_settings_link($links): array {
 
 
 add_action('elementor/widgets/register', function ($widgets_manager) {
-  $widgets_manager->register(new ClinikoStripeWidget());
+  $widgets_manager->register(new ClinikoStripeForm());
   $widgets_manager->register(new AppointmentTypeCard());
-  
 });
 
 

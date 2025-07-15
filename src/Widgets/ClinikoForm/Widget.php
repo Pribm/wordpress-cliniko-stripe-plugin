@@ -1,16 +1,13 @@
 <?php
-namespace App\Widgets;
+namespace App\Widgets\ClinikoForm;
+if (!defined('ABSPATH')) exit;
 
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
-if (!defined('ABSPATH'))
-  exit;
-
-
 use Elementor\Widget_Base;
 use Elementor\Controls_Manager;
 
-class ClinikoStripeWidget extends Widget_Base
+class Widget extends Widget_Base
 {
   public function get_name()
   {
@@ -27,8 +24,6 @@ class ClinikoStripeWidget extends Widget_Base
     return 'eicon-lock-user';
   }
 
-
-
   public function get_categories()
   {
     return ['general'];
@@ -42,7 +37,6 @@ class ClinikoStripeWidget extends Widget_Base
     register_style_controls($this);
     register_details_style_controls($this);
     register_cliniko_form_style_controls($this);
-
   }
 
   public function render()
@@ -74,14 +68,12 @@ class ClinikoStripeWidget extends Widget_Base
       ['strategy' => 'async']
     );
 
-
-
     try {
-      $template = PatientFormTemplate::find($form_template_id, cliniko_client(true));
-
-      $sections = $template ? $template->getSections() : [];
+      $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true));
+      $sections = $templateModel ? $templateModel->getSections() : [];
     } catch (\Exception $e) {
       new ApiException($e->getMessage());
+      $sections = [];
     }
 
     wp_enqueue_script(
@@ -141,7 +133,10 @@ class ClinikoStripeWidget extends Widget_Base
       'logo_url' => $logo_url,
     ]);
 
-
+    $pad = $settings['form_button_padding'] ?? null;
+    $btn_pad = isset($pad['top'], $pad['right'], $pad['bottom'], $pad['left'], $pad['unit']) ?
+      "{$pad['top']}{$pad['unit']} {$pad['right']}{$pad['unit']} {$pad['bottom']}{$pad['unit']} {$pad['left']}{$pad['unit']}" :
+      '12px 24px';
 
     wp_localize_script(
       'form-handler-js',
@@ -150,13 +145,12 @@ class ClinikoStripeWidget extends Widget_Base
         'sections' => $sections ?? [],
         'btn_bg' => esc_attr($settings['form_button_color']),
         'btn_text' => esc_attr($settings['form_button_text_color']),
-        'btn_pad' => esc_attr($settings['form_button_padding']),
-        'border_radius' => esc_attr($settings['form_border_radius']['size']),
+        'btn_pad' => $btn_pad,
+        'border_radius' => esc_attr($settings['form_border_radius']['size']) . 'px',
       ]
     );
 
     require_once __DIR__ . '/templates/cliniko_multistep_form.phtml';
-
 
     if ($is_editor) {
       require __DIR__ . '/templates/card_form_mock.phtml';
@@ -165,5 +159,4 @@ class ClinikoStripeWidget extends Widget_Base
 
     require __DIR__ . '/templates/card_form_real.phtml';
   }
-
 }

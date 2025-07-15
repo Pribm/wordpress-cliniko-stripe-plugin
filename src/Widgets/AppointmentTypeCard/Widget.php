@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Widgets\AppointmentTypeCard;
 if (!defined('ABSPATH')) exit;
 

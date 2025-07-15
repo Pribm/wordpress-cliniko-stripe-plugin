@@ -1,3 +1,17 @@
+## [1.1.3] - 2025-07-16
+
+### Added
+- Support for icons in multi-step form buttons (prev/next), with position and spacing control
+- Elementor controls to manage button icons visually
+
+### Changed
+- Reorganized all widgets into structured `src/Widgets` folder
+- Default button styles now inherit primary theme color
+
+### Fixed
+- Avoided PHP warning from `esc_attr()` when handling Dimensions arrays
+- Improved flexibility and maintainability of inline styles and template logic
+
 ## [1.1.2] - 2025-07-14
 
 ### Added
