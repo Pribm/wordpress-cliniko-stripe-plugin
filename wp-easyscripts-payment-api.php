@@ -11,7 +11,8 @@ Author: Paulo Monteiro
 Author URI: https://github.com/Pribm
 Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
-Version: 1.1.3
+Release Asset: true
+Version: 1.1.4
 */
 
 use Elementor\Plugin;
