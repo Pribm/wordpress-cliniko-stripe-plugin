@@ -5,12 +5,12 @@ use App\Widgets\ClinikoForm\Widget;
 defined('ABSPATH') || exit;
 
 /*
-Plugin Name: Cliniko Stripe Integration
+Plugin Name: Wordpress Cliniko Stripe Plugin
 Description: Integração entre Stripe e Cliniko via WordPress.
 Author: Paulo Monteiro
 GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Release Asset: true
-Version: 1.2.1
+Version: 1.2.2
 */
 
 use Elementor\Plugin;
