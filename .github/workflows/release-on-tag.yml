@@ -28,13 +28,12 @@ jobs:
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Prepare plugin ZIP (with plugin folder inside)
+      - name: Prepare plugin ZIP for GitHub Updater
+        env:
+          PLUGIN_NAME: wordpress-cliniko-stripe-plugin
+          VERSION: ${{ steps.get_version.outputs.version }}
         run: |
-          PLUGIN_NAME="wordpress-cliniko-stripe-plugin"
-          VERSION="${{ steps.get_version.outputs.version }}"
-          BUILD_DIR="build"
-          mkdir -p $BUILD_DIR/$PLUGIN_NAME
-
+          mkdir -p build/$PLUGIN_NAME
           rsync -av \
             --exclude=".git*" \
             --exclude=".distignore" \
@@ -49,16 +48,17 @@ jobs:
             --exclude="stubs" \
             --exclude="scripts" \
             --exclude="*.xml" \
-            ./ $BUILD_DIR/$PLUGIN_NAME/
-
-          cd $BUILD_DIR
+            ./ build/$PLUGIN_NAME/
+          cd build
           zip -r ../${PLUGIN_NAME}-${VERSION}.zip $PLUGIN_NAME
           cd ..
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
+        env:
+          VERSION: ${{ steps.get_version.outputs.version }}
         with:
-          files: wordpress-cliniko-stripe-plugin-${{ steps.get_version.outputs.version }}.zip
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: Release v${{ steps.get_version.outputs.version }}
-          body: "Automated release for version v${{ steps.get_version.outputs.version }}"
+          files: wordpress-cliniko-stripe-plugin-${{ env.VERSION }}.zip
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          body: "Automated release for version v${{ env.VERSION }}"
