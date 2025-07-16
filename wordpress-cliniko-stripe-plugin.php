@@ -1,22 +1,18 @@
 <?php
-
-use App\Widgets\ClinikoForm\Widget;
-
-defined('ABSPATH') || exit;
-
 /*
 Plugin Name: WordPress Cliniko Stripe Plugin
 Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Description: Integração entre Stripe e Cliniko via WordPress.
 Author: Paulo Monteiro
 Author URI: https://github.com/Pribm
-Version: 1.2.5
+Version: 1.2.6
 
 GitHub Plugin URI: Pribm/wordpress-cliniko-stripe-plugin
 Primary Branch: main
 Release Asset: true
 */
-
+defined('ABSPATH') || exit;
+use App\Widgets\ClinikoForm\Widget;
 use Elementor\Plugin;
 use App\Widgets\ClinikoForm\Widget as ClinikoStripeForm;
 use App\Widgets\AppointmentTypeCard\Widget as AppointmentTypeCard;
