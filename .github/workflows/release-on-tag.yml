@@ -28,19 +28,25 @@ jobs:
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Prepare plugin ZIP
+      - name: Prepare plugin ZIP with files at root
         run: |
-          mkdir plugin-build
+          mkdir plugin-dist
           rsync -av \
             --exclude=".git*" \
+            --exclude=".distignore" \
             --exclude=".github" \
+            --exclude="CHANGELOG.md" \
+            --exclude="README.md" \
             --exclude="tests" \
             --exclude="composer.*" \
             --exclude="phpstan.*" \
             --exclude="*.neon" \
+            --exclude="*.yml" \
+            --exclude="stubs" \
+            --exclude="scripts" \
             --exclude="*.xml" \
-            ./ ./plugin-build/
-          cd plugin-build
+            ./ plugin-dist/
+          cd plugin-dist
           zip -r ../cliniko-stripe-integration-${{ steps.get_version.outputs.version }}.zip .
           cd ..
 
