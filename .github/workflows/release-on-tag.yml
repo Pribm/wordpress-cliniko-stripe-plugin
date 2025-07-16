@@ -47,13 +47,13 @@ jobs:
             --exclude="*.xml" \
             ./ plugin-dist/
           cd plugin-dist
-          zip -r ../cliniko-stripe-integration.zip .
+          zip -r ../wordpress-cliniko-stripe-plugin.zip .
           cd ..
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: cliniko-stripe-integration.zip
+          files: wordpress-cliniko-stripe-plugin.zip
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Release v${{ steps.get_version.outputs.version }}
           body: "Automated release for version v${{ steps.get_version.outputs.version }}"
