@@ -12,7 +12,7 @@ Author URI: https://github.com/Pribm
 Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 GitHub Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Release Asset: true
-Version: 1.1.4
+Version: 1.1.6
 */
 
 use Elementor\Plugin;
