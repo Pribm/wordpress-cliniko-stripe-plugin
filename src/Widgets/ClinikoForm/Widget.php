@@ -8,7 +8,6 @@ if (!defined('ABSPATH'))
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 use Elementor\Widget_Base;
-use Elementor\Controls_Manager;
 
 class Widget extends Widget_Base
 {
