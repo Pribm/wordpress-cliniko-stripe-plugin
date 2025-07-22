@@ -1,0 +1,118 @@
+
+/* form-style.css */
+#prepayment-form {
+  padding: 20px;
+  background: var(--form-bg, #ffffff);
+  color: var(--form-text-color, #000000);
+  font-family: var(--form-font-family, Arial, sans-serif);
+  border-radius: var(--form-border-radius, 6px);
+}
+
+#prepayment-form input[type="text"],
+#prepayment-form input[type="email"],
+#prepayment-form input[type="date"],
+#prepayment-form textarea {
+  width: 100%;
+  padding: 10px;
+  border: var(--form-input-border, 1px solid #ccc);
+  border-radius: var(--form-border-radius, 6px);
+}
+
+#prepayment-form input[type="checkbox"],
+#prepayment-form input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--form-color-primary, #0073e6);
+  background-color: #fff;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+#prepayment-form input[type="checkbox"]:hover,
+#prepayment-form input[type="radio"]:hover {
+  box-shadow: 0 0 0 3px rgba(0, 115, 230, 0.15);
+}
+
+#prepayment-form input[type="checkbox"] {
+  border-radius: 6px;
+}
+
+#prepayment-form input[type="checkbox"]:checked,
+#prepayment-form input[type="radio"]:checked {
+  background-color: var(--form-color-primary, #0073e6);
+  border-color: var(--form-color-primary, #0073e6);
+}
+
+#prepayment-form input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+#prepayment-form input[type="radio"] {
+  border-radius: 50%;
+}
+
+#prepayment-form input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+}
+
+#prepayment-form input[type="checkbox"]:focus,
+#prepayment-form input[type="radio"]:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.multi-form-button {
+  font-size: 20px;
+  font-weight: 500;
+  height: 45px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--form-button-radius, 6px);
+  gap: var(--form-icon-gap, 8px);
+}
+
+.multi-form-button.prev-button {
+  background: transparent;
+  border: 1px solid var(--form-color-primary, #0073e6);
+  color: var(--form-color-primary, #0073e6);
+}
+
+.multi-form-button.next-button {
+  background: var(--form-color-primary, #0073e6);
+  color: var(--form-color-contrast, #ffffff);
+  border: none;
+}
+
+.progress-step {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--form-color-primary, #0073e6);
+}

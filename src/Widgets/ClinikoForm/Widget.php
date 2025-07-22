@@ -1,6 +1,9 @@
 <?php
 namespace App\Widgets\ClinikoForm;
-if (!defined('ABSPATH')) exit;
+
+use Elementor\Plugin;
+if (!defined('ABSPATH'))
+  exit;
 
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
@@ -31,7 +34,8 @@ class Widget extends Widget_Base
 
   public function _register_controls()
   {
-    require_once plugin_dir_path(__FILE__) . './controls/index.php';
+
+    require plugin_dir_path(__FILE__) . 'controls/index.php';
     register_cliniko_form_controls($this);
     register_content_controls($this);
     register_style_controls($this);
@@ -41,9 +45,18 @@ class Widget extends Widget_Base
 
   public function render()
   {
-    $settings = $this->get_settings_for_display();
-    $is_editor = \Elementor\Plugin::$instance->editor->is_edit_mode();
+    wp_enqueue_style(
+      'font-awesome-5',
+      'https://use.fontawesome.com/releases/v5.15.4/css/all.css',
+      [],
+      null
+    );
+    
+    $settings = $this->get_settings();
+
+    $is_editor = Plugin::$instance->editor->is_edit_mode();
     $form_template_id = $settings['cliniko_form_template_id'] ?? null;
+
 
     wp_enqueue_script(
       'loading-overlay',
@@ -96,18 +109,18 @@ class Widget extends Widget_Base
     $field_mapping_array = $settings['field_mapping'] ?? [];
 
     $appearance = [
-      'theme' => $settings['theme'],
+      'theme' => $settings['theme'] ?? 'flat',
       'variables' => [
-        'colorPrimary' => esc_attr($settings['color_primary']),
-        'colorText' => esc_attr($settings['color_text']),
-        'colorBackground' => esc_attr($settings['color_background']),
-        'borderRadius' => esc_attr($settings['border_radius']['size']) . 'px',
-        'fontFamily' => esc_attr($settings['font_family']),
-        'input_border' => esc_attr($settings['input_border'])
+        'colorPrimary' => esc_attr($settings['color_primary'] ?? '#0073e6'),
+        'colorText' => esc_attr($settings['color_text'] ?? '#333'),
+        'colorBackground' => esc_attr($settings['color_background'] ?? '#ffffff'),
+        'borderRadius' => esc_attr($settings['border_radius']['size'] ?? 6) . 'px',
+        'fontFamily' => esc_attr($settings['font_family'] ?? 'Arial, sans-serif'),
+        'input_border' => esc_attr($settings['input_border'] ?? '1px solid #ccc')
       ],
       'rules' => [
         '.Input' => [
-          'border' => esc_attr($settings['input_border']),
+          'border' => esc_attr($settings['input_border'] ?? '1px solid #ccc'),
         ]
       ]
     ];
@@ -143,10 +156,10 @@ class Widget extends Widget_Base
       'formHandlerData',
       [
         'sections' => $sections ?? [],
-        'btn_bg' => esc_attr($settings['form_button_color']),
-        'btn_text' => esc_attr($settings['form_button_text_color']),
+        'btn_bg' => esc_attr($settings['form_button_color'] ?? '#0073e6'),
+        'btn_text' => esc_attr($settings['form_button_text_color'] ?? '#ffffff'),
         'btn_pad' => $btn_pad,
-        'border_radius' => esc_attr($settings['form_border_radius']['size']) . 'px',
+        'border_radius' => esc_attr($settings['form_border_radius']['size'] ?? 6) . 'px',
       ]
     );
 

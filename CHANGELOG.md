@@ -1,3 +1,19 @@
+## [1.1.4] - 2025-10-02
+
+### Added
+- Toastify.js integration to replace native alert popups with subtle Material-like toast notifications
+- Custom `showToast()` helper with theme-based styling and inline SVG icon
+- Validation listeners to reset field outlines/borders when user starts typing or selecting
+
+### Changed
+- Required checkbox groups now display a red outline if no options are selected
+- Improved UX: error messages are now unobtrusive and styled, without interrupting flow
+- `isCurrentStepValid()` now handles grouped checkboxes, radios, and general field validation in a more modular way
+
+### Fixed
+- Prevented "false" output from appearing when conditionally adding `data-required-group` attribute
+- Fixed issue where validation errors didn't clear styling when user corrected the field
+
 ## [1.1.3] - 2025-07-16
 
 ### Added

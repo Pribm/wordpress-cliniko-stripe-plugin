@@ -5,6 +5,7 @@ use Elementor\Controls_Manager;
 
 function register_cliniko_form_style_controls($widget)
 {
+  error_log('Entrou no form style controls');
   // Seção: Estilo Geral
   $widget->start_controls_section('form_style_section', [
     'label' => 'Form Container',
