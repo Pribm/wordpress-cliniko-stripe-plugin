@@ -95,9 +95,43 @@ function parseFormToStructuredBody(formEl) {
   return structured;
 }
 
+function showToast(message) {
+  Toastify({
+    text: `
+      <div style="
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" fill="#f44336" viewBox="0 0 24 24">
+          <path d="M1 21h22L12 2 1 21zm13-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+        </svg>
+        <span style="
+          color: #333;
+          font-size: 14px;
+          font-weight: 500;
+        ">${message}</span>
+      </div>
+    `,
+    duration: 4000,
+    gravity: "bottom",
+    position: "left",
+    stopOnFocus: true,
+    escapeMarkup: false,
+    style: {
+      background: "#fff",
+      border: "1px solid #eee",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+      borderRadius: "8px",
+      padding: "12px 16px",
+      minWidth: "260px",
+      maxWidth: "360px"
+    }
+  }).showToast();
+}
 
 
-(function () {
+function mountForm () {
  
   setupSignatureCanvas();
   let currentStep = 0;
@@ -106,6 +140,9 @@ function parseFormToStructuredBody(formEl) {
   const steps = document.querySelectorAll(".form-step");
   const indicators = document.querySelectorAll(".progress-step");
   const nextBtn = document.getElementById("step-next");
+
+  let nextBtnLabel = nextBtn.innerHTML;
+
   const prevBtn = document.getElementById("step-prev");
   const activeColor = formHandlerData.btn_bg;
   const inactiveColor = "white";
@@ -128,29 +165,53 @@ function parseFormToStructuredBody(formEl) {
       }
     });
     prevBtn.style.display = i === 0 ? "none" : "inline-block";
-    nextBtn.textContent = i === steps.length - 1 ? "Submit" : "Next";
+
+    if(i === steps.length - 1){
+      nextBtn.textContent = "Submit"
+    }
     updateIndicators(i);
   }
 
-  function isCurrentStepValid() {
-    const currentFields = steps[currentStep].querySelectorAll("[required]");
-    for (let field of currentFields) {
-      if (
-        !field.value ||
-        (field.type === "radio" &&
-          !document.querySelector(`input[name="${field.name}"]:checked`))
-      ) {
-        field.style.borderColor = "red";
-        return false;
+ function isCurrentStepValid() {
+  const currentFields = steps[currentStep].querySelectorAll("[required], [data-required-group]");
+  let isValid = true;
+
+  for (let field of currentFields) {
+    // Handle required checkboxes group
+    if (field.hasAttribute("data-required-group")) {
+      const groupName = field.getAttribute("data-required-group");
+      const groupInputs = field.querySelectorAll(`input[name="${groupName}[]"]`);
+      const isChecked = Array.from(groupInputs).some(input => input.checked);
+
+      if (!isChecked) {
+        groupInputs.forEach(input => input.style.outline = "2px solid red");
+        isValid = false;
+      } else {
+        groupInputs.forEach(input => input.style.outline = "none");
       }
+
+      continue;
     }
-    return true;
+
+    // Handle single fields
+    if (
+      (!field.value && field.type !== "checkbox" && field.type !== "radio") ||
+      (field.type === "radio" && !document.querySelector(`input[name="${field.name}"]:checked`))
+    ) {
+      field.style.borderColor = "red";
+      isValid = false;
+    } else {
+      field.style.borderColor = "";
+    }
   }
+
+  return isValid;
+}
 
   nextBtn.addEventListener("click", () => {
     if (currentStep < steps.length - 1) {
       if (!isCurrentStepValid()) {
-        alert("Please fill in all required fields.");
+        showToast("Please fill in all required fields.");
         return;
       }
 
@@ -164,7 +225,7 @@ function parseFormToStructuredBody(formEl) {
       showStep(currentStep);
     } else {
       if (!isCurrentStepValid()) {
-        alert("Please fill in all required fields.");
+        showToast("Please fill in all required fields.");
         return;
       }
 
@@ -190,44 +251,82 @@ function parseFormToStructuredBody(formEl) {
       currentStep--;
       showStep(currentStep);
     }
+
+    if(currentStep + 1, steps.length - 1){
+      nextBtn.innerHTML = nextBtnLabel
+    }
   });
 
   showStep(currentStep);
-})();
+
+  function attachValidationListeners() {
+  // Inputs (text, email, date, etc.)
+  document.querySelectorAll("#prepayment-form input[required], #prepayment-form textarea[required]").forEach(input => {
+    input.addEventListener("input", () => {
+      input.style.borderColor = "";
+    });
+  });
+
+  // Required radio buttons
+  document.querySelectorAll("#prepayment-form input[type='radio'][required]").forEach(radio => {
+    radio.addEventListener("change", () => {
+      const group = document.getElementsByName(radio.name);
+      group.forEach(el => el.style.borderColor = "");
+    });
+  });
+
+  // Required checkbox groups
+  document.querySelectorAll("[data-required-group]").forEach(groupContainer => {
+    const groupName = groupContainer.getAttribute("data-required-group");
+    const checkboxes = groupContainer.querySelectorAll(`input[name="${groupName}[]"]`);
+    checkboxes.forEach(cb => {
+      cb.addEventListener("change", () => {
+        if ([...checkboxes].some(c => c.checked)) {
+          checkboxes.forEach(c => c.style.outline = "none");
+        }
+      });
+    });
+  });
+}
+
+
+attachValidationListeners();
+};
+
 
 function setupSignatureCanvas() {
   const canvas = document.getElementById("signature-pad");
   const clearBtn = document.getElementById("clear-signature");
   const signatureDataInput = document.getElementById("signature-data");
-
+  
   if (!canvas || !clearBtn || !signatureDataInput) return;
-
+  
   const ctx = canvas.getContext("2d");
   let drawing = false;
-
+  
   ctx.strokeStyle = "#000";
   ctx.lineWidth = 2;
   ctx.lineCap = "round";
-
+  
   // Desktop: mouse
   canvas.addEventListener("mousedown", (e) => {
     drawing = true;
     ctx.beginPath();
     ctx.moveTo(getX(e), getY(e));
   });
-
+  
   canvas.addEventListener("mousemove", (e) => {
     if (!drawing) return;
     ctx.lineTo(getX(e), getY(e));
     ctx.stroke();
   });
-
+  
   canvas.addEventListener("mouseup", () => {
     drawing = false;
     ctx.closePath();
     signatureDataInput.value = canvas.toDataURL("image/png");
   });
-
+  
   canvas.addEventListener("mouseleave", () => {
     if (drawing) {
       drawing = false;
@@ -235,7 +334,7 @@ function setupSignatureCanvas() {
       signatureDataInput.value = canvas.toDataURL("image/png");
     }
   });
-
+  
   // Mobile: touch
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
@@ -244,7 +343,7 @@ function setupSignatureCanvas() {
     ctx.beginPath();
     ctx.moveTo(getTouchX(touch), getTouchY(touch));
   });
-
+  
   canvas.addEventListener("touchmove", (e) => {
     e.preventDefault();
     if (!drawing) return;
@@ -252,35 +351,37 @@ function setupSignatureCanvas() {
     ctx.lineTo(getTouchX(touch), getTouchY(touch));
     ctx.stroke();
   });
-
+  
   canvas.addEventListener("touchend", () => {
     drawing = false;
     ctx.closePath();
     signatureDataInput.value = canvas.toDataURL("image/png");
   });
-
+  
   clearBtn.addEventListener("click", () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     signatureDataInput.value = "";
   });
-
+  
   function getX(e) {
     const rect = canvas.getBoundingClientRect();
     return e.clientX - rect.left;
   }
-
+  
   function getY(e) {
     const rect = canvas.getBoundingClientRect();
     return e.clientY - rect.top;
   }
-
+  
   function getTouchX(touch) {
     const rect = canvas.getBoundingClientRect();
     return touch.clientX - rect.left;
   }
-
+  
   function getTouchY(touch) {
     const rect = canvas.getBoundingClientRect();
     return touch.clientY - rect.top;
   }
 }
+
+document.addEventListener("DOMContentLoaded", () => mountForm())
