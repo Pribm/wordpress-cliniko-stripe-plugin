@@ -193,6 +193,13 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
     box-shadow: none;
   }
 
+  .field-error {
+    color: #f44336;
+    font-size: 10px;
+    margin-top: 4px;
+  }
+
+
   .multi-form-button {
     padding:
       <?= $btn_pad ?>
@@ -235,10 +242,17 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
     border: none;
   }
 </style>
-<!-- Toastify CSS -->
+
+<!-- 1. Toastify -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
-<!-- Toastify JS -->
 <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+<!-- 2. IMask -->
+<script src="https://unpkg.com/imask"></script>
+
+<!-- 3. Mask script -->
+<script src="<?= plugin_dir_url(__FILE__) ?>../assets/js/input-masks.js"></script>
+
 <form id="prepayment-form">
   <div id="form-progress-indicator" style="display: flex; align-items: center; margin-bottom: 20px; gap: 5px;">
     <?php
@@ -304,7 +318,7 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
 
               case 'checkboxes': ?>
 
-            <div <?= $question->required ? "data-required-group='$input_name'" : '' ?>>
+                <div <?= $question->required ? "data-required-group='$input_name'" : '' ?>>
                   <?php foreach ($question->answers as $opt): ?>
                     <label style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
                       <input type="checkbox" name="<?= $input_name ?>[]" value="<?= esc_attr($opt['value']) ?>" <?= $is_required ? 'data-required="true"' : '' ?> style="flex-shrink: 0;">

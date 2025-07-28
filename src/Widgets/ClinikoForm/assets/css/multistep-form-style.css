@@ -75,6 +75,13 @@
   border-radius: 50%;
 }
 
+.field-error {
+  color: #f44336;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+
 #prepayment-form input[type="checkbox"]:focus,
 #prepayment-form input[type="radio"]:focus {
   outline: none;

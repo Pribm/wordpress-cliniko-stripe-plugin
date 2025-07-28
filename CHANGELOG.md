@@ -1,3 +1,17 @@
+## [1.1.5] - 2025-10-03
+
+### Added
+- Custom validation for patient fields:
+  - Phone number: only accepts valid Australian numbers (minimum 10 digits after +61)
+  - Postcode: must be exactly 4 digits
+  - Email: format validation
+- Visual feedback for invalid fields:
+  - Red border and inline error message below the field
+  - Styles are automatically removed when the user starts typing again
+
+### Changed
+- Improved "Back" button behavior: now properly centered and only shown when applicable
+
 ## [1.1.4] - 2025-10-02
 
 ### Added
