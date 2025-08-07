@@ -1,6 +1,7 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+
 add_action('admin_init', function () {
   register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key');
   register_setting('wp_cliniko_stripe_group', 'wp_cliniko_business_id');

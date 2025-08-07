@@ -60,15 +60,28 @@ class ClinikoController
         try {
             // Step 1: Find Appointment Type
             $appointmentType = AppointmentType::find($payload['moduleId'], $client);
-            
 
             // Step 2: Process Payment
-            $paymentIntent = $stripeService->createChargeFromToken(
-                $payload['stripeToken'],
-                $appointmentType->getBillableItemsFinalPrice(),
-                $appointmentType->getName(),
-                $payload['patient']
-            );
+            $paymentIntent = null;
+
+            if ($appointmentType->requiresPayment()) {
+                if (empty($payload['stripeToken']) || !preg_match('/^tok_/', $payload['stripeToken'])) {
+                    return new WP_REST_Response([
+                        'status' => 'error',
+                        'message' => 'Payment is required but token is missing or invalid.',
+                        'errors' => [
+                            'stripeToken' => 'Missing or invalid payment token.'
+                        ]
+                    ], 422);
+                }
+
+                $paymentIntent = $stripeService->createChargeFromToken(
+                    $payload['stripeToken'],
+                    $appointmentType->getBillableItemsFinalPrice(),
+                    $appointmentType->getName(),
+                    $payload['patient']
+                );
+            }
 
             // Step 3: Create or retrieve patient
             $dto = new CreatePatientDTO();
@@ -153,7 +166,7 @@ class ClinikoController
             $patientFormDTOCreation->email_to_patient_on_completion = true;
             $patientFormDTOCreation->name = sprintf('%s - Appointment on %s', $_form->getName(), $appointmentFormatted);
 
-           PatientForm::create($patientFormDTOCreation, $client);
+            PatientForm::create($patientFormDTOCreation, $client);
 
             return new WP_REST_Response([
                 'status' => 'success',
@@ -162,8 +175,8 @@ class ClinikoController
                     'starts_at' => $createdAppointment->getStartsAt(),
                     'ends_at' => $createdAppointment->getEndsAt(),
                     'telehealth_url' => $createdAppointment->getTelehealthUrl(),
-                    'payment_reference' => $paymentIntent->id,
-                    'payment_method' => $paymentIntent->payment_method,
+                    'payment_reference' => $paymentIntent->id ?? null,
+                    'payment_method' => $paymentIntent->payment_method ?? null,
                 ],
                 'patient' => [
                     'id' => $patient->getId(),

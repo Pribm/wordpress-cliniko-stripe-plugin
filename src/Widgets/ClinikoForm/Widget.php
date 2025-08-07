@@ -72,14 +72,6 @@ class Widget extends Widget_Base
       null
     );
 
-    wp_enqueue_script(
-      'stripe-js',
-      'https://js.stripe.com/v3/',
-      [],
-      null,
-      ['strategy' => 'async']
-    );
-
     try {
       $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true));
       $sections = $templateModel ? $templateModel->getSections() : [];
@@ -89,6 +81,14 @@ class Widget extends Widget_Base
     }
 
     wp_enqueue_script(
+      'helpers-js',
+      plugin_dir_url(__FILE__) . 'assets/js/helpers.js',
+      [],
+      null,
+      []
+    );
+
+    wp_enqueue_script(
       'form-handler-js',
       plugin_dir_url(__FILE__) . 'assets/js/form-handler.js',
       [],
@@ -96,13 +96,27 @@ class Widget extends Widget_Base
       []
     );
 
-    wp_enqueue_script(
-      'cliniko-stripe-js',
-      plugin_dir_url(__FILE__) . 'assets/js/cliniko-stripe.js',
-      ["jquery"],
-      null,
-      []
-    );
+      if ($settings['enable_payment'] === 'yes') {
+      wp_enqueue_script(
+        'stripe-js',
+        'https://js.stripe.com/v3/',
+        [],
+        null,
+        ['strategy' => 'async']
+      );
+
+      wp_enqueue_script(
+        'cliniko-stripe-js',
+        plugin_dir_url(__FILE__) . 'assets/js/stripe.js',
+        ["jquery"],
+        null,
+        []
+      );
+
+      require __DIR__ . '/templates/card_form_real.phtml';
+    }
+
+
 
     $template = isset($settings['booking_html_template']) ? ltrim($settings['booking_html_template']) : '';
     $field_mapping_array = $settings['field_mapping'] ?? [];
@@ -128,21 +142,8 @@ class Widget extends Widget_Base
 
     wp_localize_script('cliniko-stripe-js', 'ClinikoStripeData', [
       'stripe_pk' => get_option('wp_stripe_public_key'),
-      'client_secret_url' => get_site_url() . '/wp-json/v1/client-secret',
-      'patient_form_template_id' => $form_template_id,
-      'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
       'module_id' => esc_attr($settings['module_id']),
-      'template' => $template,
-      'field_map' => array_reduce($field_mapping_array, function ($carry, $map) {
-        if (!empty($map['raw_name']) && !empty($map['mapped_name'])) {
-          $carry[$map['raw_name']] = $map['mapped_name'];
-        }
-        return $carry;
-      }, []),
-      'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect']),
-      'appearance' => $appearance,
-      'layout' => esc_js($settings['layout']),
-      'logo_url' => $logo_url,
+      'client_secret_url' => get_site_url() . '/wp-json/v1/client-secret',
     ]);
 
     $pad = $settings['form_button_padding'] ?? null;
@@ -159,6 +160,13 @@ class Widget extends Widget_Base
         'btn_text' => esc_attr($settings['form_button_text_color'] ?? '#ffffff'),
         'btn_pad' => $btn_pad,
         'border_radius' => esc_attr($settings['form_border_radius']['size'] ?? 6) . 'px',
+        'is_payment_enabled' => $settings['enable_payment'],
+        'module_id' => esc_attr($settings['module_id']),
+        'patient_form_template_id' => $form_template_id,
+        'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
+        'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect']),
+        'appearance' => $appearance,
+        'logo_url' => $logo_url,
       ]
     );
 
@@ -169,6 +177,6 @@ class Widget extends Widget_Base
       return;
     }
 
-    require __DIR__ . '/templates/card_form_real.phtml';
+
   }
 }

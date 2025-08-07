@@ -1,12 +1,10 @@
 <?php
-if (!defined('ABSPATH'))
-  exit;
+if (!defined('ABSPATH')) exit;
 
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 
-function hex2rgb($hex)
-{
+function hex2rgb($hex) {
   $hex = str_replace('#', '', $hex);
   if (strlen($hex) === 3) {
     $r = hexdec(str_repeat($hex[0], 2));
@@ -40,29 +38,32 @@ if (empty($sections)) {
   return;
 }
 
+// Settings
 $bg = esc_attr($settings['form_background_color'] ?? '#ffffff');
 $text = esc_attr($settings['form_text_color'] ?? '#000000');
 $font = esc_attr($settings['form_font_family'] ?? 'Arial, sans-serif');
 $label = esc_attr($settings['form_label_color'] ?? '#333333');
 $input_border = esc_attr($settings['form_input_border'] ?? '1px solid #ccc');
+$border_radius = esc_attr(($settings['form_border_radius']['size'] ?? 6) . ($settings['form_border_radius']['unit'] ?? 'px'));
 
-$border_radius_array = $settings['form_border_radius'] ?? ['size' => 6, 'unit' => 'px'];
-$border_radius = esc_attr("{$border_radius_array['size']}{$border_radius_array['unit']}");
-
+$titles_color = esc_attr($settings['titles_color'] ?? '#000000');
 $btn_bg = esc_attr($settings['form_button_color'] ?? '#0073e6');
 $btn_text = esc_attr($settings['form_button_text_color'] ?? '#ffffff');
+$btn_bg_rgb = hex2rgb($btn_bg);
 
 $pad = $settings['form_button_padding'] ?? null;
 $btn_pad = isset($pad['top'], $pad['right'], $pad['bottom'], $pad['left'], $pad['unit']) ?
   "{$pad['top']}{$pad['unit']} {$pad['right']}{$pad['unit']} {$pad['bottom']}{$pad['unit']} {$pad['left']}{$pad['unit']}" :
   '12px 24px';
 
-$radius_array = $settings['form_button_border_radius'] ?? ['size' => 6, 'unit' => 'px'];
-$radius = esc_attr("{$radius_array['size']}{$radius_array['unit']}");
-
-$layout = esc_attr($settings['form_button_layout'] ?? 'stacked');
-$width = esc_attr($settings['form_button_width'] ?? 'full');
-$alignment = esc_attr($settings['form_button_alignment'] ?? 'center');
+$radius = esc_attr(($settings['form_button_border_radius']['size'] ?? 6) . ($settings['form_button_border_radius']['unit'] ?? 'px'));
+$layout = $settings['form_button_layout'] ?? 'stacked';
+$width = $settings['form_button_width'] ?? 'full';
+$alignment = $settings['form_button_alignment'] ?? 'center';
+$icon_prev = $settings['form_button_icon_prev']['value'];
+$icon_next = $settings['form_button_icon_next']['value'];
+$icon_position = $settings['form_button_icon_position'] ?? 'before';
+$icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings['form_button_icon_spacing']['size'] . 'px' : '8px';
 
 $container_flex_direction = $layout === 'row' ? 'row' : 'column';
 $justify_content = match ($alignment) {
@@ -73,231 +74,72 @@ $justify_content = match ($alignment) {
   default => 'center',
 };
 $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
-
-$icon_prev = $settings['form_button_icon_prev']['value'];
-$icon_next = $settings['form_button_icon_next']['value'];
-$icon_position = $settings['form_button_icon_position'] ?? 'before';
-
-$icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings['form_button_icon_spacing']['size'] . 'px' : '8px';
 ?>
 
+<!-- 🧠 Inject CSS Variables -->
 <style>
-  #prepayment-form {
-    background:
-      <?= $bg ?>
-    ;
-    color:
-      <?= $text ?>
-    ;
-    font-family:
-      <?= $font ?>
-    ;
-    padding: 20px;
-    border-radius:
-      <?= $border_radius ?>
-    ;
-  }
+  :root {
+    --form-bg: <?= $bg ?>;
+    --form-text: <?= $text ?>;
+    --form-font: <?= $font ?>;
+    --form-label: <?= $label ?>;
+    --form-input-border: <?= $input_border ?>;
+    --form-radius: <?= $border_radius ?>;
 
-  #prepayment-form input[type="text"],
-  #prepayment-form input[type="email"],
-  #prepayment-form input[type="date"],
-  #prepayment-form textarea {
-    width: 100%;
-    padding: 10px;
-    border:
-      <?= $input_border ?>
-    ;
-    border-radius:
-      <?= $border_radius ?>
-    ;
-  }
-
-  #prepayment-form input[type="checkbox"],
-  #prepayment-form input[type="radio"] {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    outline: none;
-    margin: 0;
-    padding: 0;
-    cursor: pointer;
-    position: relative;
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 2px solid
-      <?= $btn_bg ?>
-    ;
-    background-color: #fff;
-    transition: all 0.25s ease;
-  }
-
-  #prepayment-form input[type="checkbox"]:hover,
-  #prepayment-form input[type="radio"]:hover {
-    box-shadow: 0 0 0 3px rgba(<?= hex2rgb($btn_bg) ?>, 0.15);
-  }
-
-  #prepayment-form input[type="checkbox"] {
-    border-radius: 6px;
-  }
-
-  #prepayment-form input[type="checkbox"]:checked {
-    background-color:
-      <?= $btn_bg ?>
-    ;
-    border-color:
-      <?= $btn_bg ?>
-    ;
-  }
-
-  #prepayment-form input[type="checkbox"]:checked::after {
-    content: '';
-    position: absolute;
-    top: 3px;
-    left: 6px;
-    width: 5px;
-    height: 10px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
-
-  #prepayment-form input[type="radio"] {
-    border-radius: 50%;
-  }
-
-  #prepayment-form input[type="radio"]:checked {
-    background-color:
-      <?= $btn_bg ?>
-    ;
-    border-color:
-      <?= $btn_bg ?>
-    ;
-  }
-
-  #prepayment-form input[type="radio"]:checked::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 8px;
-    height: 8px;
-    background: white;
-    border-radius: 50%;
-  }
-
-  #prepayment-form input[type="checkbox"]:focus,
-  #prepayment-form input[type="radio"]:focus {
-    outline: none;
-    box-shadow: none;
-  }
-
-  .field-error {
-    color: #f44336;
-    font-size: 10px;
-    margin-top: 4px;
-  }
-
-
-  .multi-form-button {
-    padding:
-      <?= $btn_pad ?>
-    ;
-    font-size: 20px;
-    font-weight: 500;
-    height: 45px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius:
-      <?= $radius ?>
-    ;
-    flex:
-      <?= $button_flex ?>
-    ;
-    gap:
-      <?= $icon_spacing ?>
-    ;
-  }
-
-  .multi-form-button.prev-button {
-    background: transparent;
-    border: 1px solid
-      <?= $btn_bg ?>
-    ;
-    color:
-      <?= $btn_bg ?>
-    ;
-  }
-
-  .multi-form-button.next-button {
-    background:
-      <?= $btn_bg ?>
-    ;
-    color:
-      <?= $btn_text ?>
-    ;
-    border: none;
+    --titles-color: <?= $titles_color ?>;
+    --btn-bg: <?= $btn_bg ?>;
+    --btn-bg-rgb: <?= $btn_bg_rgb ?>;
+    --btn-text: <?= $btn_text ?>;
+    --btn-pad: <?= $btn_pad ?>;
+    --btn-radius: <?= $radius ?>;
+    --btn-flex: <?= $button_flex ?>;
+    --btn-icon-gap: <?= $icon_spacing ?>;
   }
 </style>
 
-<!-- 1. Toastify -->
+<!-- External Libraries -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-
-<!-- 2. IMask -->
 <script src="https://unpkg.com/imask"></script>
-
-<!-- 3. Mask script -->
 <script src="<?= plugin_dir_url(__FILE__) ?>../assets/js/input-masks.js"></script>
 
+<link rel="stylesheet" href="<?= plugin_dir_url(__FILE__) ?>../assets/css/multistep-form-style.css">
+
+<!-- Multistep Form -->
 <form id="prepayment-form">
   <div id="form-progress-indicator" style="display: flex; align-items: center; margin-bottom: 20px; gap: 5px;">
-    <?php
-    $totalSteps = count($sections) + 1;
-    for ($index = 0; $index < $totalSteps; $index++):
-      ?>
+    <?php $totalSteps = count($sections) + 1; ?>
+    <?php for ($index = 0; $index < $totalSteps; $index++): ?>
       <?php if ($index > 0): ?>
         <div style="flex-grow: 1; height: 2px; background-color: #babfc5;"></div>
       <?php endif; ?>
-      <div class="progress-step" style="width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background-color: <?= $index === 0 ? $btn_bg : "white" ?>;
-    color: <?= $index === 0 ? "white" : $btn_bg ?>;
-    font-weight: bold;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s;
-    border: solid <?= $btn_bg ?> 1px;
-    ">
+      <div class="progress-step" style="
+        background-color: <?= $index === 0 ? 'var(--btn-bg)' : '#fff' ?>;
+        color: <?= $index === 0 ? '#fff' : 'var(--btn-bg)' ?>;
+      ">
         <?= $index + 1 ?>
       </div>
     <?php endfor; ?>
-
   </div>
+
   <div id="cliniko-form-steps">
     <?php foreach ($sections as $index => $section): ?>
       <div class="form-step" data-step="<?= $index ?>" style="<?= $index > 0 ? 'display: none;' : '' ?>">
-        <h3><?= esc_html($section->name) ?></h3>
+        <h3 class="multi-form-title-color"><?= esc_html($section->name) ?></h3>
         <?php if (!empty($section->description)): ?>
-          <p><?= wp_kses_post($section->description) ?></p>
+          <p class="multi-form-title-color"><?= wp_kses_post($section->description) ?></p>
         <?php endif; ?>
 
         <?php foreach ($section->questions as $question): ?>
           <?php
-          $input_name = esc_attr($question->name);
-          $required = !empty($question->required) ? 'required' : '';
-          $is_required = !empty($question->required);
+            $input_name = esc_attr($question->name);
+            $required = !empty($question->required) ? 'required' : '';
+            $is_required = !empty($question->required);
           ?>
           <div style="margin-bottom: 16px;">
-            <label style="font-weight: bold; display: block; margin-bottom: 4px; color: <?= $label ?>;">
-              <?= esc_html($question->name) ?>     <?php if ($is_required): ?><span style="color: red">*</span><?php endif; ?>
-            </label>
+            <h4 style="font-weight: bold; display: block; margin-bottom: 4px;">
+              <?= esc_html($question->name) ?> <?php if ($is_required): ?><span style="color: red">*</span><?php endif; ?>
+              </h4>
 
             <?php switch ($question->type):
               case 'textarea': ?>
@@ -309,19 +151,17 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
                   $checked = $i === 0 ? 'checked' : '';
                   ?>
                   <label style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
-                    <input type="radio" name="<?= $input_name ?>" value="<?= esc_attr($opt['value']) ?>" <?= $required ?>
-                      <?= $checked ?>>
+                    <input type="radio" name="<?= $input_name ?>" value="<?= esc_attr($opt['value']) ?>" <?= $required ?> <?= $checked ?>>
                     <span><?= esc_html($opt['value']) ?></span>
                   </label>
                 <?php endforeach;
                 break;
 
               case 'checkboxes': ?>
-
                 <div <?= $question->required ? "data-required-group='$input_name'" : '' ?>>
                   <?php foreach ($question->answers as $opt): ?>
                     <label style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
-                      <input type="checkbox" name="<?= $input_name ?>[]" value="<?= esc_attr($opt['value']) ?>" <?= $is_required ? 'data-required="true"' : '' ?> style="flex-shrink: 0;">
+                      <input type="checkbox" name="<?= $input_name ?>[]" value="<?= esc_attr($opt['value']) ?>" <?= $is_required ? 'data-required="true"' : '' ?>>
                       <span><?= esc_html($opt['value']) ?></span>
                     </label>
                   <?php endforeach; ?>
@@ -334,11 +174,9 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
 
               case 'signature': ?>
                 <div>
-                  <canvas id="signature-pad" width="400" height="150"
-                    style="border: 1px solid #ccc; border-radius: 4px; background: #fff;" <?= $is_required ? 'data-required="true"' : '' ?>></canvas>
+                  <canvas id="signature-pad" width="400" height="150" style="border: 1px solid #ccc; border-radius: 4px; background: #fff;" <?= $is_required ? 'data-required="true"' : '' ?>></canvas>
                   <br>
-                  <button type="button" id="clear-signature" class="multi-form-button next-button"
-                    style="margin-top: 8px;">Clear Signature</button>
+                  <button type="button" id="clear-signature" class="multi-form-button next-button" style="margin-top: 8px;">Clear Signature</button>
                 </div>
                 <input type="hidden" name="signature_data" id="signature-data" <?= $required ?>>
                 <?php break;
@@ -351,7 +189,7 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
       </div>
     <?php endforeach; ?>
 
-
+    <!-- Patient Step -->
     <div class="form-step" style="display: none;" data-step="<?= count($sections) ?>">
       <h3>Patient Details</h3>
       <style>
@@ -360,20 +198,15 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
           grid-template-columns: repeat(12, 1fr);
           gap: 16px;
         }
-
         <?php for ($i = 1; $i <= 12; $i++): ?>
+        .col-span-<?= $i ?> {
+          grid-column: span <?= $i ?>;
+        }
+        @media (max-width: 768px) {
           .col-span-<?= $i ?> {
-            grid-column: span
-              <?= $i ?>
-            ;
+            grid-column: span 12 !important;
           }
-
-          @media (max-width: 768px) {
-            .col-span-<?= $i ?> {
-              grid-column: span 12 !important;
-            }
-          }
-
+        }
         <?php endfor; ?>
       </style>
       <div class="patient-grid">
@@ -392,19 +225,17 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
         ];
         foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
           <div class="col-span-<?= $colSpan ?>" style="display: flex; flex-direction: column;">
-            <label style="font-weight: bold; margin-bottom: 4px; color: <?= $label ?>;">
-              <?= esc_html($label_text) ?>   <?= $required ? ' <span style="color: red">*</span>' : '' ?>
+            <label style="font-weight: bold; margin-bottom: 4px; color: var(--form-label);">
+              <?= esc_html($label_text) ?> <?= $required ? ' <span style="color: red">*</span>' : '' ?>
             </label>
-            <input type="<?= esc_attr($type) ?>" name="patient[<?= esc_attr($name) ?>]" <?= $required ? 'required' : '' ?>
-              data-required="<?= $required ? 'true' : 'false' ?>">
+            <input type="<?= esc_attr($type) ?>" name="patient[<?= esc_attr($name) ?>]" <?= $required ? 'required' : '' ?> data-required="<?= $required ? 'true' : 'false' ?>">
           </div>
         <?php endforeach; ?>
       </div>
     </div>
   </div>
 
-  <div
-    style="margin-top: 28px; width: 100%; display: flex; flex-direction: <?= $container_flex_direction ?>; justify-content: <?= $justify_content ?>; gap: 8px; flex-wrap: nowrap;">
+  <div style="margin-top: 28px; width: 100%; display: flex; flex-direction: <?= $container_flex_direction ?>; justify-content: <?= $justify_content ?>; gap: 8px; flex-wrap: nowrap;">
     <button type="button" id="step-prev" class="multi-form-button prev-button">
       <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
       <span>Back</span>
@@ -417,5 +248,4 @@ $icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings
       <?php if ($icon_next && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_next) ?>"></i><?php endif; ?>
     </button>
   </div>
-
 </form>

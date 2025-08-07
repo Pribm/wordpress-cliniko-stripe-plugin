@@ -5,7 +5,7 @@ use Elementor\Controls_Manager;
 
 function register_cliniko_form_style_controls($widget)
 {
-  error_log('Entrou no form style controls');
+
   // Seção: Estilo Geral
   $widget->start_controls_section('form_style_section', [
     'label' => 'Form Container',
@@ -13,7 +13,7 @@ function register_cliniko_form_style_controls($widget)
   ]);
 
   $widget->add_control('form_background_color', [
-    'label' => 'Background Color',
+    'label' => 'Background',
     'type' => Controls_Manager::COLOR,
     'default' => '#ffffff',
     'selectors' => [
@@ -22,7 +22,7 @@ function register_cliniko_form_style_controls($widget)
   ]);
 
   $widget->add_control('form_text_color', [
-    'label' => 'Text Color',
+    'label' => 'Text',
     'type' => Controls_Manager::COLOR,
     'default' => '#000000',
     'selectors' => [
@@ -30,8 +30,23 @@ function register_cliniko_form_style_controls($widget)
     ],
   ]);
 
+$widget->add_control('titles_color', [
+  'label' => 'Headers',
+  'type' => Controls_Manager::COLOR,
+  'default' => '#181818ff',
+  'selectors' => [
+    '{{WRAPPER}} #prepayment-form h1,
+    {{WRAPPER}} #prepayment-form h2,
+    {{WRAPPER}} #prepayment-form h3,
+    {{WRAPPER}} #prepayment-form h4,
+    {{WRAPPER}} #prepayment-form h5,
+    {{WRAPPER}} #prepayment-form h6' => 'color: {{VALUE}};',
+  ],
+  ]);
+
+
   $widget->add_control('form_label_color', [
-    'label' => 'Label Color',
+    'label' => 'Labels',
     'type' => Controls_Manager::COLOR,
     'default' => '#333333',
     'selectors' => [
@@ -39,19 +54,45 @@ function register_cliniko_form_style_controls($widget)
     ],
   ]);
 
-  $widget->add_control('form_input_border', [
-    'label' => 'Input Border',
-    'type' => Controls_Manager::TEXT,
-    'default' => '1px solid #ccc',
-  ]);
+// Text color for input
+$widget->add_control('form_input_color', [
+  'label' => 'Input Text Color',
+  'type' => Controls_Manager::COLOR,
+  'default' => '#333333',
+  'selectors' => [
+    '{{WRAPPER}} #prepayment-form input' => 'color: {{VALUE}};',
+  ],
+]);
+
+
+$widget->add_control('form_input_border_color', [
+  'label' => 'Input Border Color',
+  'type' => Controls_Manager::COLOR,
+  'default' => 'var(--e-global-color-primary)',
+  'selectors' => [
+    '{{WRAPPER}} #prepayment-form input' => 'border-color: {{VALUE}};',
+    '{{WRAPPER}} #prepayment-form input:checked' => 'background-color: {{VALUE}};',
+  ],
+]);
 
   $widget->add_control('form_border_radius', [
-    'label' => 'Border Radius',
+    'label' => 'Input Border Radius',
     'type' => Controls_Manager::SLIDER,
     'size_units' => ['px'],
-    'range' => ['px' => ['min' => 0, 'max' => 20]],
+    'range' => ['px' => ['min' => 0, 'max' => 50]],
     'default' => ['size' => 6],
   ]);
+
+ $widget->add_control('form_input_border_width', [
+  'label' => 'Input Border Width',
+  'type' => Controls_Manager::SLIDER,
+  'size_units' => ['px'],
+  'range' => ['px' => ['min' => 0, 'max' => 20]],
+  'default' => ['size' => 1],
+  'selectors' => [
+    '{{WRAPPER}} #prepayment-form input' => 'border-width: {{SIZE}}{{UNIT}};',
+  ],
+]);
 
   $widget->add_control('form_font_family', [
     'label' => 'Font Family',

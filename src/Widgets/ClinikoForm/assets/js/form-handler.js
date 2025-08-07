@@ -87,7 +87,7 @@ function parseFormToStructuredBody(formEl) {
           description: section.description,
           questions: questions,
         };
-      }),
+      }).filter(section => section.questions.length > 0),
     },
     ...extractNestedFields(formEl, "patient"),
   };
@@ -291,34 +291,36 @@ function isCurrentStepValid() {
 }
 
 
-  nextBtn.addEventListener("click", () => {
-    if (currentStep < steps.length - 1) {
-      if (!isCurrentStepValid()) {
-        showToast("Please review the highlighted fields before continuing.");
-        return;
-      }
+nextBtn.addEventListener("click", async () => {
+  const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
 
-      // ✅ Pré-carrega o Stripe no penúltimo passo
-      if (currentStep === steps.length - 2 && !stripeInitStarted) {
-        stripeInitStarted = true;
-        if (!window.stripe) initStripe();
-      }
+  if (currentStep < steps.length - 1) {
+    if (!isCurrentStepValid()) {
+      showToast("Please review the highlighted fields before continuing.");
+      return;
+    }
 
-      currentStep++;
-      showStep(currentStep);
-    } else {
-      if (!isCurrentStepValid()) {
-        showToast("Please review the highlighted fields before continuing.");
-        return;
-      }
+    // Preload Stripe if payment is enabled and we're at the step before the last
+    if (isPaymentEnabled && currentStep === steps.length - 2 && !stripeInitStarted) {
+      stripeInitStarted = true;
+      if (!window.stripe) initStripe();
+    }
 
+    currentStep++;
+    showStep(currentStep);
+  } else {
+    if (!isCurrentStepValid()) {
+      showToast("Please review the highlighted fields before continuing.");
+      return;
+    }
+
+    if (isPaymentEnabled) {
       document.getElementById("prepayment-form").style.display = "none";
       document.getElementById("payment_form").style.display = "flex";
 
       if (!window.stripe) initStripe();
 
       const backBtn = document.getElementById("go-back-button");
-
       if (backBtn) {
         backBtn.addEventListener("click", () => {
           document.getElementById("prepayment-form").style.display = "block";
@@ -326,8 +328,13 @@ function isCurrentStepValid() {
           showStep(currentStep);
         });
       }
+    } else {
+        showPaymentLoader();
+        await submitBookingForm();
     }
-  });
+  }
+});
+
 
   prevBtn.addEventListener("click", () => {
     if (currentStep > 0) {
@@ -397,6 +404,118 @@ function attachValidationListeners() {
 }
 
   attachValidationListeners();
+}
+
+async function submitBookingForm(stripeToken = null, errorEl = null) {
+  const formElement = document.getElementById("prepayment-form");
+  const { content, patient } = parseFormToStructuredBody(formElement);
+
+  const formData = new FormData();
+  formData.append("content", JSON.stringify(content));
+  formData.append("patient", JSON.stringify(patient));
+  formData.append("moduleId", formHandlerData.module_id);
+  formData.append("patient_form_template_id", formHandlerData.patient_form_template_id);
+
+  if (stripeToken) {
+    formData.append("stripeToken", stripeToken);
+  }
+
+  const signatureData = document.getElementById("signature-data")?.value;
+  if (signatureData?.startsWith("data:image/")) {
+    const blob = dataURLToBlob(signatureData);
+    const file = new File([blob], "signature.png", { type: "image/png" });
+    formData.append("signature_file", file);
+  }
+
+  try {
+    const response = await fetch(formHandlerData.booking_url, {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (result.status === "success") {
+      const redirectBase = formHandlerData.redirect_url;
+      const queryParams = new URLSearchParams({
+        patient_name: result.patient?.name ?? "",
+        email: result.patient?.email ?? "",
+        start: result.appointment?.starts_at ?? "",
+        end: result.appointment?.ends_at ?? "",
+        ref: result.appointment?.payment_reference ?? "",
+        link: result.appointment?.telehealth_url ?? "",
+      });
+
+      window.location.href = `${redirectBase}?${queryParams.toString()}`;
+    } else {
+      if (errorEl) {
+        errorEl.textContent = result.message || "Error booking appointment. Please try again.";
+      } else {
+        showToast(result.message || "Error booking appointment.");
+      }
+    }
+  } catch (err) {
+    console.error("Booking failed", err);
+    const message = "Unexpected error. Please try again.";
+    if (errorEl) {
+      errorEl.textContent = message;
+    } else {
+      showToast(message);
+    }
+  } finally {
+    jQuery.LoadingOverlay("hide");
+  }
+}
+
+
+function showPaymentLoader() {
+  const styles = formHandlerData.appearance?.variables || {};
+  const logo = formHandlerData.logo_url;
+
+  jQuery.LoadingOverlay("show", {
+    image: "",
+    background: "rgba(255, 255, 255, 0.85)",
+    zIndex: 9999,
+    custom: jQuery(`
+      <div style="
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 32px;
+        font-family: ${styles.fontFamily || 'sans-serif'};
+        color: ${styles.colorText || '#333'};
+      ">
+        ${logo ? `<img src="${logo}" alt="Logo" style="max-height: 60px; margin-bottom: 20px;" class="pulse-logo" />` : ''}
+        <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
+          Processing your secure payment...
+        </div>
+        <div style="font-size: 14px; color: #666;">
+          Please wait while we confirm your appointment with the clinic.
+        </div>
+      </div>
+    `),
+  });
+
+  if (!document.getElementById('pulse-logo-style')) {
+    const style = document.createElement('style');
+    style.id = 'pulse-logo-style';
+    style.innerHTML = `
+      @keyframes pulseLogo {
+        0%   { transform: scale(1); opacity: 1; }
+        50%  { transform: scale(1.08); opacity: 0.85; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .pulse-logo {
+        animation: pulseLogo 1.6s ease-in-out infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
 
 function setupSignatureCanvas() {

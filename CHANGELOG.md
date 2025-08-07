@@ -1,3 +1,28 @@
+## [1.1.6] - 2025-10-04
+
+### Added
+- New **Tools & Maintenance** page in the WordPress admin panel (`wp-cliniko-tools`)
+- ✅ **Clear API Cache** button to purge all Cliniko GET request transients
+- ✅ **Connectivity Test** for Cliniko and Stripe APIs with feedback display
+- ✅ **Trigger Data Sync** tool to manually sync appointment types from Cliniko
+- ✅ **System Info Display** section to show:
+  - Site URL, Home URL
+  - WordPress and PHP versions
+  - Active theme and server software
+  - Memory limit, execution time
+  - Cliniko/Stripe key status and plugin version
+
+### Changed
+- Layout improvements to the Tools page:
+  - Admin notices are clearer and styled
+  - Maintenance actions grouped in a visual container
+  - System info organized into a striped table for better readability
+
+### Internal
+- Created `App\Admin\Modules\Tools` module with proper hook registration
+- Reused `CachedClientDecorator` logic and `AppointmentType::sync()` for backend utilities
+
+
 ## [1.1.5] - 2025-10-03
 
 ### Added

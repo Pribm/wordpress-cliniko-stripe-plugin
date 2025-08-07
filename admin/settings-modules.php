@@ -35,6 +35,8 @@ add_action('admin_init', function () {
     echo '</div>';
     echo '<button type="button" id="add-module">Add Module</button>';
 
+    
+
     ?>
     <script>
     document.getElementById('add-module').addEventListener('click', function () {
