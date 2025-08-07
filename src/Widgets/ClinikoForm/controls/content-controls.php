@@ -13,6 +13,7 @@ function register_content_controls($widget)
     $widget->start_controls_section('section_content', [
         'label' => 'Payment Form',
         'tab' => Controls_Manager::TAB_CONTENT,
+           'condition' => ['enable_payment' => 'yes']
     ]);
 
     // Payment Settings
@@ -20,6 +21,7 @@ function register_content_controls($widget)
         'label' => 'Button Label',
         'type' => Controls_Manager::TEXT,
         'default' => 'Pay Now',
+     
     ]);
 
     $widget->add_control('onpayment_success_redirect', [
@@ -135,14 +137,13 @@ function register_cliniko_form_controls($widget)
         'description' => 'Select the appointment type for this payment form'
     ]);
 
-    // Control: Enable Multistep Form
-    $widget->add_control('enable_multistep', [
-        'label' => 'Enable Multistep Form',
+    $widget->add_control('enable_payment', [
+        'label' => 'Enable Payment Step',
         'type' => Controls_Manager::SWITCHER,
         'label_on' => 'Yes',
         'label_off' => 'No',
         'return_value' => 'yes',
-        'default' => 'no',
+        'default' => 'yes',
     ]);
 
     $widget->end_controls_section();

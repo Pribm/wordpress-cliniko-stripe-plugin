@@ -6,6 +6,7 @@ function register_style_controls($widget) {
   $widget->start_controls_section('stripe_style_section', [
     'label' => 'Stripe Appearance',
     'tab' => Controls_Manager::TAB_STYLE,
+          'condition' => ['enable_payment' => 'yes']
   ]);
 
   $widget->add_control('theme', [

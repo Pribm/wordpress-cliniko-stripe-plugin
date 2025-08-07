@@ -3,7 +3,6 @@
 namespace App\Widgets\AppointmentTypeCard;
 if (!defined('ABSPATH')) exit;
 
-use App\Client\Cliniko\Client;
 use App\Model\AppointmentType;
 
 class Helpers {

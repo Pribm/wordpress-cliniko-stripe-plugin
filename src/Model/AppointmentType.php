@@ -185,6 +185,11 @@ class AppointmentType
         }, 0);
     }
 
+    public function requiresPayment(): bool
+    {
+        return $this->getBillableItemsFinalPrice() > 0;
+    }
+
     public static function findFromUrl(string $url, ApiClientInterface $client): ?self
     {
         $response = $client->get($url);

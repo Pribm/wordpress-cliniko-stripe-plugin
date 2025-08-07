@@ -18,10 +18,10 @@ class AppointmentRequestValidator
             return ['payload' => 'Invalid JSON payload.'];
         }
 
-        // Validação do Stripe e campos principais
-        if (empty($payload['stripeToken']) || !Validator::stringType()->startsWith('tok_')->validate($payload['stripeToken'])) {
-            $errors['stripeToken'] = 'Invalid or missing payment token.';
-        }
+        // // Validação do Stripe e campos principais
+        // if (empty($payload['stripeToken']) || !Validator::stringType()->startsWith('tok_')->validate($payload['stripeToken'])) {
+        //     $errors['stripeToken'] = 'Invalid or missing payment token.';
+        // }
 
         if (empty($payload['moduleId'])) {
             $errors['moduleId'] = 'moduleId is required.';
