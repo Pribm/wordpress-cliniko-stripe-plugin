@@ -11,6 +11,9 @@ use App\Routes\ApiRoutes;
 
 class Bootstrap {
     public static function init() {
+
+        
+        
         new ApiRoutes();
         PluginFacade::init();
     }

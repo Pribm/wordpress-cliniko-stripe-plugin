@@ -22,6 +22,7 @@ class CachedClientDecorator implements ApiClientInterface
 
         $cached = get_transient($cacheKey);
         if ($cached !== false) {
+
             return new ClientResponse($cached);
         }
 

@@ -71,7 +71,12 @@
    ========================================= */
 
 /* Wrap each question block */
-.inputGroup { margin-bottom: 16px; }
+.inputGroup { 
+  margin-bottom: 16px;
+    display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
 /* Each option line */
 #prepayment-form .inputGroup label {
@@ -174,8 +179,14 @@
   transform: translate(-50%, -50%) scale(1);
 }
 
+
+
 /* Group of options (checkbox list container) */
-.options-group { display: block; }
+.options-group { 
+    display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
 /* “Other” input (JS toggles display) */
 .other-input-wrap {

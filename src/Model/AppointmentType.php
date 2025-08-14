@@ -179,9 +179,12 @@ class AppointmentType
         
         $billableItems = $this->getAppointmentTypeBillableItems();
 
-        if (count($billableItems) === 0) return 0;
+        if (empty($billableItems)) return 0;
 
-        return array_reduce($billableItems, function ($carry, $item) {
+        return array_reduce($billableItems, function ($carry, AppointmentTypeBillableItem $item) {
+            if($item->getBillableItem() === null){
+                 return $carry;
+            } 
             return $carry + $item->getBillableItem()->getPriceInCents();
         }, 0);
     }

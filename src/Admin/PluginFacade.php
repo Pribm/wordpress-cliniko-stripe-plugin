@@ -32,6 +32,9 @@ class PluginFacade
      */
     public static function init(): void
     {
+
+        
+
         Settings::init();
         Credentials::init();
         AppointmentTypes::init();

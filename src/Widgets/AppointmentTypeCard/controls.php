@@ -61,36 +61,6 @@ $this->start_controls_section('layout_section', [
   'tab' => Controls_Manager::TAB_STYLE,
 ]);
 
-// $this->add_control('card_display', [
-//   'label' => __('Display', 'plugin-name'),
-//   'type' => Controls_Manager::SELECT,
-//   'default' => 'block',
-//   'options' => [
-//     'block' => 'Block',
-//     'flex'  => 'Flex',
-//     'grid'  => 'Grid',
-//   ],
-//   'selectors' => [
-//     '{{WRAPPER}} .appointment-card' => 'display: {{VALUE}};',
-//   ],
-// ]);
-
-// $this->add_control('flex_direction', [
-//   'label' => __('Flex Direction', 'plugin-name'),
-//   'type' => Controls_Manager::SELECT,
-//   'default' => 'column',
-//   'options' => [
-//     'row' => 'Row',
-//     'column' => 'Column',
-//     'row-reverse' => 'Row Reverse',
-//     'column-reverse' => 'Column Reverse',
-//   ],
-//   'condition' => ['card_display' => 'flex'],
-//   'selectors' => [
-//     '{{WRAPPER}} .appointment-card' => 'flex-direction: {{VALUE}};',
-//   ],
-// ]);
-
 $this->add_control('card_gap', [
   'label' => __('Gap Between Elements', 'plugin-name'),
   'type' => Controls_Manager::SLIDER,
@@ -372,4 +342,3 @@ $this->add_group_control(Group_Control_Typography::get_type(), [
 ]);
 
 $this->end_controls_section();
-

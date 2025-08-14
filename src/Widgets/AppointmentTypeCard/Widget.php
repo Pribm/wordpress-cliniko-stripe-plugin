@@ -30,7 +30,11 @@ class Widget extends Widget_Base {
   protected function render() {
     $settings = $this->get_settings_for_display();
 
-    $types = Helpers::get_appointment_types();
+    if (Plugin::$instance->editor->is_edit_mode()) {
+      $types = get_transient('cliniko_appointment_types_render_data') ?: [];
+    } else {
+      $types = Helpers::get_appointment_types();
+    }
 
     $selected = $settings['selected_appointment_type'] ?? null;
     $type = array_filter($types, fn($t) => $t['id'] === $selected);
