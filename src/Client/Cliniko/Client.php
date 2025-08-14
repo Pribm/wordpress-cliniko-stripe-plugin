@@ -2,10 +2,9 @@
 namespace App\Client\Cliniko;
 
 use App\Contracts\ClientResponse;
-
-if (!defined('ABSPATH')) exit;
 use App\Contracts\ApiClientInterface;
 
+if (!defined('ABSPATH')) exit;
 
 class Client implements ApiClientInterface
 {
@@ -44,65 +43,85 @@ class Client implements ApiClientInterface
         return "https://api.{$shard}.cliniko.com/v1/";
     }
 
- public function get(string $endpointOrUrl): ClientResponse
-{
-    $url = str_starts_with($endpointOrUrl, 'http') ? $endpointOrUrl : $this->baseUrl . ltrim($endpointOrUrl, '/');
+    public function get(string $endpointOrUrl): ClientResponse
+    {
+        $url = str_starts_with($endpointOrUrl, 'http') ? $endpointOrUrl : $this->baseUrl . ltrim($endpointOrUrl, '/');
 
-    $response = wp_remote_get($url, [
-        'headers' => $this->getDefaultHeaders()
-    ]);
+        $response = wp_remote_get($url, [
+            'headers' => $this->getDefaultHeaders()
+        ]);
 
-    if (is_wp_error($response)) {
-        return new ClientResponse(null, $response->get_error_message());
+        if (is_wp_error($response)) {
+            return new ClientResponse(null, $response->get_error_message());
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        return new ClientResponse($data);
     }
 
-    $body = wp_remote_retrieve_body($response);
-    $data = json_decode($body, true);
+    public function post(string $endpoint, array $data): ClientResponse
+    {
+        $url = $this->baseUrl . ltrim($endpoint, '/');
 
-    return new ClientResponse($data);
-}
+        $response = wp_remote_post($url, [
+            'headers' => array_merge($this->getDefaultHeaders(), [
+                'Content-Type' => 'application/json'
+            ]),
+            'body' => json_encode($data)
+        ]);
 
+        if (is_wp_error($response)) {
+            return new ClientResponse(null, $response->get_error_message());
+        }
 
-public function post(string $endpoint, array $data): ClientResponse
-{
-    $url = $this->baseUrl . ltrim($endpoint, '/');
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
 
-    $response = wp_remote_post($url, [
-        'headers' => array_merge($this->getDefaultHeaders(), [
-            'Content-Type' => 'application/json'
-        ]),
-        'body' => json_encode($data)
-    ]);
-
-    if (is_wp_error($response)) {
-        return new ClientResponse(null, $response->get_error_message());
+        return new ClientResponse($data);
     }
 
-    $body = wp_remote_retrieve_body($response);
-    $data = json_decode($body, true);
+    public function put(string $endpoint, array $data): ClientResponse
+    {
+        $url = $this->baseUrl . ltrim($endpoint, '/');
 
-    return new ClientResponse($data);
-}
+        $response = wp_remote_request($url, [
+            'method' => 'PUT',
+            'headers' => array_merge($this->getDefaultHeaders(), [
+                'Content-Type' => 'application/json'
+            ]),
+            'body' => json_encode($data)
+        ]);
 
-public function delete(string $endpoint): ClientResponse
-{
-    $url = $this->baseUrl . ltrim($endpoint, '/');
+        if (is_wp_error($response)) {
+            return new ClientResponse(null, $response->get_error_message());
+        }
 
-    $response = wp_remote_request($url, [
-        'method' => 'DELETE',
-        'headers' => $this->getDefaultHeaders(),
-    ]);
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
 
-    if (is_wp_error($response)) {
-        return new ClientResponse(null, $response->get_error_message());
+        return new ClientResponse($data);
     }
 
-    $status = wp_remote_retrieve_response_code($response);
-    $success = $status === 204;
+    public function delete(string $endpoint): ClientResponse
+    {
+        $url = $this->baseUrl . ltrim($endpoint, '/');
 
-    return new ClientResponse(['deleted' => $success]);
-}
+        $response = wp_remote_request($url, [
+            'method' => 'DELETE',
+            'headers' => $this->getDefaultHeaders(),
+        ]);
 
+        if (is_wp_error($response)) {
+            return new ClientResponse(null, $response->get_error_message());
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $success = $status === 204;
+
+        return new ClientResponse(['deleted' => $success]);
+    }
 
     private function getDefaultHeaders(): array
     {

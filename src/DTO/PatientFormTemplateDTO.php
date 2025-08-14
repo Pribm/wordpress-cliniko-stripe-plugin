@@ -38,6 +38,17 @@ class PatientFormTemplateDTO
                 $question->type = $questionData['type'];
                 $question->required = $questionData['required'];
                 $question->answers = $questionData['answers'] ?? [];
+
+                if (!empty($questionData['other']) && is_array($questionData['other'])) {
+                    $other = new PatientFormTemplateQuestionOtherDTO();
+                    if (array_key_exists('enabled', $questionData['other'])) {
+                        $other->enabled = (bool) $questionData['other']['enabled'];
+                    }
+                    $question->other = $other;
+                } else {
+                    $question->other = null;
+                }
+
                 return $question;
             }, $sectionData['questions']) : [];
 

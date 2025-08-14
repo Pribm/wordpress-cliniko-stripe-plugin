@@ -35,27 +35,34 @@ class CachedClientDecorator implements ApiClientInterface
     }
 
     public function refresh(string $url): ClientResponse
-{
-    $cacheKey = 'cliniko_api_' . md5('GET_' . $url);
+    {
+        $cacheKey = 'cliniko_api_' . md5('GET_' . $url);
 
-    // Force real API call
-    $response = $this->client->get($url);
+        // Force real API call
+        $response = $this->client->get($url);
 
-    if ($response->isSuccessful()) {
-        set_transient($cacheKey, $response->data, $this->ttl);
+        if ($response->isSuccessful()) {
+            set_transient($cacheKey, $response->data, $this->ttl);
+        }
+
+        return $response;
     }
 
-    return $response;
-}
-
-public function invalidate(string $url): void
-{
-    $cacheKey = 'cliniko_api_' . md5('GET_' . $url);
-    delete_transient($cacheKey);
-}
+    public function invalidate(string $url): void
+    {
+        $cacheKey = 'cliniko_api_' . md5('GET_' . $url);
+        delete_transient($cacheKey);
+    }
 
     public function post(string $url, array $data): ClientResponse
     {
         return $this->client->post($url, $data);
+    }
+
+    public function put(string $url, array $data): ClientResponse
+    {
+        // Invalida o cache da chave relacionada
+        $this->invalidate($url);
+        return $this->client->put($url, $data);
     }
 }

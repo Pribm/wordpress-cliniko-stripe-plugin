@@ -176,6 +176,7 @@ class AppointmentType
 
     public function getBillableItemsFinalPrice(): int
     {
+        
         $billableItems = $this->getAppointmentTypeBillableItems();
 
         if (count($billableItems) === 0) return 0;

@@ -9,15 +9,13 @@ class Helpers {
 
     public function __construct(){}
 
-   static function get_appointment_types(): array {
-  $cache_key = 'cliniko_appointment_types_render_data';
-  $cached = get_transient($cache_key);
-  if ($cached !== false) return $cached;
+static function get_appointment_types() {
+  $client = cliniko_client(true);
+  $types = AppointmentType::all($client);
 
-  $types = AppointmentType::all(cliniko_client(true));
-  $mapped = array_map(function (AppointmentType $type) {
+    $mapped = array_map(function (AppointmentType $type) {
     $cents = $type->getBillableItemsFinalPrice();
-    $price = is_numeric($cents) ? number_format($cents / 100, 2, '.', '') : null;
+    $price = is_numeric($cents) ? number_format($cents / 100, 2, '.', '') : 0;
 
     return [
       'id' => $type->getId(),
@@ -27,7 +25,6 @@ class Helpers {
     ];
   }, $types);
 
-  set_transient($cache_key, $mapped, 3600); // cache do mapeamento também
   return $mapped;
 }
 

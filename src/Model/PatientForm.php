@@ -53,6 +53,28 @@ class PatientForm
         return new self(PatientFormDTO::fromArray($response->data), $client);
     }
 
+    public static function update(string $id, array $data, ApiClientInterface $client): self
+{
+    $response = $client->put("patient_forms/{$id}", $data);
+
+    if (!$response->isSuccessful()) {
+        throw new ApiException("Request to update patient form failed.", [
+            "error" => $response->error,
+            "serialized_obj" => $data
+        ]);
+    }
+
+    if (isset($response->data['errors'])) {
+        throw new ApiException("API Validation error", [
+            "errors" => $response->data["errors"],
+            "serialized_obj" => $data
+        ]);
+    }
+
+    return new self(PatientFormDTO::fromArray($response->data), $client);
+}
+
+
     public static function findFromUrl(string $url, ApiClientInterface $client): ?self
     {
         $response = $client->get($url);

@@ -23,77 +23,88 @@ function parseFormToStructuredBody(formEl) {
 
   const structured = {
     content: {
-      sections: sectionsData.map((section) => {
-        const questions = section.questions
-          .map((q) => {
-            const question = {
-              name: q.name,
-              required: !!q.required,
-              type: q.type,
-            };
+      sections: sectionsData
+        .map((section) => {
+          const questions = section.questions
+            .map((q) => {
+              const question = {
+                name: q.name,
+                type: q.type,
+                required: !!q.required,
+              };
 
-            if (q.type === "checkboxes" && Array.isArray(q.answers)) {
-              const selectedValues = formData.getAll(q.name + "[]") || [];
+              // CHECKBOXES
+              if (q.type === "checkboxes" && Array.isArray(q.answers)) {
+                const rawSelected = formData.getAll(q.name + "[]") || [];
 
-              question.answers = q.answers
-                .filter((opt) => selectedValues.includes(opt.value))
-                .map((opt) => ({
-                  value: opt.value,
-                  selected: true,
-                }));
+                // include all options; mark only selected
+                question.answers = q.answers.map((opt) => {
+                  const entry = { value: opt.value };
+                  if (rawSelected.includes(opt.value)) entry.selected = true;
+                  return entry;
+                });
 
-              if (q.other?.enabled) {
-                const otherValue = formData.get(q.name + "_other");
-                if (otherValue) {
-                  question.other = { value: otherValue };
+                if (q.other?.enabled) {
+                  const otherChecked =
+                    rawSelected.includes("__other__") || rawSelected.includes("other");
+                  const otherValue = (formData.get(q.name + "_other") || "").trim();
+
+                  question.other = otherChecked
+                    ? { value: otherValue, enabled: true, selected: true } // value may be "" (allowed)
+                    : { enabled: true };
                 }
-              }
-            } else if (q.type === "radiobuttons" && Array.isArray(q.answers)) {
-              const selected = formData.get(q.name);
-              question.answers = q.answers
-                .filter((opt) => selected === opt.value)
-                .map((opt) => ({
-                  value: opt.value,
-                  selected: true,
-                }));
 
-              if (q.other?.enabled) {
-                const otherValue = formData.get(q.name + "_other");
-                if (otherValue && selected === "other") {
-                  question.other = { value: otherValue };
+              // RADIOBUTTONS
+              } else if (q.type === "radiobuttons" && Array.isArray(q.answers)) {
+                const selected = formData.get(q.name);
+
+                question.answers = q.answers.map((opt) => {
+                  const entry = { value: opt.value };
+                  if (selected === opt.value) entry.selected = true;
+                  return entry;
+                });
+
+                if (q.other?.enabled) {
+                  const isOther = selected === "__other__" || selected === "other";
+                  const otherValue = (formData.get(q.name + "_other") || "").trim();
+                  question.other = isOther
+                    ? { value: otherValue, enabled: true, selected: true }
+                    : { enabled: true };
                 }
+
+              // SIMPLE INPUTS
+              } else {
+                question.answer = formData.get(q.name);
               }
-            } else {
-              question.answer = formData.get(q.name);
-            }
 
-            return question;
-          })
-          .filter((q) => {
-            if (q.type === "signature") return false;
-            if (q.answers && Array.isArray(q.answers) && q.answers.length === 0)
-              return false;
-            if (
-              "answer" in q &&
-              typeof q.answer === "string" &&
-              q.answer.trim() === ""
-            )
-              return false;
-            return true;
-          });
+              return question;
+            })
+            .filter((q) => {
+              // ✅ keep original behavior: drop signature questions
+              if (q.type === "signature") return false;
 
-        return {
-          name: section.name,
-          description: section.description,
-          questions: questions,
-        };
-      }).filter(section => section.questions.length > 0),
+              // keep original “empty question” guards
+              if (q.answers && Array.isArray(q.answers) && q.answers.length === 0) return false;
+              if ("answer" in q && typeof q.answer === "string" && q.answer.trim() === "") return false;
+
+              return true;
+            });
+
+          return {
+            name: section.name,
+            description: section.description,
+            questions,
+          };
+        })
+        .filter((section) => section.questions.length > 0),
     },
     ...extractNestedFields(formEl, "patient"),
   };
 
   return structured;
 }
+
+
 
 function showToast(message) {
   Toastify({
@@ -130,8 +141,46 @@ function showToast(message) {
   }).showToast();
 }
 
+function bindOtherToggle(form) {
+  if (!form) return;
+
+  const onToggle = (cb) => {
+
+    const targetId = cb.getAttribute('data-other-target');
+    const wrap = targetId ? document.getElementById(targetId) : null;
+        console.log("toggle dat wrap", wrap)
+    if (!wrap) return;
+
+    const textInput = wrap.querySelector('input[type="text"]');
+    const isRequiredGroup = cb.hasAttribute('data-required');
+
+    if (cb.checked) {
+      wrap.style.display = 'block';
+      cb.setAttribute('aria-expanded', 'true');
+      if (isRequiredGroup && textInput) textInput.setAttribute('required', 'required');
+      if (textInput) textInput.focus();
+    } else {
+      wrap.style.display = 'none';
+      cb.setAttribute('aria-expanded', 'false');
+      if (textInput) {
+        textInput.removeAttribute('required');
+        textInput.value = '';
+      }
+    }
+  };
+
+  form.querySelectorAll('input.other-toggle').forEach(cb => {
+    cb.addEventListener('change', () => onToggle(cb));
+  });
+}
+
 function mountForm() {
+
+  const form = document.getElementById('prepayment-form');
+  bindOtherToggle(form); 
+
   setupSignatureCanvas();
+
   let currentStep = 0;
   let stripeInitStarted = false;
 
@@ -609,3 +658,5 @@ function setupSignatureCanvas() {
 }
 
 document.addEventListener("DOMContentLoaded", () => mountForm());
+
+
