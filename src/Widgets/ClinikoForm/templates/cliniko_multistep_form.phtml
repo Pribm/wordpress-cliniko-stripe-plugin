@@ -74,11 +74,21 @@ $justify_content = match ($alignment) {
   default => 'center',
 };
 $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
+
+/**
+ * PATCH: robust asset base (parent of templates/) + cache-busting
+ */
+$base_url  = trailingslashit( plugin_dir_url( dirname(__FILE__) ) );  // .../ClinikoForm/
+$assets_url = $base_url . 'assets/';
+
+$base_path = trailingslashit( plugin_dir_path( dirname(__FILE__) ) );
+$js_ver  = file_exists($base_path . 'assets/js/input-masks.js') ? filemtime($base_path . 'assets/js/input-masks.js') : null;
+$css_ver = file_exists($base_path . 'assets/css/multistep-form-style.css') ? filemtime($base_path . 'assets/css/multistep-form-style.css') : null;
 ?>
 
 <!-- 🧠 Inject CSS Variables -->
 <style>
-  :root {
+  #prepayment-form {
     --form-bg: <?= $bg ?>;
     --form-text: <?= $text ?>;
     --form-font: <?= $font ?>;
@@ -106,24 +116,52 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 <script src="https://unpkg.com/imask"></script>
-<script src="<?= plugin_dir_url(__FILE__) ?>../assets/js/input-masks.js"></script>
 
-<link rel="stylesheet" href="<?= plugin_dir_url(__FILE__) ?>../assets/css/multistep-form-style.css">
+<!-- PATCH: absolute, versioned asset URLs (no ../) -->
+<script src="<?= esc_url( $assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '') ) ?>"></script>
+<link rel="stylesheet" href="<?= esc_url( $assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '') ) ?>">
 
 <!-- Multistep Form -->
 <form id="prepayment-form">
   <!-- Progress -->
-  <div id="form-progress-indicator" class="form-progress">
-    <?php $totalSteps = count($sections) + 1; ?>
-    <?php for ($index = 0; $index < $totalSteps; $index++): ?>
-      <?php if ($index > 0): ?>
+<?php
+$totalSteps   = count($sections) + 1;
+$currentStep  = 1; // Replace with your actual current step logic
+$progressType = $settings['progress_type'] ?? 'bar';
+
+// Common wrapper with a modifier class
+?>
+<div id="form-progress-indicator" class="form-progress form-progress--<?= esc_attr($progressType) ?>">
+
+  <?php if ($progressType === 'bar'): ?>
+    <div class="progress-track">
+      <div class="progress-fill" style="width: <?= ($currentStep / $totalSteps) * 100 ?>%;"></div>
+    </div>
+
+  <?php elseif ($progressType === 'dots'): ?>
+    <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
+      <span class="progress-dot <?= $i === $currentStep ? 'is-active' : '' ?>"></span>
+    <?php endfor; ?>
+
+  <?php elseif ($progressType === 'steps'): ?>
+    <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
+      <?php if ($i > 1): ?>
         <div class="form-progress__divider"></div>
       <?php endif; ?>
-      <div class="progress-step <?= $index === 0 ? 'is-active' : '' ?>">
-        <?= $index + 1 ?>
+      <div class="progress-step <?= $i === $currentStep ? 'is-active' : '' ?>">
+        <?= $i ?>
       </div>
     <?php endfor; ?>
-  </div>
+
+  <?php elseif ($progressType === 'fraction'): ?>
+    <span class="progress-text"><?= $currentStep ?>/<?= $totalSteps ?></span>
+
+  <?php elseif ($progressType === 'percentage'): ?>
+    <span class="progress-text"><?= round(($currentStep / $totalSteps) * 100) ?>%</span>
+  <?php endif; ?>
+
+</div>
+
 
   <div id="cliniko-form-steps">
     <?php foreach ($sections as $index => $section): ?>
@@ -230,33 +268,62 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
       </div>
     <?php endforeach; ?>
 
-    <!-- Patient Step -->
-    <div class="form-step is-hidden" data-step="<?= count($sections) ?>">
-      <h3>Patient Details</h3>
-      <div class="patient-grid">
-        <?php
-        $fields = [
-          ['first_name', 'First Name', 'text', 6, true],
-          ['last_name', 'Last Name', 'text', 6, true],
-          ['email', 'Email', 'email', 8, true],
-          ['phone', 'Phone Number', 'text', 4, true],
-          ['address_1', 'Address Line 1', 'text', 12, true],
-          ['city', 'City', 'text', 6, true],
-          ['state', 'State', 'text', 2, true],
-          ['post_code', 'Post Code', 'text', 4, true],
-          ['country', 'Country', 'text', 6, true],
-          ['date_of_birth', 'Date of Birth', 'date', 6, true],
-        ];
-        foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
-          <div class="col-span-<?= $colSpan ?> field-col">
-            <label class="field-label">
-              <?= esc_html($label_text) ?> <?= $required ? '<span class="req">*</span>' : '' ?>
-            </label>
-            <input type="<?= esc_attr($type) ?>" name="patient[<?= esc_attr($name) ?>]" <?= $required ? 'required' : '' ?> data-required="<?= $required ? 'true' : 'false' ?>">
-          </div>
-        <?php endforeach; ?>
+<!-- Patient Step -->
+<div class="form-step is-hidden" data-step="<?= count($sections) ?>">
+  <h3>Patient Details</h3>
+  <div class="patient-grid">
+    <?php
+    $fields = [
+      ['first_name', 'First Name', 'text', 6, true],
+      ['last_name', 'Last Name', 'text', 6, true],
+      ['email', 'Email', 'email', 8, true],
+      ['phone', 'Phone Number', 'text', 4, true],
+      // ➕ NEW FIELDS
+      // Medicare number (10 digits, displayed as 1234 56789 1)
+      // pattern allows optional spaces; we'll also IMask it
+      ['medicare', 'Medicare Number', 'text', 8, true],
+      // Medicare reference (1 digit next to the person’s name on the card)
+      ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
+      ['address_1', 'Address Line 1', 'text', 12, true],
+      ['address_2', 'Address Line 2', 'text', 12, false],
+      ['city', 'City', 'text', 6, true],
+      ['state', 'State', 'text', 2, true],
+      ['post_code', 'Post Code', 'text', 4, true],
+      ['country', 'Country', 'text', 6, true],
+      ['date_of_birth', 'Date of Birth', 'date', 6, true],
+
+    ];
+
+    foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
+      <div class="col-span-<?= (int)$colSpan ?> field-col">
+        <label class="field-label" for="patient-<?= esc_attr($name) ?>">
+          <?= esc_html($label_text) ?> <?= $required ? '<span class="req">*</span>' : '' ?>
+        </label>
+        <input
+          id="patient-<?= esc_attr($name) ?>"
+          type="<?= esc_attr($type) ?>"
+          name="patient[<?= esc_attr($name) ?>]"
+          <?= $required ? 'required' : '' ?>
+          data-required="<?= $required ? 'true' : 'false' ?>"
+          <?php if ($name === 'medicare'): ?>
+            inputmode="numeric"
+            maxlength="13" 
+            pattern="\d{4}\s?\d{5}\s?\d"
+            title="Enter 10 digits (e.g. 1234 56789 1)"
+            placeholder="1234 56789 1"
+          <?php elseif ($name === 'medicare_reference_number'): ?>
+            inputmode="numeric"
+            maxlength="1"
+            pattern="\d"
+            title="Enter the 1-digit reference next to your name"
+            placeholder="1"
+          <?php endif; ?>
+        >
       </div>
-    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+
   </div>
 
   <div class="form-actions">
@@ -273,5 +340,3 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
     </button>
   </div>
 </form>
-
-

@@ -96,6 +96,30 @@ function register_cliniko_form_style_controls($widget)
     ],
   ]);
 
+  $widget->add_control('progress_type', [
+  'label'   => 'Progress Bar Type',
+  'type'    => Controls_Manager::SELECT,
+  'default' => 'bar',
+  'options' => [
+    'none'       => 'None',
+    'bar'        => 'Linear Bar',
+    'dots'       => 'Dots',
+    'steps'      => 'Steps (labels)',
+    'fraction'   => 'Fraction (3/10)',
+    'percentage' => 'Percentage (30%)',
+  ],
+]);
+
+  $widget->add_responsive_control('progress_margin', [
+  'label' => 'Progress Margin',
+  'type'  => Controls_Manager::DIMENSIONS,
+  'size_units' => ['px', 'em', '%'],
+  'selectors' => [
+    '{{WRAPPER}} .form-progress' =>
+      'margin: {{TOP}}{{UNIT}} {{RIGHT}}{{UNIT}} {{BOTTOM}}{{UNIT}} {{LEFT}}{{UNIT}} !important;',
+  ],
+]);
+
   $widget->end_controls_section();
 
   /**

@@ -104,8 +104,6 @@ function parseFormToStructuredBody(formEl) {
   return structured;
 }
 
-
-
 function showToast(message) {
   Toastify({
     text: `
@@ -185,22 +183,48 @@ function mountForm() {
   let stripeInitStarted = false;
 
   const steps = document.querySelectorAll(".form-step");
-  const indicators = document.querySelectorAll(".progress-step");
   const nextBtn = document.getElementById("step-next");
 
   let nextBtnLabel = nextBtn.innerHTML;
 
   const prevBtn = document.getElementById("step-prev");
-  const activeColor = formHandlerData.btn_bg;
-  const inactiveColor = "white";
 
-  function updateIndicators(index) {
-    indicators.forEach((el, i) => {
-      el.style.backgroundColor = i === index ? activeColor : inactiveColor;
-      el.style.color = i === index ? "white" : activeColor;
-      el.style.border = i === index ? "" : "solid " + activeColor + " 1px";
+
+function updateIndicators(index) {
+ 
+  const type = formHandlerData.appearance.progress_type; 
+
+  if (type === "steps") {
+    document.querySelectorAll(".progress-step").forEach((el, i) => {
+      el.classList.toggle("is-active", i === index);
     });
+
+  } else if (type === "dots") {
+    document.querySelectorAll(".progress-dot").forEach((el, i) => {
+      el.classList.toggle("is-active", i === index);
+    });
+
+  } else if (type === "bar") {
+    const total = steps.length;
+    const fill = document.querySelector(".progress-fill");
+    if (fill) {
+      fill.style.width = ((index + 1) / total) * 100 + "%";
+    }
+
+  } else if (type === "fraction") {
+    const text = document.querySelector(".form-progress--fraction .progress-text");
+    if (text) {
+      text.textContent = (index + 1) + "/" + steps.length;
+    }
+
+  } else if (type === "percentage") {
+    const text = document.querySelector(".form-progress--percentage .progress-text");
+    if (text) {
+      text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
+    }
   }
+}
+
 
   function showStep(i) {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -515,7 +539,6 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
     jQuery.LoadingOverlay("hide");
   }
 }
-
 
 function showPaymentLoader() {
   const styles = formHandlerData.appearance?.variables || {};

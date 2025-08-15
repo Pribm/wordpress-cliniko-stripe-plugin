@@ -1,22 +1,10 @@
 <?php
 namespace App\Controller;
 
-use App\Client\Cliniko\Client;
-use App\DTO\CreatePatientCaseDTO;
-use App\DTO\CreatePatientDTO;
-use App\DTO\CreatePatientFormDTO;
 use App\Exception\ApiException;
 use App\Facade\AppointmentFacade;
-use App\Model\AppointmentType;
-use App\Model\IndividualAppointment;
-use App\Model\PatientCase;
-use App\Model\PatientForm;
-use App\Model\PatientFormTemplate;
-use App\Service\ClinikoAttachmentService;
 use App\Validator\AppointmentRequestValidator;
-use DateInterval;
-use DateTimeImmutable;
-use DateTimeZone;
+
 
 if (!defined('ABSPATH'))
     exit;

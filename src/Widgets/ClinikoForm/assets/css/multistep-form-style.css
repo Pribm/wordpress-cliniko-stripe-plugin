@@ -216,20 +216,17 @@
 }
 
 /* =========================================
-   Progress indicator
+   Progress indicator – Base
    ========================================= */
-.form-progress {
+#form-progress-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 20px;
 }
-.form-progress__divider {
-  flex: 1 1 0;
-  height: 2px;
-  background: var(--progress-divider, #babfc5);
-}
-#form-progress-indicator .progress-step {
+
+/* Shared step styling */
+.progress-step {
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -243,14 +240,71 @@
   background: #fff;
   transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
-#form-progress-indicator .progress-step.is-active {
+.progress-step.is-active {
   background: var(--btn-bg);
   color: #fff;
   border-color: var(--btn-bg);
 }
 
-/* Toggle steps via JS */
-.form-step.is-hidden { display: none; }
+.form-progress__divider {
+  flex: 1 1 0;
+  height: 2px;
+  background: var(--progress-divider, #babfc5);
+}
+
+/* ---------- Linear Bar ---------- */
+.form-progress--bar {
+  width: 100%;
+}
+.form-progress--bar .progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--progress-divider, #e5e7eb);
+  overflow: hidden;
+}
+.form-progress--bar .progress-fill {
+  height: 100%;
+  background: var(--btn-bg);
+  transition: width 0.3s ease;
+}
+
+/* ---------- Dots ---------- */
+.form-progress--dots {
+  gap: 8px;
+}
+.form-progress--dots .progress-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--progress-divider, #cbd5e1);
+  border-radius: 50%;
+  transition: background-color 0.25s ease;
+}
+.form-progress--dots .progress-dot.is-active {
+  background: var(--btn-bg);
+}
+
+/* ---------- Steps (numbered) ---------- */
+.form-progress--steps .form-progress__divider {
+  background: var(--progress-divider, #babfc5);
+}
+
+/* ---------- Fraction ---------- */
+.form-progress--fraction .progress-text {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--btn-bg);
+}
+
+/* ---------- Percentage ---------- */
+.form-progress--percentage .progress-text {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--btn-bg);
+}
+
+
+
 
 /* =========================================
    Patient Info Grid

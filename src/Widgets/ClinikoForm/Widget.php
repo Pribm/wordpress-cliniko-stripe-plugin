@@ -121,8 +121,10 @@ class Widget extends Widget_Base
     $template = isset($settings['booking_html_template']) ? ltrim($settings['booking_html_template']) : '';
     $field_mapping_array = $settings['field_mapping'] ?? [];
 
+
     $appearance = [
       'theme' => $settings['theme'] ?? 'flat',
+      'progress_type' => $settings['progress_type'],
       'variables' => [
         'colorPrimary' => esc_attr($settings['color_primary'] ?? '#0073e6'),
         'colorText' => esc_attr($settings['color_text'] ?? '#333'),

@@ -32,7 +32,7 @@ class PatientDTO
         ]));
 
         return new self(
-            $data['id'],
+            $data['id'] ?? '',
             $data['first_name'] ?? '',
             $data['last_name'] ?? '',
             $data['preferred_first_name'] ?? null,

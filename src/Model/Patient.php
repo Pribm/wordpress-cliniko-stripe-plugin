@@ -28,6 +28,7 @@ class Patient
 
     public static function create(CreatePatientDTO $dto, ApiClientInterface $client): ?self
     {
+        
         $response = $client->post('patients', $dto->toArray());
 
         if (!$response->isSuccessful()) {

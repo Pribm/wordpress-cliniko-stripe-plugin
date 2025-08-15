@@ -147,7 +147,7 @@ class AppointmentFacade
         }
 
         if (empty($token) || !preg_match('/^tok_/', $token)) {
-            throw new ApiException('Pagamento requerido, token ausente ou inválido.', ['stripeToken' => $token]);
+            throw new ApiException('Payment required, there is no token or the token is invalid.', ['stripeToken' => $token]);
         }
 
         return $this->stripeService->createChargeFromToken(
@@ -158,19 +158,32 @@ class AppointmentFacade
         );
     }
 
-    private function ensurePatient(array $patientPayload): object
-    {
-        $dto = new CreatePatientDTO();
-        $dto->firstName = $patientPayload['first_name'] ?? '';
-        $dto->lastName  = $patientPayload['last_name']  ?? '';
-        $dto->email     = $patientPayload['email']      ?? '';
+private function ensurePatient(array $patientPayload): object
+{
+    $dto = new CreatePatientDTO();
 
-        $patient = $this->clinikoService->findOrCreatePatient($dto);
-        if (!$patient) {
-            throw new ApiException('Não foi possível localizar/criar o paciente.', ['email' => $dto->email]);
+    foreach ($patientPayload as $key => $value) {
+        // Convert snake_case to camelCase
+        $camelKey = lcfirst(str_replace(' ', '', ucwords(str_replace('_', ' ', $key))));
+
+        // Only assign if the property exists in the DTO
+        if (property_exists($dto, $camelKey)) {
+            $dto->{$camelKey} = $value;
         }
-        return $patient;
     }
+
+    $patient = $this->clinikoService->findOrCreatePatient($dto);
+
+    if (!$patient) {
+        throw new ApiException(
+            'Not possible to create the patient.',
+            ['email' => $dto->email ?? null]
+        );
+    }
+
+    return $patient;
+}
+
 
     /** @return array{0:DateTimeImmutable,1:string,2:string} [$now, $from, $to] */
     private function makeWindow(): array
