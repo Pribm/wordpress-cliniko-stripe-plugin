@@ -171,12 +171,9 @@ function bindOtherToggle(form) {
     cb.addEventListener('change', () => onToggle(cb));
   });
 }
-
 function mountForm() {
-
-  const form = document.getElementById('prepayment-form');
-  bindOtherToggle(form); 
-
+  const form = document.getElementById("prepayment-form");
+  bindOtherToggle(form);
   setupSignatureCanvas();
 
   let currentStep = 0;
@@ -184,289 +181,270 @@ function mountForm() {
 
   const steps = document.querySelectorAll(".form-step");
   const nextBtn = document.getElementById("step-next");
-
-  let nextBtnLabel = nextBtn.innerHTML;
-
   const prevBtn = document.getElementById("step-prev");
+  const nextBtnLabel = nextBtn.innerHTML;
 
+  // Keep Stripe references global to this form instance
+  let stripeInstance = null;
+  let cardElementInstance = null;
+  let errorElementInstance = null;
 
-function updateIndicators(index) {
- 
-  const type = formHandlerData.appearance.progress_type; 
-
-  if (type === "steps") {
-    document.querySelectorAll(".progress-step").forEach((el, i) => {
-      el.classList.toggle("is-active", i === index);
-    });
-
-  } else if (type === "dots") {
-    document.querySelectorAll(".progress-dot").forEach((el, i) => {
-      el.classList.toggle("is-active", i === index);
-    });
-
-  } else if (type === "bar") {
-    const total = steps.length;
-    const fill = document.querySelector(".progress-fill");
-    if (fill) {
-      fill.style.width = ((index + 1) / total) * 100 + "%";
+  async function safeInitStripe() {
+    // Already initialized and mounted?
+    if (stripeInstance && cardElementInstance) {
+      return;
     }
+    const { stripe, cardElement, errorEl } = await initializeStripeElements();
+    stripeInstance = stripe;
+    cardElementInstance = cardElement;
+    errorElementInstance = errorEl;
+    handlePaymentAndFormSubmission(stripeInstance, cardElementInstance, errorElementInstance);
+  }
 
-  } else if (type === "fraction") {
-    const text = document.querySelector(".form-progress--fraction .progress-text");
-    if (text) {
-      text.textContent = (index + 1) + "/" + steps.length;
-    }
+  function updateIndicators(index) {
+    const type = formHandlerData.appearance.progress_type;
 
-  } else if (type === "percentage") {
-    const text = document.querySelector(".form-progress--percentage .progress-text");
-    if (text) {
-      text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
+    if (type === "steps") {
+      document.querySelectorAll(".progress-step").forEach((el, i) => {
+        el.classList.toggle("is-active", i === index);
+      });
+    } else if (type === "dots") {
+      document.querySelectorAll(".progress-dot").forEach((el, i) => {
+        el.classList.toggle("is-active", i === index);
+      });
+    } else if (type === "bar") {
+      const total = steps.length;
+      const fill = document.querySelector(".progress-fill");
+      if (fill) {
+        fill.style.width = ((index + 1) / total) * 100 + "%";
+      }
+    } else if (type === "fraction") {
+      const text = document.querySelector(".form-progress--fraction .progress-text");
+      if (text) {
+        text.textContent = index + 1 + "/" + steps.length;
+      }
+    } else if (type === "percentage") {
+      const text = document.querySelector(".form-progress--percentage .progress-text");
+      if (text) {
+        text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
+      }
     }
   }
-}
-
 
   function showStep(i) {
     window.scrollTo({ top: 0, behavior: "smooth" });
     steps.forEach((step, index) => {
-      if (index === i) {
-        step.style.display = "block";
-      } else {
-        step.style.display = "none";
-      }
+      step.style.display = index === i ? "block" : "none";
     });
     prevBtn.style.display = i === 0 ? "none" : "flex";
-
     if (i === steps.length - 1) {
       nextBtn.textContent = "Submit";
     }
     updateIndicators(i);
   }
 
-function isCurrentStepValid() {
-  const currentFields = steps[currentStep].querySelectorAll(
-    "[required], [data-required-group]"
-  );
-  let isValid = true;
+  function isCurrentStepValid() {
+    const currentFields = steps[currentStep].querySelectorAll("[required], [data-required-group]");
+    let isValid = true;
 
-  for (let field of currentFields) {
-    const parent = field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || field.parentElement;
-    const existingError = parent.querySelector(".field-error");
-    if (existingError) existingError.remove();
+    for (let field of currentFields) {
+      const parent =
+        field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || field.parentElement;
+      const existingError = parent.querySelector(".field-error");
+      if (existingError) existingError.remove();
 
-    // Handle required checkbox group
-    if (field.hasAttribute("data-required-group")) {
-      const groupName = field.getAttribute("data-required-group");
-      const groupInputs = field.querySelectorAll(`input[name="${groupName}[]"]`);
-      const isChecked = Array.from(groupInputs).some((input) => input.checked);
+      // Required checkbox group
+      if (field.hasAttribute("data-required-group")) {
+        const groupName = field.getAttribute("data-required-group");
+        const groupInputs = field.querySelectorAll(`input[name="${groupName}[]"]`);
+        const isChecked = Array.from(groupInputs).some((input) => input.checked);
+        if (!isChecked) {
+          groupInputs.forEach((input) => (input.style.outline = "2px solid red"));
+          isValid = false;
+          if (!existingError) {
+            const msg = document.createElement("div");
+            msg.className = "field-error";
+            msg.textContent = "Please select at least one option.";
+            field.appendChild(msg);
+          }
+        } else {
+          groupInputs.forEach((input) => (input.style.outline = "none"));
+        }
+        continue;
+      }
 
-      if (!isChecked) {
-        groupInputs.forEach((input) => (input.style.outline = "2px solid red"));
+      // Required radio
+      if (field.type === "radio" && !document.querySelector(`input[name="${field.name}"]:checked`)) {
+        field.style.borderColor = "red";
         isValid = false;
-
         if (!existingError) {
           const msg = document.createElement("div");
           msg.className = "field-error";
-          msg.textContent = "Please select at least one option.";
-          field.appendChild(msg);
+          msg.textContent = "Please select an option.";
+          parent.appendChild(msg);
+        }
+        continue;
+      }
+
+      const value = field.value.trim();
+
+      // Email
+      if (field.type === "email") {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) {
+          field.style.borderColor = "red";
+          isValid = false;
+          const msg = document.createElement("div");
+          msg.className = "field-error";
+          msg.textContent = "Please enter a valid email address.";
+          parent.appendChild(msg);
+          continue;
+        }
+        field.style.borderColor = "";
+        continue;
+      }
+
+      // Phone
+      if (field.name === "patient[phone]") {
+        const clean = value.replace(/\D/g, "");
+        if (clean.length < 10) {
+          field.style.borderColor = "red";
+          isValid = false;
+          const msg = document.createElement("div");
+          msg.className = "field-error";
+          msg.textContent = "Please enter a valid phone number.";
+          parent.appendChild(msg);
+          continue;
+        }
+        field.style.borderColor = "";
+        continue;
+      }
+
+      // Postcode
+      if (field.name === "patient[post_code]") {
+        if (!/^\d{4}$/.test(value)) {
+          field.style.borderColor = "red";
+          isValid = false;
+          const msg = document.createElement("div");
+          msg.className = "field-error";
+          msg.textContent = "Please enter a 4-digit postcode.";
+          parent.appendChild(msg);
+          continue;
+        }
+        field.style.borderColor = "";
+        continue;
+      }
+
+      // General required
+      if (!value) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "This field is required.";
+        parent.appendChild(msg);
+      } else {
+        field.style.borderColor = "";
+      }
+    }
+    return isValid;
+  }
+
+  nextBtn.addEventListener("click", async () => {
+    const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
+
+    if (currentStep < steps.length - 1) {
+      if (!isCurrentStepValid()) {
+        showToast("Please review the highlighted fields before continuing.");
+        return;
+      }
+
+      if (isPaymentEnabled && currentStep === steps.length - 2 && !stripeInitStarted) {
+        stripeInitStarted = true;
+        await safeInitStripe();
+      }
+
+      currentStep++;
+      showStep(currentStep);
+    } else {
+      if (!isCurrentStepValid()) {
+        showToast("Please review the highlighted fields before continuing.");
+        return;
+      }
+
+      if (isPaymentEnabled) {
+        document.getElementById("prepayment-form").style.display = "none";
+        document.getElementById("payment_form").style.display = "flex";
+        await safeInitStripe();
+
+        const backBtn = document.getElementById("go-back-button");
+        if (backBtn) {
+          backBtn.addEventListener("click", () => {
+            document.getElementById("prepayment-form").style.display = "block";
+            document.getElementById("payment_form").style.display = "none";
+            showStep(currentStep);
+          });
         }
       } else {
-        groupInputs.forEach((input) => (input.style.outline = "none"));
-      }
-
-      continue;
-    }
-
-    // Handle required radio buttons
-    if (
-      field.type === "radio" &&
-      !document.querySelector(`input[name="${field.name}"]:checked`)
-    ) {
-      field.style.borderColor = "red";
-      isValid = false;
-
-      if (!existingError) {
-        const msg = document.createElement("div");
-        msg.className = "field-error";
-        msg.textContent = "Please select an option.";
-        parent.appendChild(msg);
-      }
-      continue;
-    }
-
-    const value = field.value.trim();
-
-    // Email validation
-    if (field.type === "email") {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(value)) {
-        field.style.borderColor = "red";
-        isValid = false;
-
-        const msg = document.createElement("div");
-        msg.className = "field-error";
-        msg.textContent = "Please enter a valid email address.";
-        parent.appendChild(msg);
-        continue;
-      }
-      field.style.borderColor = "";
-      continue;
-    }
-
-    // Masked phone validation
-    if (field.name === "patient[phone]") {
-      const clean = value.replace(/\D/g, "");
-      if (clean.length < 10) {
-        field.style.borderColor = "red";
-        isValid = false;
-
-        const msg = document.createElement("div");
-        msg.className = "field-error";
-        msg.textContent = "Please enter a valid phone number.";
-        parent.appendChild(msg);
-        continue;
-      }
-      field.style.borderColor = "";
-      continue;
-    }
-
-    // Masked postcode validation
-    if (field.name === "patient[post_code]") {
-      if (!/^\d{4}$/.test(value)) {
-        field.style.borderColor = "red";
-        isValid = false;
-
-        const msg = document.createElement("div");
-        msg.className = "field-error";
-        msg.textContent = "Please enter a 4-digit postcode.";
-        parent.appendChild(msg);
-        continue;
-      }
-      field.style.borderColor = "";
-      continue;
-    }
-
-    // General required validation
-    if (!value) {
-      field.style.borderColor = "red";
-      isValid = false;
-
-      const msg = document.createElement("div");
-      msg.className = "field-error";
-      msg.textContent = "This field is required.";
-      parent.appendChild(msg);
-    } else {
-      field.style.borderColor = "";
-    }
-  }
-
-  return isValid;
-}
-
-
-nextBtn.addEventListener("click", async () => {
-  const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
-
-  if (currentStep < steps.length - 1) {
-    if (!isCurrentStepValid()) {
-      showToast("Please review the highlighted fields before continuing.");
-      return;
-    }
-
-    // Preload Stripe if payment is enabled and we're at the step before the last
-    if (isPaymentEnabled && currentStep === steps.length - 2 && !stripeInitStarted) {
-      stripeInitStarted = true;
-      if (!window.stripe) initStripe();
-    }
-
-    currentStep++;
-    showStep(currentStep);
-  } else {
-    if (!isCurrentStepValid()) {
-      showToast("Please review the highlighted fields before continuing.");
-      return;
-    }
-
-    if (isPaymentEnabled) {
-      document.getElementById("prepayment-form").style.display = "none";
-      document.getElementById("payment_form").style.display = "flex";
-
-      if (!window.stripe) initStripe();
-
-      const backBtn = document.getElementById("go-back-button");
-      if (backBtn) {
-        backBtn.addEventListener("click", () => {
-          document.getElementById("prepayment-form").style.display = "block";
-          document.getElementById("payment_form").style.display = "none";
-          showStep(currentStep);
-        });
-      }
-    } else {
         showPaymentLoader();
         await submitBookingForm();
+      }
     }
-  }
-});
-
+  });
 
   prevBtn.addEventListener("click", () => {
     if (currentStep > 0) {
       currentStep--;
       showStep(currentStep);
     }
-
-    if ((currentStep + 1, steps.length - 1)) {
+    if (currentStep + 1 < steps.length) {
       nextBtn.innerHTML = nextBtnLabel;
     }
   });
 
   showStep(currentStep);
 
-function attachValidationListeners() {
-  document
-    .querySelectorAll(
-      "#prepayment-form input[required], #prepayment-form textarea[required]"
-    )
-    .forEach((input) => {
-      input.addEventListener("input", () => {
-        input.style.borderColor = "";
-
-        const parent = input.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || input.parentElement;
-        const existingError = parent.querySelector(".field-error");
-        if (existingError) existingError.remove();
-      });
-    });
-
-  // Radio buttons
-  document
-    .querySelectorAll("#prepayment-form input[type='radio'][required]")
-    .forEach((radio) => {
-      radio.addEventListener("change", () => {
-        const group = document.getElementsByName(radio.name);
-        group.forEach((el) => {
-          el.style.borderColor = "";
-          const parent = el.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || el.parentElement;
+  function attachValidationListeners() {
+    document
+      .querySelectorAll("#prepayment-form input[required], #prepayment-form textarea[required]")
+      .forEach((input) => {
+        input.addEventListener("input", () => {
+          input.style.borderColor = "";
+          const parent =
+            input.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || input.parentElement;
           const existingError = parent.querySelector(".field-error");
           if (existingError) existingError.remove();
         });
       });
-    });
 
-  // Required checkbox groups
-  document
-    .querySelectorAll("[data-required-group]")
-    .forEach((groupContainer) => {
+    // Radio buttons
+    document
+      .querySelectorAll("#prepayment-form input[type='radio'][required]")
+      .forEach((radio) => {
+        radio.addEventListener("change", () => {
+          const group = document.getElementsByName(radio.name);
+          group.forEach((el) => {
+            el.style.borderColor = "";
+            const parent =
+              el.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || el.parentElement;
+            const existingError = parent.querySelector(".field-error");
+            if (existingError) existingError.remove();
+          });
+        });
+      });
+
+    // Required checkbox groups
+    document.querySelectorAll("[data-required-group]").forEach((groupContainer) => {
       const groupName = groupContainer.getAttribute("data-required-group");
-      const checkboxes = groupContainer.querySelectorAll(
-        `input[name="${groupName}[]"]`
-      );
+      const checkboxes = groupContainer.querySelectorAll(`input[name="${groupName}[]"]`);
       checkboxes.forEach((cb) => {
         cb.addEventListener("change", () => {
           const hasChecked = [...checkboxes].some((c) => c.checked);
           if (hasChecked) {
             checkboxes.forEach((c) => {
               c.style.outline = "none";
-              const parent = c.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || c.parentElement;
+              const parent =
+                c.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || c.parentElement;
               const existingError = parent.querySelector(".field-error");
               if (existingError) existingError.remove();
             });
@@ -474,10 +452,12 @@ function attachValidationListeners() {
         });
       });
     });
-}
+  }
 
   attachValidationListeners();
 }
+
+
 
 async function submitBookingForm(stripeToken = null, errorEl = null) {
   const formElement = document.getElementById("prepayment-form");

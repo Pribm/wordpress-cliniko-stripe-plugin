@@ -21,12 +21,6 @@ async function initStripe() {
 async function initializeStripeElements() {
   const stripe = Stripe(ClinikoStripeData.stripe_pk);
 
-  const res = await fetch(ClinikoStripeData.client_secret_url, {
-    method: "POST",
-    body: JSON.stringify({ moduleId: ClinikoStripeData.module_id }),
-    headers: { "Content-Type": "application/json" },
-  });
-
   const elements = stripe.elements();
   const style = {
     base: {

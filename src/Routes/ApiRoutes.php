@@ -13,15 +13,7 @@ class ApiRoutes {
     }
 
     public function register_routes() {
-        // Rota para obter client secret do Stripe
-        $stripeController = new StripeController();
-
-        register_rest_route('v1', '/client-secret', [
-            'methods' => 'POST',
-            'callback' => [$stripeController, 'getClientSecret'],
-            'permission_callback' => '__return_true',
-        ]);
-
+        
         // Rota para agendar no Cliniko após pagamento
         $clinikoController = new ClinikoController();
         register_rest_route('v1', '/book-cliniko', [

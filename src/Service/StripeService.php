@@ -2,6 +2,7 @@
 namespace App\Service;
 
 use ErrorException;
+use Stripe\Charge;
 if (!defined('ABSPATH'))
     exit;
 
@@ -38,25 +39,34 @@ class StripeService
     }
 
 
-    public function createChargeFromToken(string $token, int $amount, string $description = '', array $metadata = [])
-    {
-        try {
-            $params = [
-                'amount' => $amount,
-                'currency' => 'aud',
-                'source' => $token,
-                'description' => $description,
-            ];
+public function createChargeFromToken(
+    string $token,
+    int $amount,
+    string $description = '',
+    array $metadata = [],
+    string $receiptEmail = ''
+) {
+    try {
+        $params = [
+            'amount'      => $amount,
+            'currency'    => 'aud',
+            'source'      => $token,
+            'description' => $description,
+        ];
 
-            if (!empty($metadata)) {
-                $params['metadata'] = $metadata;
-            }
-
-            return \Stripe\Charge::create($params);
-        } catch (\Exception $e) {
-            throw new ErrorException($e->getMessage());
+        if (!empty($metadata)) {
+            $params['metadata'] = $metadata;
         }
+
+        if (!empty($receiptEmail)) {
+            $params['receipt_email'] = $receiptEmail;
+        }
+
+        return Charge::create($params);
+    } catch (\Exception $e) {
+        throw new ErrorException($e->getMessage());
     }
+}
 
 
     public function retrievePaymentIntent(string $id): PaymentIntent|null
