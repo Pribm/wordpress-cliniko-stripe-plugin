@@ -1,3 +1,51 @@
+## [1.2.3] - 2025-08-21
+
+### Added
+- **Standardized error format** across backend:
+  - Each error now contains `field`, `label`, `code`, `detail`
+  - Easier to map to frontend fields and show friendly messages
+- **Frontend error rendering**:
+  - Errors are displayed as a styled `<ul>` list under the payment form
+  - Each message is prefixed with the field label for clarity
+- **Medicare validation rules**:
+  - Medicare number must contain **exactly 10 digits**
+  - Medicare reference number must be **a single digit between 1–9**
+
+### Changed
+- **ClinikoController**:
+  - Now returns consistent error responses (`errors[]` array) for validation, API, and server exceptions
+  - Validation errors return `422`, API/server issues return `500`
+- **Stripe initialization**:
+  - Refactored to singleton (`getStripe()`) to avoid multiple initializations
+  - Payment button handler is attached only once (`paymentHandlerAttached` guard)
+- **Multi-step form validation (`isCurrentStepValid`)**:
+  - Added checks for Medicare fields (digit count & range)
+  - Improved error messages for phone, postcode, and Medicare
+- **Frontend feedback**:
+  - Inline error messages styled in red
+  - Borders reset automatically when user corrects the field
+
+### Internal
+- Unified backend and frontend error handling to use the same data contract
+- Reduced duplication of Stripe initialization code
+- Improved maintainability by centralizing validation logic both server- and client-side
+
+
+## [1.2.2] - 2025-08-20
+
+### Changed
+- **PatientForm model refactor** for consistency and static analysis compliance:
+  - `create()` now always returns a `PatientForm` or throws an `ApiException` (never `null`)
+  - `delete()` now returns `void` and throws on failure instead of returning `true`
+  - Improved error handling in `create()` and `update()` (guards against empty API responses)
+  - Stricter type hints and docblocks added across methods
+  - Cleaned up unused imports and redundant null checks
+
+### Internal
+- Aligns with the ongoing refactor of models and code abstraction
+- PHPStan warnings removed by ensuring clear contracts in return types
+- Safe handling of linked entity fetches with stronger defensive coding
+
 ## [1.1.6] - 2025-10-04
 
 ### Added

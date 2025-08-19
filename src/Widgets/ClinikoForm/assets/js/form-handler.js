@@ -243,112 +243,145 @@ function mountForm() {
     updateIndicators(i);
   }
 
-  function isCurrentStepValid() {
-    const currentFields = steps[currentStep].querySelectorAll("[required], [data-required-group]");
-    let isValid = true;
+function isCurrentStepValid() {
+  const currentFields = steps[currentStep].querySelectorAll("[required], [data-required-group]");
+  let isValid = true;
 
-    for (let field of currentFields) {
-      const parent =
-        field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || field.parentElement;
-      const existingError = parent.querySelector(".field-error");
-      if (existingError) existingError.remove();
+  for (let field of currentFields) {
+    const parent =
+      field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || field.parentElement;
+    const existingError = parent.querySelector(".field-error");
+    if (existingError) existingError.remove();
 
-      // Required checkbox group
-      if (field.hasAttribute("data-required-group")) {
-        const groupName = field.getAttribute("data-required-group");
-        const groupInputs = field.querySelectorAll(`input[name="${groupName}[]"]`);
-        const isChecked = Array.from(groupInputs).some((input) => input.checked);
-        if (!isChecked) {
-          groupInputs.forEach((input) => (input.style.outline = "2px solid red"));
-          isValid = false;
-          if (!existingError) {
-            const msg = document.createElement("div");
-            msg.className = "field-error";
-            msg.textContent = "Please select at least one option.";
-            field.appendChild(msg);
-          }
-        } else {
-          groupInputs.forEach((input) => (input.style.outline = "none"));
-        }
-        continue;
-      }
-
-      // Required radio
-      if (field.type === "radio" && !document.querySelector(`input[name="${field.name}"]:checked`)) {
-        field.style.borderColor = "red";
+    // Required checkbox group
+    if (field.hasAttribute("data-required-group")) {
+      const groupName = field.getAttribute("data-required-group");
+      const groupInputs = field.querySelectorAll(`input[name="${groupName}[]"]`);
+      const isChecked = Array.from(groupInputs).some((input) => input.checked);
+      if (!isChecked) {
+        groupInputs.forEach((input) => (input.style.outline = "2px solid red"));
         isValid = false;
         if (!existingError) {
           const msg = document.createElement("div");
           msg.className = "field-error";
-          msg.textContent = "Please select an option.";
-          parent.appendChild(msg);
+          msg.textContent = "Please select at least one option.";
+          field.appendChild(msg);
         }
-        continue;
+      } else {
+        groupInputs.forEach((input) => (input.style.outline = "none"));
       }
+      continue;
+    }
 
-      const value = field.value.trim();
-
-      // Email
-      if (field.type === "email") {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(value)) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Please enter a valid email address.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
+    // Required radio
+    if (field.type === "radio" && !document.querySelector(`input[name="${field.name}"]:checked`)) {
+      field.style.borderColor = "red";
+      isValid = false;
+      if (!existingError) {
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Please select an option.";
+        parent.appendChild(msg);
       }
+      continue;
+    }
 
-      // Phone
-      if (field.name === "patient[phone]") {
-        const clean = value.replace(/\D/g, "");
-        if (clean.length < 10) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Please enter a valid phone number.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
-      }
+    const value = field.value.trim();
 
-      // Postcode
-      if (field.name === "patient[post_code]") {
-        if (!/^\d{4}$/.test(value)) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Please enter a 4-digit postcode.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
-      }
-
-      // General required
-      if (!value) {
+    // Email
+    if (field.type === "email") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
         field.style.borderColor = "red";
         isValid = false;
         const msg = document.createElement("div");
         msg.className = "field-error";
-        msg.textContent = "This field is required.";
+        msg.textContent = "Please enter a valid email address.";
         parent.appendChild(msg);
-      } else {
-        field.style.borderColor = "";
+        continue;
       }
+      field.style.borderColor = "";
+      continue;
     }
-    return isValid;
+
+    // Phone (AU: 10 digits)
+    if (field.name === "patient[phone]") {
+      const clean = value.replace(/\D/g, "");
+      if (clean.length !== 10) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Phone number must be 10 digits.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Postcode (4 digits)
+    if (field.name === "patient[post_code]") {
+      if (!/^\d{4}$/.test(value)) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Please enter a 4-digit postcode.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Medicare number (10 digits, ignoring spaces)
+    if (field.name === "patient[medicare]") {
+      const clean = value.replace(/\D/g, "");
+      if (clean.length !== 10) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Medicare number must contain exactly 10 digits.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Medicare reference number (1 digit, 1–9)
+    if (field.name === "patient[medicare_reference_number]") {
+      const clean = value.replace(/\D/g, "");
+      if (!/^[1-9]$/.test(clean)) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Medicare reference number must be a single digit between 1 and 9.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // General required
+    if (!value) {
+      field.style.borderColor = "red";
+      isValid = false;
+      const msg = document.createElement("div");
+      msg.className = "field-error";
+      msg.textContent = "This field is required.";
+      parent.appendChild(msg);
+    } else {
+      field.style.borderColor = "";
+    }
   }
+  return isValid;
+}
+
 
   nextBtn.addEventListener("click", async () => {
     const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
@@ -489,6 +522,7 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
     const result = await response.json();
 
     if (result.status === "success") {
+      // ✅ Success redirect
       const redirectBase = formHandlerData.redirect_url;
       const queryParams = new URLSearchParams({
         patient_name: result.patient?.name ?? "",
@@ -501,8 +535,29 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
 
       window.location.href = `${redirectBase}?${queryParams.toString()}`;
     } else {
+      // ❌ Handle errors (validation / API / server)
       if (errorEl) {
-        errorEl.textContent = result.message || "Error booking appointment. Please try again.";
+        errorEl.innerHTML = ""; // clear old messages
+
+        if (Array.isArray(result.errors) && result.errors.length > 0) {
+          // Create error list
+          const ul = document.createElement("ul");
+          ul.style.marginTop = "0.5rem";
+          ul.style.fontSize = "0.8rem";
+          ul.style.paddingLeft = "1.2rem";
+          ul.style.color = "#c62828";
+          ul.style.fontWeight = "500";
+
+          result.errors.forEach(e => {
+            const li = document.createElement("li");
+            li.textContent = `${e.label}: ${e.detail}`;
+            ul.appendChild(li);
+          });
+
+          errorEl.appendChild(ul);
+        } else {
+          errorEl.textContent = result.message || "Error booking appointment. Please try again.";
+        }
       } else {
         showToast(result.message || "Error booking appointment.");
       }
@@ -519,6 +574,7 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
     jQuery.LoadingOverlay("hide");
   }
 }
+
 
 function showPaymentLoader() {
   const styles = formHandlerData.appearance?.variables || {};

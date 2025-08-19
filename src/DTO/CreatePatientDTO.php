@@ -18,6 +18,8 @@ class CreatePatientDTO
     public ?string $postCode = null;
     public ?string $country = null;
 
+    public ?bool $acceptedPrivacyPolicy = false;
+
     public ?string $dateOfBirth = null;
     public ?string $notes = null;
     public ?string $genderIdentity = null;
@@ -45,6 +47,7 @@ class CreatePatientDTO
             'gender_identity'           => $this->genderIdentity,
             'preferred_first_name'      => $this->preferredFirstName,
             'patient_phone_numbers'     => $this->patientPhoneNumbers,
+            'accepted_privacy_policy' => $this->acceptedPrivacyPolicy
         ];
     }
 }
