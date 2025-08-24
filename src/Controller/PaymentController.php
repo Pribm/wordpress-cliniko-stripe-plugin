@@ -112,6 +112,7 @@ class PaymentController
                     'amount'                   => $amount,
                     'currency'                 => 'aud',
                     'payload_key'              => $payloadKey,   // <-- worker will load the heavy data
+                    'appointment_label' => $apptType->getName()
                 ],
                 5,
                 $charge->id

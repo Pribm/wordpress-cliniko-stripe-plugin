@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Handles syncing Elementor widget email templates into WP options.
+ * Handles syncing Elementor widget email templates + switchers into WP options.
  */
 class ElementorTemplateSync
 {
@@ -39,14 +39,30 @@ class ElementorTemplateSync
     {
         foreach ($elements as $element) {
             if (!empty($element['widgetType']) && $element['widgetType'] === 'cliniko_stripe_payment') {
-                if (!empty($element['settings']['failure_email_template'])) {
-                    update_option('wp_cliniko_failure_email_tpl', $element['settings']['failure_email_template']);
-                }
-                if (!empty($element['settings']['success_email_template'])) {
-                    update_option('wp_cliniko_success_email_tpl', $element['settings']['success_email_template']);
-                }
+                $settings = $element['settings'] ?? [];
+
+                // --- Failure Email ---
+                update_option(
+                    'wp_cliniko_failure_email_tpl',
+                    $settings['failure_email_template'] ?? ''
+                );
+                update_option(
+                    'wp_cliniko_send_email_on_failure',
+                    $settings['send_email_on_failure'] ?? 'yes'
+                );
+
+                // --- Success Email ---
+                update_option(
+                    'wp_cliniko_success_email_tpl',
+                    $settings['success_email_template'] ?? ''
+                );
+                update_option(
+                    'wp_cliniko_send_email_on_success',
+                    $settings['send_email_on_success'] ?? 'no'
+                );
             }
 
+            // Recurse into nested elements
             if (!empty($element['elements']) && is_array($element['elements'])) {
                 self::walkElements($element['elements']);
             }

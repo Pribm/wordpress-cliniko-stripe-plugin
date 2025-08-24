@@ -1,3 +1,31 @@
+## [1.2.4] - 2025-08-24
+
+### Added
+- **NotificationService**:
+  - Centralized handling of success/failure emails
+  - Prevents duplicates via transient lock
+  - Supports Elementor-driven templates with placeholder substitution
+- **Elementor widget controls**:
+  - `send_email_on_success` / `send_email_on_failure` toggles
+  - `success_email_template` / `failure_email_template` raw HTML inputs
+  - Templates synced to WordPress options via new `ElementorTemplateSync`
+- **Success toast style** on frontend:
+  - Green checkmark icon, light green background
+  - Distinguishable from error toast (red)
+
+### Changed
+- **ClinikoSchedulingWorker**:
+  - Now delegates notifications to `NotificationService`
+  - Success flow triggers confirmation email if enabled
+  - Failure flow triggers refund + failure email if enabled
+  - Removed inline `wp_mail` duplication in worker
+
+### Internal
+- Improved maintainability by decoupling email logic from worker
+- Elementor template sync ensures admin edits persist to runtime options
+- Unified toast helper supports both success and error styling
+
+
 ## [1.2.3] - 2025-08-21
 
 ### Added

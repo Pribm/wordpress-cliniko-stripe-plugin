@@ -104,7 +104,21 @@ function parseFormToStructuredBody(formEl) {
   return structured;
 }
 
-function showToast(message) {
+function showToast(message, type = "error") {
+  const isSuccess = type === "success";
+
+  const icon = isSuccess
+    ? `<svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" fill="#2e7d32" viewBox="0 0 24 24">
+         <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+       </svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" fill="#f44336" viewBox="0 0 24 24">
+         <path d="M1 21h22L12 2 1 21zm13-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+       </svg>`;
+
+  const bgColor = isSuccess ? "#f1f8f4" : "#fff";
+  const borderColor = isSuccess ? "#c8e6c9" : "#eee";
+  const textColor = isSuccess ? "#2e7d32" : "#333";
+
   Toastify({
     text: `
       <div style="
@@ -112,11 +126,9 @@ function showToast(message) {
         align-items: center;
         gap: 12px;
       ">
-        <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" fill="#f44336" viewBox="0 0 24 24">
-          <path d="M1 21h22L12 2 1 21zm13-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-        </svg>
+        ${icon}
         <span style="
-          color: #333;
+          color: ${textColor};
           font-size: 14px;
           font-weight: 500;
         ">${message}</span>
@@ -128,8 +140,8 @@ function showToast(message) {
     stopOnFocus: true,
     escapeMarkup: false,
     style: {
-      background: "#fff",
-      border: "1px solid #eee",
+      background: bgColor,
+      border: `1px solid ${borderColor}`,
       boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
       borderRadius: "8px",
       padding: "12px 16px",
@@ -504,8 +516,7 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
     patient,
     moduleId: formHandlerData.module_id,
     patient_form_template_id: formHandlerData.patient_form_template_id,
-    stripeToken, // required for the payment route
-    // NOTE: if you later add signature pre-upload, pass signature_attachment_id here
+    stripeToken, 
   };
 
   try {
@@ -518,8 +529,7 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
     const result = await response.json();
 
     if (result.status === "success" && result.payment?.id) {
-      // Payment ok; scheduling is enqueued in the background
-      showToast("Payment received. We’re scheduling your appointment now…");
+      showToast("Payment received! We’re scheduling your appointment now…", "success");
 
       const redirectBase = formHandlerData.redirect_url;
       const queryParams = new URLSearchParams({
