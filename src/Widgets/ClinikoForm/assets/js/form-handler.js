@@ -492,88 +492,89 @@ function isCurrentStepValid() {
 
 
 
+
+
 async function submitBookingForm(stripeToken = null, errorEl = null) {
   const formElement = document.getElementById("prepayment-form");
   const { content, patient } = parseFormToStructuredBody(formElement);
 
-  const formData = new FormData();
-  formData.append("content", JSON.stringify(content));
-  formData.append("patient", JSON.stringify(patient));
-  formData.append("moduleId", formHandlerData.module_id);
-  formData.append("patient_form_template_id", formHandlerData.patient_form_template_id);
-
-  if (stripeToken) {
-    formData.append("stripeToken", stripeToken);
-  }
-
-  const signatureData = document.getElementById("signature-data")?.value;
-  if (signatureData?.startsWith("data:image/")) {
-    const blob = dataURLToBlob(signatureData);
-    const file = new File([blob], "signature.png", { type: "image/png" });
-    formData.append("signature_file", file);
-  }
+  // Build JSON payload for the new charge route
+  const payload = {
+    content,
+    patient,
+    moduleId: formHandlerData.module_id,
+    patient_form_template_id: formHandlerData.patient_form_template_id,
+    stripeToken, // required for the payment route
+    // NOTE: if you later add signature pre-upload, pass signature_attachment_id here
+  };
 
   try {
-    const response = await fetch(formHandlerData.booking_url, {
+    const response = await fetch(formHandlerData.payment_url, {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
 
     const result = await response.json();
 
-    if (result.status === "success") {
-      // ✅ Success redirect
+    if (result.status === "success" && result.payment?.id) {
+      // Payment ok; scheduling is enqueued in the background
+      showToast("Payment received. We’re scheduling your appointment now…");
+
       const redirectBase = formHandlerData.redirect_url;
       const queryParams = new URLSearchParams({
-        patient_name: result.patient?.name ?? "",
-        email: result.patient?.email ?? "",
-        start: result.appointment?.starts_at ?? "",
-        end: result.appointment?.ends_at ?? "",
-        ref: result.appointment?.payment_reference ?? "",
-        link: result.appointment?.telehealth_url ?? "",
+        // We no longer have appointment times here; worker will create them later
+        patient_name:
+          (patient?.first_name && patient?.last_name)
+            ? `${patient.first_name} ${patient.last_name}`
+            : "",
+        email: patient?.email ?? "",
+        ref: result.payment.id,           // Stripe charge id
+        status: "scheduling_queued",      // for your success page UI
+        receipt: result.payment.receipt_url ?? "",
       });
 
       window.location.href = `${redirectBase}?${queryParams.toString()}`;
     } else {
-      // ❌ Handle errors (validation / API / server)
-      if (errorEl) {
-        errorEl.innerHTML = ""; // clear old messages
-
-        if (Array.isArray(result.errors) && result.errors.length > 0) {
-          // Create error list
-          const ul = document.createElement("ul");
-          ul.style.marginTop = "0.5rem";
-          ul.style.fontSize = "0.8rem";
-          ul.style.paddingLeft = "1.2rem";
-          ul.style.color = "#c62828";
-          ul.style.fontWeight = "500";
-
-          result.errors.forEach(e => {
-            const li = document.createElement("li");
-            li.textContent = `${e.label}: ${e.detail}`;
-            ul.appendChild(li);
-          });
-
-          errorEl.appendChild(ul);
-        } else {
-          errorEl.textContent = result.message || "Error booking appointment. Please try again.";
-        }
-      } else {
-        showToast(result.message || "Error booking appointment.");
-      }
+      // Errors from payment route
+      handleChargeErrors(result, errorEl);
     }
   } catch (err) {
-    console.error("Booking failed", err);
+    console.error("Payment request failed", err);
     const message = "Unexpected error. Please try again.";
-    if (errorEl) {
-      errorEl.textContent = message;
-    } else {
-      showToast(message);
-    }
+    if (errorEl) errorEl.textContent = message;
+    else showToast(message);
   } finally {
     jQuery.LoadingOverlay("hide");
   }
 }
+
+// Helper to render payment errors (mirrors your existing UI pattern)
+function handleChargeErrors(result, errorEl) {
+  const message = result?.message || "Payment failed. Please try again.";
+  if (errorEl) {
+    errorEl.innerHTML = "";
+    if (Array.isArray(result?.errors) && result.errors.length > 0) {
+      const ul = document.createElement("ul");
+      ul.style.marginTop = "0.5rem";
+      ul.style.fontSize = "0.8rem";
+      ul.style.paddingLeft = "1.2rem";
+      ul.style.color = "#c62828";
+      ul.style.fontWeight = "500";
+      result.errors.forEach(e => {
+        const li = document.createElement("li");
+        li.textContent = `${e.label || "Error"}: ${e.detail || e.code || "Unknown"}`;
+        ul.appendChild(li);
+      });
+      errorEl.appendChild(ul);
+    } else {
+      errorEl.textContent = message;
+    }
+  } else {
+    showToast(message);
+  }
+}
+
 
 
 function showPaymentLoader() {

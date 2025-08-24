@@ -3,11 +3,12 @@ namespace App\Service;
 
 use ErrorException;
 use Stripe\Charge;
+use Stripe\Refund;
 if (!defined('ABSPATH'))
     exit;
 
 use Stripe\Stripe;
-use Stripe\PaymentIntent;
+
 
 class StripeService
 {
@@ -19,69 +20,54 @@ class StripeService
         $this->stripe::setApiKey($api_key);
     }
 
-    public function createPaymentIntent(int $amount, string $description, array $metadata = [])
-    {
-
-        $params = [
-            'amount' => $amount,
-            'currency' => 'aud',
-            'payment_method_types' => ['card'],
-            'description' => $description
-        ];
-
-        if (!empty($metadata)) {
-            $params['metadata'] = $metadata;
-        }
-
-        $intent = PaymentIntent::create($params);
-
-        return $intent->client_secret;
-    }
-
-
-public function createChargeFromToken(
-    string $token,
-    int $amount,
-    string $description = '',
-    array $metadata = [],
-    string $receiptEmail = ''
-) {
-    try {
-        $params = [
-            'amount'      => $amount,
-            'currency'    => 'aud',
-            'source'      => $token,
-            'description' => $description,
-        ];
-
-        if (!empty($metadata)) {
-            $params['metadata'] = $metadata;
-        }
-
-        if (!empty($receiptEmail)) {
-            $params['receipt_email'] = $receiptEmail;
-        }
-
-        return Charge::create($params);
-    } catch (\Exception $e) {
-        throw new ErrorException($e->getMessage());
-    }
-}
-
-
-    public function retrievePaymentIntent(string $id): PaymentIntent|null
-    {
+    public function createChargeFromToken(
+        string $token,
+        int $amount,
+        string $description = '',
+        array $metadata = [],
+        string $receiptEmail = ''
+    ) {
         try {
-            Stripe::setApiKey(get_option('wp_stripe_secret_key'));
-            return PaymentIntent::retrieve($id);
+            $params = [
+                'amount' => $amount,
+                'currency' => 'aud',
+                'source' => $token,
+                'description' => $description,
+            ];
+
+            if (!empty($metadata)) {
+                $params['metadata'] = $metadata;
+            }
+
+            if (!empty($receiptEmail)) {
+                $params['receipt_email'] = $receiptEmail;
+            }
+
+            return Charge::create($params);
         } catch (\Exception $e) {
-            error_log('[StripeService] Failed to retrieve PaymentIntent: ' . $e->getMessage());
-            return null;
+            throw new ErrorException($e->getMessage());
         }
     }
 
-    public function getStripe()
+    /**
+     * Full or partial refund.
+     * @param string      $chargeId  The Stripe charge id (e.g., ch_xxx)
+     * @param int|null    $amount    Amount in cents; null = full refund
+     * @param string|null $reason    'requested_by_customer' | 'duplicate' | 'fraudulent'
+     * @param array       $metadata  Extra context
+     * @return \Stripe\Refund
+     */
+    public function refundCharge(string $chargeId, ?int $amount = null, ?string $reason = null, array $metadata = [])
     {
-        return $this->stripe;
+        $params = ['charge' => $chargeId];
+        if ($amount !== null)
+            $params['amount'] = $amount;     // cents
+        if ($reason !== null)
+            $params['reason'] = $reason;
+        if (!empty($metadata))
+            $params['metadata'] = $metadata;
+
+        return Refund::create($params);
     }
+
 }
