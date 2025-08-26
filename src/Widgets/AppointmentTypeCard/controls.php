@@ -1,4 +1,8 @@
 <?php
+
+use App\Model\AppointmentType;
+
+
 if (!defined('ABSPATH')) exit;
 use App\Widgets\AppointmentTypeCard\Helpers;
 use Elementor\Controls_Manager;
@@ -11,8 +15,16 @@ $this->start_controls_section('section_content', [
   'label' => __('Content', 'plugin-name'),
 ]);
 
-$types = Helpers::get_appointment_types();
-$options = array_column($types, 'name', 'id');
+$client = cliniko_client(true);
+$types = AppointmentType::all($client, true);
+
+// $options = array_column($types, 'name', 'id');
+
+$options = [];
+foreach ($types as $type) {
+    /** @var AppointmentType $type */
+    $options[$type->getId()] = $type->getName();
+}
 
 $this->add_control('selected_appointment_type', [
   'label' => __('Select Appointment Type', 'plugin-name'),
