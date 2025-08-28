@@ -184,8 +184,14 @@ $progressType = $settings['progress_type'] ?? 'bar';
             </h4>
 
             <?php switch ($question->type):
-              case 'textarea': ?>
-                <textarea name="<?= $input_name ?>" <?= $required ?>></textarea>
+              case 'paragraph': ?>
+                <textarea 
+                  rows="6" 
+                  name="<?= $input_name ?>" 
+                  <?= $required ?> 
+                  style="resize: vertical;"
+                ></textarea>
+
                 <?php break;
 
               case 'radiobuttons':
