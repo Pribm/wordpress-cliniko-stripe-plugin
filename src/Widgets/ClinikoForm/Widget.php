@@ -73,7 +73,7 @@ class Widget extends Widget_Base
     );
 
     try {
-      $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true));
+      $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true), false);
       $sections = $templateModel ? $templateModel->getSections() : [];
     } catch (\Exception $e) {
       new ApiException($e->getMessage());
@@ -112,6 +112,18 @@ class Widget extends Widget_Base
         null,
         []
       );
+
+      wp_enqueue_script(
+        'save-on-exit',
+        plugin_dir_url(__FILE__) . 'assets/js/save-on-exit.js',
+        ["jquery"],
+        null,
+        [
+          'save_on_exit' => $settings['save_on_exit'] === 'yes',
+        ]
+      );
+
+
 
       require __DIR__ . '/templates/card_form_real.phtml';
     }

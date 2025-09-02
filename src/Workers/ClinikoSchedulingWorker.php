@@ -87,8 +87,6 @@ class ClinikoSchedulingWorker
 
     public static function handle($args): void
     {
-
-
         global $wpdb;
         $notifier = new NotificationService();
 
@@ -235,25 +233,7 @@ class ClinikoSchedulingWorker
                 $wpdb->update($table, ['patient_case_id' => (string) $pc->getId(), 'updated_at' => $now], ['payment_reference' => $paymentRef]);
             }
 
-            // 5) Appointment
-            $appt = IndividualAppointment::create([
-                'appointment_type_id' => $appointmentTypeId,
-                'business_id'         => $businessId,
-                'starts_at'           => $start->format(DATE_ATOM),
-                'ends_at'             => $end->format(DATE_ATOM),
-                'patient_id'          => $pt->getId(),
-                'practitioner_id'     => $practitionerId,
-                'patient_case_id'     => $pc->getId(),
-            ], $client);
-            if (!$appt) {
-                throw new \RuntimeException('Failed to create appointment.');
-            }
-
-            if ($useLedger) {
-                $wpdb->update($table, ['appointment_id' => (string) $appt->getId(), 'updated_at' => $now], ['payment_reference' => $paymentRef]);
-            }
-
-            // 6) Patient form
+            // 5) Patient form (before appointment)
             $_tpl = PatientFormTemplate::find($patientFormTemplateId, $client);
             if (!$_tpl) {
                 throw new \RuntimeException('Patient form template not found.');
@@ -268,7 +248,6 @@ class ClinikoSchedulingWorker
             $pfDTO->patient_form_template_id = $patientFormTemplateId;
             $pfDTO->patient_id = $pt->getId();
             $pfDTO->attendee_id = $pt->getId();
-            $pfDTO->appointment_id = $appt->getId();
             $pfDTO->email_to_patient_on_completion = true;
             $pfDTO->name = sprintf('%s - Appointment on %s', $_tpl->getName(), $label);
 
@@ -280,8 +259,31 @@ class ClinikoSchedulingWorker
             if ($useLedger) {
                 $wpdb->update($table, [
                     'patient_form_id' => (string) $pf->getId(),
-                    'status'          => 'succeeded',
                     'updated_at'      => $now,
+                ], ['payment_reference' => $paymentRef]);
+            }
+
+            // 6) Appointment (last step, with form ID in notes)
+            $appt = IndividualAppointment::create([
+                'appointment_type_id' => $appointmentTypeId,
+                'business_id'         => $businessId,
+                'starts_at'           => $start->format(DATE_ATOM),
+                'ends_at'             => $end->format(DATE_ATOM),
+                'patient_id'          => $pt->getId(),
+                'practitioner_id'     => $practitionerId,
+                'patient_case_id'     => $pc->getId(),
+                'notes'               => 'Linked patient form ID: ' . $pf->getId(),
+            ], $client);
+
+            if (!$appt) {
+                throw new \RuntimeException('Failed to create appointment.');
+            }
+
+            if ($useLedger) {
+                $wpdb->update($table, [
+                    'appointment_id' => (string) $appt->getId(),
+                    'status'         => 'succeeded',
+                    'updated_at'     => $now,
                 ], ['payment_reference' => $paymentRef]);
             }
 

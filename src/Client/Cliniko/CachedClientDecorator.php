@@ -21,6 +21,7 @@ class CachedClientDecorator implements ApiClientInterface
         $cacheKey = 'cliniko_api_' . md5('GET_' . $url);
 
         $cached = get_transient($cacheKey);
+
         if ($cached !== false) {
 
             return new ClientResponse($cached);
@@ -28,7 +29,7 @@ class CachedClientDecorator implements ApiClientInterface
 
         $response = $this->client->get($url);
 
-        if ($response->isSuccessful()) {
+        if ($response->isSuccessful() && !empty($response->data)) {
             set_transient($cacheKey, $response->data, $this->ttl);
         }
 

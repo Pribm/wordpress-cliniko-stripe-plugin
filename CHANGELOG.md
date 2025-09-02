@@ -1,3 +1,35 @@
+## [1.2.8] - 2025-09-02
+
+### Added
+- **Exit & Draft Save System** for patient forms:
+  - Automatically saves appointment progress (all answers + step index) into `localStorage`.
+  - Patient-friendly **exit modal** when leaving mid-form:
+    - Options: *Stay on this page*, *Leave without saving*, *Save & Leave*.
+  - **Restore bar** displayed at the top of the form if a saved draft exists, with *Continue* or *Start Over* actions.
+- **Unique draft keys per form/page**:
+  - Each booking page (e.g. `/book/erectile-disfunction`, `/prescriptions`) maintains its own independent draft state.
+- **Stripe integration awareness**:
+  - Draft save/leave modal is skipped when patient completes final payment.
+  - Draft is automatically cleared after successful payment and booking confirmation.
+
+### Changed
+- **Toasts**:
+  - Unified with the existing `showToast()` helper.
+  - Language adapted to be more patient-friendly (avoids technical terms like *draft*):
+    - On restore: *“Your appointment form has been restored. You can continue where you left off.”*
+    - On auto-save: *“Don’t worry, your appointment details will be saved automatically if you leave.”*
+    - On submit: *“We’ve saved your appointment details while confirming your booking.”*
+- **Navigation guard**:
+  - In-form links now trigger the save/leave modal before navigation.
+  - Browser refresh/close now triggers silent auto-save (no intrusive prompts).
+
+### Internal
+- Introduced versioned storage key schema: `clinikoFormProgress:v9:{pathname}`.
+- Exposed `window.currentStep` globally for use across scripts.
+- Preserves and restores **signature pad** input during draft restore.
+- Hardened event binding to prevent duplicate observers in Stripe and exit-save logic.
+
+
 ## [1.2.4] - 2025-08-24
 
 ### Added

@@ -19,9 +19,14 @@ class ApiRoutes
 
         // Rota para agendar no Cliniko após pagamento
         $clinikoController = new ClinikoController();
-        register_rest_route('v1', '/book-cliniko', [
-            'methods' => 'POST',
-            'callback' => [$clinikoController, 'scheduleAppointment'],
+        // register_rest_route('v1', '/book-cliniko', [
+        //     'methods' => 'POST',
+        //     'callback' => [$clinikoController, 'scheduleAppointment'],
+        //     'permission_callback' => '__return_true',
+        // ]);
+        register_rest_route('v1', '/get-patient', [
+            'methods' => 'GET',
+            'callback' => [$clinikoController, 'getPatient'],
             'permission_callback' => '__return_true',
         ]);
 

@@ -110,12 +110,13 @@ abstract class AbstractModel
      * @return static|null
      * @throws ApiException
      */
-    public static function find(string $id, ApiClientInterface $client, bool $throwOnError = true): ?static
+    public static function find(string $id, ApiClientInterface $client, bool $throwOnError = false): ?static
     {
         $path     = static::getResourcePath();
         $response = $client->get("{$path}/{$id}");
 
         if (!$response->isSuccessful()) {
+
             if ($throwOnError) {
                 throw new ApiException("Failed to find resource at {$path}/{$id}.", ['error' => $response->error]);
             }
@@ -123,7 +124,6 @@ abstract class AbstractModel
         }
 
         if (empty($response->data)) {
-            // Bodyless success (e.g., 204/202) -> nothing to hydrate
             return null;
         }
 

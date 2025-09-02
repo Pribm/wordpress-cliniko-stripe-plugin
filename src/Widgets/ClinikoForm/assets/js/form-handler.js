@@ -188,11 +188,15 @@ function mountForm() {
   bindOtherToggle(form);
   setupSignatureCanvas();
 
-  let currentStep = 0;
+  window.currentStep = 0;
   let stripeInitStarted = false;
 
   const steps = document.querySelectorAll(".form-step");
   const nextBtn = document.getElementById("step-next");
+if (nextBtn) {
+  window.nextBtnLabel = nextBtn.innerHTML;
+}
+
   const prevBtn = document.getElementById("step-prev");
   const nextBtnLabel = nextBtn.innerHTML;
 
@@ -256,7 +260,7 @@ function mountForm() {
   }
 
 function isCurrentStepValid() {
-  const currentFields = steps[currentStep].querySelectorAll("[required], [data-required-group]");
+  const currentFields = steps[window.currentStep].querySelectorAll("[required], [data-required-group]");
   let isValid = true;
 
   for (let field of currentFields) {
@@ -398,19 +402,19 @@ function isCurrentStepValid() {
   nextBtn.addEventListener("click", async () => {
     const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
 
-    if (currentStep < steps.length - 1) {
+    if (window.currentStep < steps.length - 1) {
       if (!isCurrentStepValid()) {
         showToast("Please review the highlighted fields before continuing.");
         return;
       }
 
-      if (isPaymentEnabled && currentStep === steps.length - 2 && !stripeInitStarted) {
+      if (isPaymentEnabled && window.currentStep === steps.length - 2 && !stripeInitStarted) {
         stripeInitStarted = true;
         await safeInitStripe();
       }
 
-      currentStep++;
-      showStep(currentStep);
+      window.currentStep++;
+      showStep(window.currentStep);
     } else {
       if (!isCurrentStepValid()) {
         showToast("Please review the highlighted fields before continuing.");
@@ -427,7 +431,7 @@ function isCurrentStepValid() {
           backBtn.addEventListener("click", () => {
             document.getElementById("prepayment-form").style.display = "block";
             document.getElementById("payment_form").style.display = "none";
-            showStep(currentStep);
+            showStep(window.currentStep);
           });
         }
       } else {
@@ -438,16 +442,16 @@ function isCurrentStepValid() {
   });
 
   prevBtn.addEventListener("click", () => {
-    if (currentStep > 0) {
-      currentStep--;
-      showStep(currentStep);
+    if (window.currentStep > 0) {
+      window.currentStep--;
+      showStep(window.currentStep);
     }
-    if (currentStep + 1 < steps.length) {
+    if (window.currentStep + 1 < steps.length) {
       nextBtn.innerHTML = nextBtnLabel;
     }
   });
 
-  showStep(currentStep);
+  showStep(window.currentStep);
 
   function attachValidationListeners() {
     document
@@ -502,10 +506,6 @@ function isCurrentStepValid() {
   attachValidationListeners();
 }
 
-
-
-
-
 async function submitBookingForm(stripeToken = null, errorEl = null) {
   const formElement = document.getElementById("prepayment-form");
   const { content, patient } = parseFormToStructuredBody(formElement);
@@ -530,6 +530,8 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
 
     if (result.status === "success" && result.payment?.id) {
       showToast("Payment received! We’re scheduling your appointment now…", "success");
+
+      window.formIsSubmitting = true;
 
       const redirectBase = formHandlerData.redirect_url;
       const queryParams = new URLSearchParams({
@@ -728,5 +730,3 @@ function setupSignatureCanvas() {
 }
 
 document.addEventListener("DOMContentLoaded", () => mountForm());
-
-

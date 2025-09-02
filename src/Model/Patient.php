@@ -21,6 +21,7 @@ class Patient extends AbstractModel
     public static function query(string $query, ApiClientInterface $client, bool $throwOnError = false): ?self
     {
         $instance = new static(null, $client);
+
         $response = $client->get("{$instance->getResourcePath()}{$query}");
 
         if (!$response->isSuccessful()) {
@@ -52,4 +53,6 @@ class Patient extends AbstractModel
     {
         return $this->dto->email;
     }
+
+
 }
