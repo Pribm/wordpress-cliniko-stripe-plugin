@@ -7,11 +7,24 @@ if (!defined('ABSPATH')) {
 
 class NotificationService
 {
-    private const SUCCESS_OPTION_ENABLED = 'wp_cliniko_send_email_on_success';
+    private const SUCCESS_OPTION_ENABLED  = 'wp_cliniko_send_email_on_success';
     private const SUCCESS_OPTION_TEMPLATE = 'wp_cliniko_success_email_tpl';
 
-    private const FAILURE_OPTION_ENABLED = 'wp_cliniko_send_email_on_failure';
+    private const FAILURE_OPTION_ENABLED  = 'wp_cliniko_send_email_on_failure';
     private const FAILURE_OPTION_TEMPLATE = 'wp_cliniko_failure_email_tpl';
+
+    private const CONFIRM_OPTION_ENABLED  = 'wp_cliniko_send_email_on_confirm';
+    private const CONFIRM_OPTION_SUBJECT  = 'wp_cliniko_confirm_email_subject';
+    private const CONFIRM_OPTION_TEMPLATE = 'wp_cliniko_confirm_email_tpl';
+
+    private const WELCOME_OPTION_ENABLED  = 'wp_cliniko_send_email_on_welcome';
+    private const WELCOME_OPTION_SUBJECT  = 'wp_cliniko_welcome_email_subject';
+    private const WELCOME_OPTION_TEMPLATE = 'wp_cliniko_welcome_email_tpl';
+
+    private const RESET_OPTION_ENABLED    = 'wp_cliniko_send_email_on_password_reset';
+    private const RESET_OPTION_SUBJECT    = 'wp_cliniko_password_reset_subject';
+    private const RESET_OPTION_TEMPLATE   = 'wp_cliniko_password_reset_tpl';
+
 
     public function sendSuccess(array $args, array $patient, string $paymentRef, ?int $amountCents): void
     {
@@ -52,6 +65,72 @@ class NotificationService
         );
     }
 
+     public function sendConfirmation(array $patient, string $token): void
+    {
+        if (get_option(self::CONFIRM_OPTION_ENABLED) !== 'yes') return;
+
+        $toEmail = (string) ($patient['email'] ?? '');
+        if (!$toEmail) return;
+
+        $subject = get_option(self::CONFIRM_OPTION_SUBJECT, 'Confirm your Us account');
+        $tpl     = get_option(self::CONFIRM_OPTION_TEMPLATE, '<p>Hi {first_name},</p><p>Click <a href="{confirmation_url}">here</a> to confirm your account.</p>');
+
+        $vars = [
+            '{first_name}'       => esc_html((string) ($patient['first_name'] ?? '')),
+            '{last_name}'        => esc_html((string) ($patient['last_name'] ?? '')),
+            '{email}'            => esc_html($toEmail),
+            '{confirmation_url}' => site_url('/?confirm_token=' . urlencode($token)),
+        ];
+
+        $body = strtr($tpl, $vars);
+
+        wp_mail($toEmail, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
+    }
+
+    public function sendWelcome(array $patient): void
+    {
+        if (get_option(self::WELCOME_OPTION_ENABLED) !== 'yes') return;
+
+        $toEmail = (string) ($patient['email'] ?? '');
+        if (!$toEmail) return;
+
+        $subject = get_option(self::WELCOME_OPTION_SUBJECT, 'Welcome to Us!');
+        $tpl     = get_option(self::WELCOME_OPTION_TEMPLATE, '<p>Hi {first_name},</p><p>Welcome aboard! You can now book consultations easily.</p>');
+
+        $vars = [
+            '{first_name}' => esc_html((string) ($patient['first_name'] ?? '')),
+            '{last_name}'  => esc_html((string) ($patient['last_name'] ?? '')),
+            '{email}'      => esc_html($toEmail),
+        ];
+
+        $body = strtr($tpl, $vars);
+
+        wp_mail($toEmail, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
+    }
+
+    public function sendPasswordReset(array $patient, string $resetUrl): void
+    {
+        if (get_option(self::RESET_OPTION_ENABLED) !== 'yes') return;
+
+        $toEmail = (string) ($patient['email'] ?? '');
+        if (!$toEmail) return;
+
+        $subject = get_option(self::RESET_OPTION_SUBJECT, 'Reset your Us password');
+        $tpl     = get_option(self::RESET_OPTION_TEMPLATE, '<p>Hi {first_name},</p><p>Click <a href="{reset_url}">here</a> to reset your password.</p>');
+
+        $vars = [
+            '{first_name}' => esc_html((string) ($patient['first_name'] ?? '')),
+            '{last_name}'  => esc_html((string) ($patient['last_name'] ?? '')),
+            '{email}'      => esc_html($toEmail),
+            '{reset_url}'  => esc_url($resetUrl),
+        ];
+
+        $body = strtr($tpl, $vars);
+
+        wp_mail($toEmail, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
+    }
+
+
     private function dispatchMail(
         array $args,
         array $patient,
@@ -86,7 +165,6 @@ class NotificationService
             set_transient($notifyKey, 1, 86400);
         }
     }
-
     private function renderTemplate(
         string $optionKey,
         array $args,
@@ -118,7 +196,23 @@ class NotificationService
             return "<p>$greet,</p>"
                 . "<p>Your {$vars['{appointment_label}']} request has been confirmed.</p>"
                 . ($amountTxt ? "<p>We received your payment of <strong>\${$amountTxt} {$vars['{currency}']}</strong>.</p>" : '')
-                . "<p>Thank you for choosing EasyScripts.</p>";
+                . "<p>Thank you for choosing Us.</p>";
+        }
+
+        return "<p>$greet,</p>"
+            . "<p>We were unable to complete your {$vars['{appointment_label}']} request.</p>"
+            . ($amountTxt ? "<p>A refund of <strong>\${$amountTxt} {$vars['{currency}']}</strong> has been initiated.</p>" : '')
+            . "<p>Please contact support if you need assistance.</p>";
+    }
+
+        private function defaultBody(array $vars, bool $isSuccess, string $amountTxt): string
+    {
+        $greet = $vars['{first_name}'] ? 'Hi ' . $vars['{first_name}'] : 'Hi';
+        if ($isSuccess) {
+            return "<p>$greet,</p>"
+                . "<p>Your {$vars['{appointment_label}']} request has been confirmed.</p>"
+                . ($amountTxt ? "<p>We received your payment of <strong>\${$amountTxt} {$vars['{currency}']}</strong>.</p>" : '')
+                . "<p>Thank you for choosing Us.</p>";
         }
 
         return "<p>$greet,</p>"

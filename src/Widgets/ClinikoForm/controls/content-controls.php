@@ -99,7 +99,7 @@ function register_content_controls($widget)
 
     $widget->add_control('success_email_template', [
         'label' => 'Success Email Template',
-        'type' => Controls_Manager::TEXTAREA, // Changed from WYSIWYG
+        'type' => Controls_Manager::CODE, // Changed from WYSIWYG
         'rows' => 10, // Adjust height for usability
         'default' =>
             '<p>Hi {first_name},</p>' .
@@ -130,7 +130,7 @@ function register_content_controls($widget)
 
     $widget->add_control('failure_email_template', [
         'label' => 'Failure Email Template',
-        'type' => Controls_Manager::TEXTAREA, // Changed from WYSIWYG
+        'type' => Controls_Manager::CODE, // Changed from WYSIWYG
         'rows' => 10, // Adjust height for usability
         'default' =>
             '<p>Hi {first_name},</p>' .
@@ -207,17 +207,17 @@ function register_cliniko_form_controls($widget)
         'default' => 'yes',
     ]);
 
-   $widget->add_control(
-    'save_on_exit',
-    [
-        'label'        => __('Save on Exit', 'plugin-name'),
-        'type'         => Controls_Manager::SWITCHER,
-        'label_on'     => __('Yes', 'plugin-name'),
-        'label_off'    => __('No', 'plugin-name'),
-        'return_value' => 'yes',
-        'default'      => 'no',
-    ]
-);
+    $widget->add_control(
+        'save_on_exit',
+        [
+            'label' => __('Save on Exit', 'plugin-name'),
+            'type' => Controls_Manager::SWITCHER,
+            'label_on' => __('Yes', 'plugin-name'),
+            'label_off' => __('No', 'plugin-name'),
+            'return_value' => 'yes',
+            'default' => 'no',
+        ]
+    );
 
     $widget->end_controls_section();
 }

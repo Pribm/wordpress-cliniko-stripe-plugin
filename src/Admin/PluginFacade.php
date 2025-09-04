@@ -8,6 +8,7 @@ use App\Admin\Modules\ElementorTemplateSync;
 use App\Admin\Modules\PatientForms;
 use App\Admin\Modules\Settings;
 use App\Admin\Modules\Tools;
+use App\Admin\Modules\UserManagement;
 use App\Workers\ClinikoSchedulingWorker;
 
 
@@ -44,6 +45,7 @@ class PluginFacade
         Credentials::init();
         AppointmentTypes::init();
         PatientForms::init();
+        UserManagement::init();
         Tools::init();
     }
 }

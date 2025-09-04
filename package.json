@@ -1,0 +1,21 @@
+{
+  "name": "wordpress-cliniko-stripe-plugin",
+  "version": "1.0.0",
+  "description": "This plugin integrates **Cliniko** and **Stripe** into your WordPress site using Elementor widgets and a custom backend connection. Designed for medical practices, it allows patients to book and pay for appointments in a smooth, customizable interface.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "watch": "vite build --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@stripe/stripe-js": "^7.9.0"
+  }
+}

@@ -9,6 +9,51 @@
    (optional) --progress-divider
    ========================================================= */
 
+   .account-choice-cards {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.account-card {
+  flex: 1 1 200px;
+  background: #f4f8f7;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.account-card:hover {
+  border-color: var(--btn-bg);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.account-card i {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+  color: var(--btn-bg);
+}
+
+.account-card h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--titles-color);
+}
+
+.account-card p {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+
 /* Base container */
 #prepayment-form {
   background: var(--form-bg);
@@ -33,6 +78,7 @@
 #prepayment-form input[type="text"],
 #prepayment-form input[type="email"],
 #prepayment-form input[type="date"],
+#prepayment-form input[type="password"],
 #prepayment-form textarea {
   width: 100%;
   padding: 10px;

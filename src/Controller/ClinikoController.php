@@ -14,6 +14,7 @@ use App\Model\PatientForm;
 use App\Model\PatientFormTemplate;
 use App\Service\ClinikoAttachmentService;
 use App\Validator\AppointmentRequestValidator;
+use App\Validator\PatientRequestValidator;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -315,60 +316,44 @@ class ClinikoController
     //     }
     // }
 
-public function getPatient(WP_REST_Request $request)
-{
-    $params = $request->get_params();
+    public function getPatient(WP_REST_Request $request)
+    {
+        $user = wp_get_current_user();
 
-    $firstName   = sanitize_text_field($params['first_name'] ?? '');
-    $lastName    = sanitize_text_field($params['last_name'] ?? '');
-    $email       = sanitize_email($params['email'] ?? '');
-    $dateOfBirth = sanitize_text_field($params['date_of_birth'] ?? '');
+        if (!$user || $user->ID === 0) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 401);
+        }
 
-    // ✅ Validate email
-    if (!empty($params['email']) && !is_email($params['email'])) {
+        // 🔑 Get Cliniko patient ID mapped to this WP user
+        $clinikoPatientId = get_user_meta($user->ID, 'cliniko_patient_id', true);
+
+        if (!$clinikoPatientId) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'No Cliniko patient ID linked to this account.',
+            ], 404);
+        }
+
+        // ✅ Fetch patient by Cliniko UID directly
+        $client = cliniko_client(true);
+        $patient = Patient::find($clinikoPatientId, $client);
+
+        if (!$patient) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Patient not found in Cliniko.',
+            ], 404);
+        }
+
         return new WP_REST_Response([
-            'success' => false,
-            'message' => 'Invalid email format provided.',
-        ], 400);
+            'success' => true,
+            'patient' => $patient->getDTO(),
+            //'wp_user_id' => $user->ID,              // extra info (optional)
+            'cliniko_patient_id' => $clinikoPatientId,
+        ], 200);
     }
-
-    // ✅ Convert date_of_birth to Cliniko format (YYYY-MM-DD)
-    $dobFormatted = '';
-    if ($dateOfBirth && preg_match('/^\d{8}$/', $dateOfBirth)) {
-        $dobFormatted = substr($dateOfBirth, 4, 4) . '-' . substr($dateOfBirth, 2, 2) . '-' . substr($dateOfBirth, 0, 2);
-    }
-
-    // ✅ Build q[] filters
-    $filters = [];
-    if ($firstName)   $filters[] = 'q[]=' . urlencode("first_name:={$firstName}");
-    if ($lastName)    $filters[] = 'q[]=' . urlencode("last_name:={$lastName}");
-    if ($email)       $filters[] = 'q[]=' . urlencode("email:={$email}");
-    if ($dobFormatted)$filters[] = 'q[]=' . urlencode("date_of_birth:={$dobFormatted}");
-
-    $queryString = '';
-    if (!empty($filters)) {
-        $queryString = '?' . implode('&', $filters);
-    }
-
-    // ✅ Run query
-    $client = cliniko_client(true); // your ApiClientInterface
-    $patient = Patient::query($queryString, $client);
-
-    if (!$patient) {
-        return new WP_REST_Response([
-            'success' => false,
-            'message' => 'Patient not found.',
-        ], 404);
-    }
-
-    return new WP_REST_Response([
-        'success' => true,
-        'patient' => $patient->getDTO(),
-    ], 200);
-}
-
-
-
-
 }
 
