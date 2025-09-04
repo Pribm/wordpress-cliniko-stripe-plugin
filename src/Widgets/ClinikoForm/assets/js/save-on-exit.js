@@ -317,11 +317,11 @@
       }
     }, true);
 
-    window.addEventListener('beforeunload',(e)=>{
-      if (window.formIsSubmitting) return; // ✅ skip if submitting
-      if(pendingNav && pendingNav.type==='link') return;
-      saveAll(root);
-      e.preventDefault(); e.returnValue = "";
-    });
+    // window.addEventListener('beforeunload',(e)=>{
+    //   if (window.formIsSubmitting) return; // ✅ skip if submitting
+    //   if(pendingNav && pendingNav.type==='link') return;
+    //   saveAll(root);
+    //   e.preventDefault(); e.returnValue = "";
+    // });
   });
 })();
