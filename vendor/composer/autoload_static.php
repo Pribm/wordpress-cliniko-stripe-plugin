@@ -38,6 +38,7 @@ class ComposerStaticInit60be2d7759b7e12e095bb59c1520cb1a
         ),
         'A' => 
         array (
+            'App\\Core\\Framework\\' => 19,
             'App\\' => 4,
         ),
     );
@@ -79,6 +80,10 @@ class ComposerStaticInit60be2d7759b7e12e095bb59c1520cb1a
         'GuzzleHttp\\' => 
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/guzzle/src',
+        ),
+        'App\\Core\\Framework\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/app/Core/Framework',
         ),
         'App\\' => 
         array (

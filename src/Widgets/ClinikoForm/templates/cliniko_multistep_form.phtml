@@ -74,11 +74,21 @@ $justify_content = match ($alignment) {
   default => 'center',
 };
 $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
+
+/**
+ * PATCH: robust asset base (parent of templates/) + cache-busting
+ */
+$base_url  = trailingslashit( plugin_dir_url( dirname(__FILE__) ) );  // .../ClinikoForm/
+$assets_url = $base_url . 'assets/';
+
+$base_path = trailingslashit( plugin_dir_path( dirname(__FILE__) ) );
+$js_ver  = file_exists($base_path . 'assets/js/input-masks.js') ? filemtime($base_path . 'assets/js/input-masks.js') : null;
+$css_ver = file_exists($base_path . 'assets/css/multistep-form-style.css') ? filemtime($base_path . 'assets/css/multistep-form-style.css') : null;
 ?>
 
 <!-- 🧠 Inject CSS Variables -->
 <style>
-  :root {
+  #prepayment-form {
     --form-bg: <?= $bg ?>;
     --form-text: <?= $text ?>;
     --form-font: <?= $font ?>;
@@ -95,36 +105,67 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
     --btn-flex: <?= $button_flex ?>;
     --btn-icon-gap: <?= $icon_spacing ?>;
   }
+
+  /* Optional: a light indent & spacing for the “Other” input */
+  .other-input-wrap {
+    margin: 6px 0 0 28px;
+  }
 </style>
 
 <!-- External Libraries -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 <script src="https://unpkg.com/imask"></script>
-<script src="<?= plugin_dir_url(__FILE__) ?>../assets/js/input-masks.js"></script>
 
-<link rel="stylesheet" href="<?= plugin_dir_url(__FILE__) ?>../assets/css/multistep-form-style.css">
+<!-- PATCH: absolute, versioned asset URLs (no ../) -->
+<script src="<?= esc_url( $assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '') ) ?>"></script>
+<link rel="stylesheet" href="<?= esc_url( $assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '') ) ?>">
 
 <!-- Multistep Form -->
 <form id="prepayment-form">
-  <div id="form-progress-indicator" style="display: flex; align-items: center; margin-bottom: 20px; gap: 5px;">
-    <?php $totalSteps = count($sections) + 1; ?>
-    <?php for ($index = 0; $index < $totalSteps; $index++): ?>
-      <?php if ($index > 0): ?>
-        <div style="flex-grow: 1; height: 2px; background-color: #babfc5;"></div>
+  <!-- Progress -->
+<?php
+$totalSteps   = count($sections) + 1;
+$currentStep  = 1; // Replace with your actual current step logic
+$progressType = $settings['progress_type'] ?? 'bar';
+
+// Common wrapper with a modifier class
+?>
+<div id="form-progress-indicator" class="form-progress form-progress--<?= esc_attr($progressType) ?>">
+
+  <?php if ($progressType === 'bar'): ?>
+    <div class="progress-track">
+      <div class="progress-fill" style="width: <?= ($currentStep / $totalSteps) * 100 ?>%;"></div>
+    </div>
+
+  <?php elseif ($progressType === 'dots'): ?>
+    <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
+      <span class="progress-dot <?= $i === $currentStep ? 'is-active' : '' ?>"></span>
+    <?php endfor; ?>
+
+  <?php elseif ($progressType === 'steps'): ?>
+    <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
+      <?php if ($i > 1): ?>
+        <div class="form-progress__divider"></div>
       <?php endif; ?>
-      <div class="progress-step" style="
-        background-color: <?= $index === 0 ? 'var(--btn-bg)' : '#fff' ?>;
-        color: <?= $index === 0 ? '#fff' : 'var(--btn-bg)' ?>;
-      ">
-        <?= $index + 1 ?>
+      <div class="progress-step <?= $i === $currentStep ? 'is-active' : '' ?>">
+        <?= $i ?>
       </div>
     <?php endfor; ?>
-  </div>
+
+  <?php elseif ($progressType === 'fraction'): ?>
+    <span class="progress-text"><?= $currentStep ?>/<?= $totalSteps ?></span>
+
+  <?php elseif ($progressType === 'percentage'): ?>
+    <span class="progress-text"><?= round(($currentStep / $totalSteps) * 100) ?>%</span>
+  <?php endif; ?>
+
+</div>
+
 
   <div id="cliniko-form-steps">
     <?php foreach ($sections as $index => $section): ?>
-      <div class="form-step" data-step="<?= $index ?>" style="<?= $index > 0 ? 'display: none;' : '' ?>">
+      <div class="form-step <?= $index > 0 ? 'is-hidden' : '' ?>" data-step="<?= $index ?>">
         <h3 class="multi-form-title-color"><?= esc_html($section->name) ?></h3>
         <?php if (!empty($section->description)): ?>
           <p class="multi-form-title-color"><?= wp_kses_post($section->description) ?></p>
@@ -135,22 +176,29 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
             $input_name = esc_attr($question->name);
             $required = !empty($question->required) ? 'required' : '';
             $is_required = !empty($question->required);
+            $qid = substr(md5($input_name), 0, 8);
           ?>
-          <div style="margin-bottom: 16px;">
-            <h4 style="font-weight: bold; display: block; margin-bottom: 4px;">
-              <?= esc_html($question->name) ?> <?php if ($is_required): ?><span style="color: red">*</span><?php endif; ?>
-              </h4>
+          <div class="inputGroup">
+            <h4 class="question-title">
+              <?= esc_html($question->name) ?> <?php if ($is_required): ?><span class="req">*</span><?php endif; ?>
+            </h4>
 
             <?php switch ($question->type):
-              case 'textarea': ?>
-                <textarea name="<?= $input_name ?>" <?= $required ?>></textarea>
+              case 'paragraph': ?>
+                <textarea 
+                  rows="6" 
+                  name="<?= $input_name ?>" 
+                  <?= $required ?> 
+                  style="resize: vertical;"
+                ></textarea>
+
                 <?php break;
 
               case 'radiobuttons':
                 foreach ($question->answers as $i => $opt):
                   $checked = $i === 0 ? 'checked' : '';
                   ?>
-                  <label style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
+                  <label>
                     <input type="radio" name="<?= $input_name ?>" value="<?= esc_attr($opt['value']) ?>" <?= $required ?> <?= $checked ?>>
                     <span><?= esc_html($opt['value']) ?></span>
                   </label>
@@ -158,13 +206,51 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
                 break;
 
               case 'checkboxes': ?>
-                <div <?= $question->required ? "data-required-group='$input_name'" : '' ?>>
+                <div class="options-group" <?= $question->required ? "data-required-group='$input_name'" : '' ?>>
                   <?php foreach ($question->answers as $opt): ?>
-                    <label style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
-                      <input type="checkbox" name="<?= $input_name ?>[]" value="<?= esc_attr($opt['value']) ?>" <?= $is_required ? 'data-required="true"' : '' ?>>
+                    <label>
+                      <input
+                        type="checkbox"
+                        name="<?= $input_name ?>[]"
+                        value="<?= esc_attr($opt['value']) ?>"
+                        <?= $is_required ? 'data-required="true"' : '' ?>
+                      >
                       <span><?= esc_html($opt['value']) ?></span>
                     </label>
                   <?php endforeach; ?>
+
+                  <?php if (!empty($question->other) && !empty($question->other->enabled)): ?>
+                    <?php
+                      $otherCheckboxId = 'other-toggle-' . $qid;
+                      $otherInputWrapId = 'other-input-wrap-' . $qid;
+                      $otherInputName = $input_name . '_other';
+                    ?>
+                    <label for="<?= esc_attr($otherCheckboxId) ?>">
+                      <input
+                        id="<?= esc_attr($otherCheckboxId) ?>"
+                        class="other-toggle"
+                        type="checkbox"
+                        name="<?= $input_name ?>[]"
+                        value="__other__"
+                        <?= $is_required ? 'data-required="true"' : '' ?>
+                        aria-controls="<?= esc_attr($otherInputWrapId) ?>"
+                        aria-expanded="false"
+                        data-other-target="<?= esc_attr($otherInputWrapId) ?>"
+                        data-other-input-name="<?= esc_attr($otherInputName) ?>"
+                        data-question-name="<?= esc_attr($input_name) ?>"
+                      >
+                      <span>Other</span>
+                    </label>
+
+                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap">
+                      <input
+                        type="text"
+                        name="<?= esc_attr($otherInputName) ?>"
+                        placeholder="Please specify"
+                        aria-label="Other for <?= esc_attr($input_name) ?>"
+                      >
+                    </div>
+                  <?php endif; ?>
                 </div>
                 <?php break;
 
@@ -173,10 +259,9 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
                 <?php break;
 
               case 'signature': ?>
-                <div>
-                  <canvas id="signature-pad" width="400" height="150" style="border: 1px solid #ccc; border-radius: 4px; background: #fff;" <?= $is_required ? 'data-required="true"' : '' ?>></canvas>
-                  <br>
-                  <button type="button" id="clear-signature" class="multi-form-button next-button" style="margin-top: 8px;">Clear Signature</button>
+                <div class="signature">
+                  <canvas id="signature-pad" class="signature-pad" width="400" height="150" <?= $is_required ? 'data-required="true"' : '' ?>></canvas>
+                  <button type="button" id="clear-signature" class="multi-form-button next-button signature-clear">Clear Signature</button>
                 </div>
                 <input type="hidden" name="signature_data" id="signature-data" <?= $required ?>>
                 <?php break;
@@ -189,53 +274,65 @@ $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
       </div>
     <?php endforeach; ?>
 
-    <!-- Patient Step -->
-    <div class="form-step" style="display: none;" data-step="<?= count($sections) ?>">
-      <h3>Patient Details</h3>
-      <style>
-        .patient-grid {
-          display: grid;
-          grid-template-columns: repeat(12, 1fr);
-          gap: 16px;
-        }
-        <?php for ($i = 1; $i <= 12; $i++): ?>
-        .col-span-<?= $i ?> {
-          grid-column: span <?= $i ?>;
-        }
-        @media (max-width: 768px) {
-          .col-span-<?= $i ?> {
-            grid-column: span 12 !important;
-          }
-        }
-        <?php endfor; ?>
-      </style>
-      <div class="patient-grid">
-        <?php
-        $fields = [
-          ['first_name', 'First Name', 'text', 6, true],
-          ['last_name', 'Last Name', 'text', 6, true],
-          ['email', 'Email', 'email', 8, true],
-          ['phone', 'Phone Number', 'text', 4, true],
-          ['address_1', 'Address Line 1', 'text', 12, true],
-          ['city', 'City', 'text', 6, true],
-          ['state', 'State', 'text', 2, true],
-          ['post_code', 'Post Code', 'text', 4, true],
-          ['country', 'Country', 'text', 6, true],
-          ['date_of_birth', 'Date of Birth', 'date', 6, true],
-        ];
-        foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
-          <div class="col-span-<?= $colSpan ?>" style="display: flex; flex-direction: column;">
-            <label style="font-weight: bold; margin-bottom: 4px; color: var(--form-label);">
-              <?= esc_html($label_text) ?> <?= $required ? ' <span style="color: red">*</span>' : '' ?>
-            </label>
-            <input type="<?= esc_attr($type) ?>" name="patient[<?= esc_attr($name) ?>]" <?= $required ? 'required' : '' ?> data-required="<?= $required ? 'true' : 'false' ?>">
-          </div>
-        <?php endforeach; ?>
+<!-- Patient Step -->
+<div class="form-step is-hidden" data-step="<?= count($sections) ?>">
+  <h3>Patient Details</h3>
+  <div class="patient-grid">
+    <?php
+    $fields = [
+      ['first_name', 'First Name', 'text', 6, true],
+      ['last_name', 'Last Name', 'text', 6, true],
+      ['email', 'Email', 'email', 8, true],
+      ['phone', 'Phone Number', 'text', 4, true],
+      // ➕ NEW FIELDS
+      // Medicare number (10 digits, displayed as 1234 56789 1)
+      // pattern allows optional spaces; we'll also IMask it
+      ['medicare', 'Medicare Number', 'text', 8, true],
+      // Medicare reference (1 digit next to the person’s name on the card)
+      ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
+      ['address_1', 'Address Line 1', 'text', 12, true],
+      ['address_2', 'Address Line 2', 'text', 12, false],
+      ['city', 'City', 'text', 6, true],
+      ['state', 'State', 'text', 2, true],
+      ['post_code', 'Post Code', 'text', 4, true],
+      ['country', 'Country', 'text', 6, true],
+      ['date_of_birth', 'Date of Birth', 'date', 6, true],
+
+    ];
+
+    foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
+      <div class="col-span-<?= (int)$colSpan ?> field-col">
+        <label class="field-label" for="patient-<?= esc_attr($name) ?>">
+          <?= esc_html($label_text) ?> <?= $required ? '<span class="req">*</span>' : '' ?>
+        </label>
+        <input
+          id="patient-<?= esc_attr($name) ?>"
+          type="<?= esc_attr($type) ?>"
+          name="patient[<?= esc_attr($name) ?>]"
+          <?= $required ? 'required' : '' ?>
+          data-required="<?= $required ? 'true' : 'false' ?>"
+          <?php if ($name === 'medicare'): ?>
+            inputmode="numeric"
+            maxlength="13" 
+            pattern="\d{4}\s?\d{5}\s?\d"
+            title="Enter 10 digits (e.g. 1234 56789 1)"
+            placeholder="1234 56789 1"
+          <?php elseif ($name === 'medicare_reference_number'): ?>
+            inputmode="numeric"
+            maxlength="1"
+            pattern="\d"
+            title="Enter the 1-digit reference next to your name"
+            placeholder="1"
+          <?php endif; ?>
+        >
       </div>
-    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+
   </div>
 
-  <div style="margin-top: 28px; width: 100%; display: flex; flex-direction: <?= $container_flex_direction ?>; justify-content: <?= $justify_content ?>; gap: 8px; flex-wrap: nowrap;">
+  <div class="form-actions">
     <button type="button" id="step-prev" class="multi-form-button prev-button">
       <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
       <span>Back</span>

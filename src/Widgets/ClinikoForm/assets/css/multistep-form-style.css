@@ -1,13 +1,35 @@
-/* === Base Form Container === */
+/* =========================================================
+   Prepayment Form – Full Stylesheet
+   Variables expected from PHP:
+   --form-bg, --form-text, --form-font, --form-label,
+   --form-input-border, --form-radius,
+   --titles-color, --btn-bg, --btn-bg-rgb, --btn-text,
+   --btn-pad, --btn-radius, --btn-flex, --btn-icon-gap,
+   --actions-direction, --actions-justify,
+   (optional) --progress-divider
+   ========================================================= */
+
+/* Base container */
 #prepayment-form {
   background: var(--form-bg);
   color: var(--form-text);
   font-family: var(--form-font);
   padding: 20px;
   border-radius: var(--form-radius);
+  line-height: 1.5;
 }
 
-/* === Inputs === */
+/* Typography helpers */
+.multi-form-title-color { color: var(--titles-color); }
+.question-title {
+  font-weight: 700;
+  display: block;
+  margin: 0 0 4px;
+  line-height: 1.25;
+}
+.req { color: red; }
+
+/* Inputs: text/email/date/textarea */
 #prepayment-form input[type="text"],
 #prepayment-form input[type="email"],
 #prepayment-form input[type="date"],
@@ -16,89 +38,316 @@
   padding: 10px;
   border: var(--form-input-border);
   border-radius: var(--form-radius);
+  background: #fff;
+  color: var(--form-text);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-/* === Checkboxes & Radios === */
+#prepayment-form input[type="text"]::placeholder,
+#prepayment-form input[type="email"]::placeholder,
+#prepayment-form input[type="date"]::placeholder,
+#prepayment-form textarea::placeholder {
+  color: rgba(0,0,0,.4);
+}
+
+#prepayment-form input[type="text"]:focus-visible,
+#prepayment-form input[type="email"]:focus-visible,
+#prepayment-form input[type="date"]:focus-visible,
+#prepayment-form textarea:focus-visible {
+  outline: none;
+  border-color: var(--btn-bg);
+  box-shadow: 0 0 0 3px rgba(var(--btn-bg-rgb), 0.15);
+}
+
+/* Validation error message */
+.field-error {
+  color: #f44336;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* =========================================
+   Options: Checkboxes & Radios (custom)
+   ========================================= */
+
+/* Wrap each question block */
+.inputGroup { 
+  margin-bottom: 16px;
+    display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Each option line */
+#prepayment-form .inputGroup label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.3;        /* consistent text height */
+}
+
+/* Option text node */
+#prepayment-form .inputGroup label > span {
+  display: inline-block;
+  line-height: 1.3;
+}
+
+/* Reset and base for custom controls */
 #prepayment-form input[type="checkbox"],
 #prepayment-form input[type="radio"] {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
+  box-sizing: border-box;
   outline: none;
   margin: 0;
   padding: 0;
   cursor: pointer;
-  position: relative;
-  display: inline-block;
+  position: relative;      /* anchor ::after */
+  display: inline-block;   /* avoids baseline quirks */
+  vertical-align: middle;
   width: 20px;
   height: 20px;
   border: 2px solid var(--btn-bg);
   background-color: #fff;
-  transition: all 0.25s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* Hover ring (no shift) */
 #prepayment-form input[type="checkbox"]:hover,
 #prepayment-form input[type="radio"]:hover {
-  box-shadow: 0 0 0 3px rgba(var(--btn-bg-rgb), 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--btn-bg-rgb), 0.12);
 }
 
+/* Focus ring */
+#prepayment-form input[type="checkbox"]:focus-visible,
+#prepayment-form input[type="radio"]:focus-visible {
+  box-shadow: 0 0 0 3px rgba(var(--btn-bg-rgb), 0.18);
+}
+
+/* Checkbox: square (NO global radius affecting radios) */
 #prepayment-form input[type="checkbox"] {
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
+/* Radio: circle */
+#prepayment-form input[type="radio"] {
+  border-radius: 50%;
+}
+
+/* Checked base color */
 #prepayment-form input[type="checkbox"]:checked,
 #prepayment-form input[type="radio"]:checked {
   background-color: var(--btn-bg);
   border-color: var(--btn-bg);
 }
 
-#prepayment-form input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 6px;
-  width: 5px;
-  height: 10px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-#prepayment-form input[type="radio"] {
-  border-radius: 50%;
-}
-
-#prepayment-form input[type="radio"]:checked::after {
+/* Checkbox: checkmark (absolute, no layout shift) */
+#prepayment-form input[type="checkbox"]::after {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -55%) rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 0.15s ease;
+}
+#prepayment-form input[type="checkbox"]:checked::after {
+  transform: translate(-50%, -55%) rotate(45deg) scale(1);
+}
+
+/* Radio: inner dot */
+#prepayment-form input[type="radio"]::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%) scale(0);
   width: 8px;
   height: 8px;
-  background: white;
+  background: #fff;
   border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+#prepayment-form input[type="radio"]:checked::after {
+  transform: translate(-50%, -50%) scale(1);
 }
 
-#prepayment-form input[type="checkbox"]:focus,
-#prepayment-form input[type="radio"]:focus {
-  outline: none;
-  box-shadow: none;
+
+
+/* Group of options (checkbox list container) */
+.options-group { 
+    display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* === Error Text === */
-.field-error {
-  color: #f44336;
-  font-size: 10px;
-  margin-top: 4px;
+/* “Other” input (JS toggles display) */
+.other-input-wrap {
+  display: none;
+  margin: 6px 0 0 28px; /* indent to align with option text */
+}
+.other-input-wrap input[type="text"] {
+  max-width: 420px;
 }
 
-/* === Multistep Buttons === */
+/* =========================================
+   Signature
+   ========================================= */
+.signature {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.signature-pad {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  width: 100%;
+  max-width: 420px;
+  height: 150px;
+}
+
+/* =========================================
+   Progress indicator – Base
+   ========================================= */
+#form-progress-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+/* Shared step styling */
+.progress-step {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--btn-bg);
+  color: var(--btn-bg);
+  background: #fff;
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+.progress-step.is-active {
+  background: var(--btn-bg);
+  color: #fff;
+  border-color: var(--btn-bg);
+}
+
+.form-progress__divider {
+  flex: 1 1 0;
+  height: 2px;
+  background: var(--progress-divider, #babfc5);
+}
+
+/* ---------- Linear Bar ---------- */
+.form-progress--bar {
+  width: 100%;
+}
+.form-progress--bar .progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--progress-divider, #e5e7eb);
+  overflow: hidden;
+}
+.form-progress--bar .progress-fill {
+  height: 100%;
+  background: var(--btn-bg);
+  transition: width 0.3s ease;
+}
+
+/* ---------- Dots ---------- */
+.form-progress--dots {
+  gap: 8px;
+}
+.form-progress--dots .progress-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--progress-divider, #cbd5e1);
+  border-radius: 50%;
+  transition: background-color 0.25s ease;
+}
+.form-progress--dots .progress-dot.is-active {
+  background: var(--btn-bg);
+}
+
+/* ---------- Steps (numbered) ---------- */
+.form-progress--steps .form-progress__divider {
+  background: var(--progress-divider, #babfc5);
+}
+
+/* ---------- Fraction ---------- */
+.form-progress--fraction .progress-text {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--btn-bg);
+}
+
+/* ---------- Percentage ---------- */
+.form-progress--percentage .progress-text {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--btn-bg);
+}
+
+
+
+
+/* =========================================
+   Patient Info Grid
+   ========================================= */
+.patient-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+.field-col { display: flex; flex-direction: column; }
+.field-label {
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--form-label);
+}
+
+/* Column span utilities */
+.col-span-1  { grid-column: span 1; }
+.col-span-2  { grid-column: span 2; }
+.col-span-3  { grid-column: span 3; }
+.col-span-4  { grid-column: span 4; }
+.col-span-5  { grid-column: span 5; }
+.col-span-6  { grid-column: span 6; }
+.col-span-7  { grid-column: span 7; }
+.col-span-8  { grid-column: span 8; }
+.col-span-9  { grid-column: span 9; }
+.col-span-10 { grid-column: span 10; }
+.col-span-11 { grid-column: span 11; }
+.col-span-12 { grid-column: span 12; }
+
+/* Stack grid on narrow screens */
+@media (max-width: 768px) {
+  .patient-grid [class*="col-span-"] { grid-column: span 12 !important; }
+}
+
+/* =========================================
+   Buttons / Actions
+   ========================================= */
 .multi-form-button {
   padding: var(--btn-pad);
-  font-size: 20px;
-  font-weight: 500;
-  height: 45px;
+  font-size: 16px;
+  font-weight: 600;
+  min-height: 44px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -106,16 +355,19 @@
   border-radius: var(--btn-radius);
   flex: var(--btn-flex);
   gap: var(--btn-icon-gap);
+  border: 1px solid transparent;
+  transition: transform 0.05s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
-.multi-form-title-color {
-  color: var(--titles-color);
-}
+.multi-form-button:active { transform: translateY(1px); }
 
 .multi-form-button.prev-button {
-  background: transparent;
-  border: 1px solid var(--btn-bg);
+  background: #fff;
   color: var(--btn-bg);
+  border-color: var(--btn-bg);
+}
+.multi-form-button.prev-button:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
 }
 
 .multi-form-button.next-button {
@@ -123,60 +375,24 @@
   color: var(--btn-text);
   border: none;
 }
+.multi-form-button.next-button:hover {
+  box-shadow: 0 6px 16px rgba(var(--btn-bg-rgb), .24);
+}
 
-/* === Progress Step Circles === */
-#form-progress-indicator .progress-step {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  font-weight: bold;
-  font-size: 14px;
+/* Actions container: controlled by PHP-injected vars */
+.form-actions {
+  margin-top: 28px;
+  width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.3s;
-  border: solid var(--btn-bg) 1px;
+  flex-direction: var(--actions-direction);
+  justify-content: var(--actions-justify);
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap; /* prevent overflow */
 }
 
-/* === Patient Info Grid === */
-.patient-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 16px;
-}
-
-@media (max-width: 768px) {
-  .patient-grid [class*="col-span-"] {
-    grid-column: span 12 !important;
-  }
-}
-
-.col-span-1 { grid-column: span 1; }
-.col-span-2 { grid-column: span 2; }
-.col-span-3 { grid-column: span 3; }
-.col-span-4 { grid-column: span 4; }
-.col-span-5 { grid-column: span 5; }
-.col-span-6 { grid-column: span 6; }
-.col-span-7 { grid-column: span 7; }
-.col-span-8 { grid-column: span 8; }
-.col-span-9 { grid-column: span 9; }
-.col-span-10 { grid-column: span 10; }
-.col-span-11 { grid-column: span 11; }
-.col-span-12 { grid-column: span 12; }
-
-@media (max-width: 768px) {
-  .col-span-1,
-  .col-span-2,
-  .col-span-3,
-  .col-span-4,
-  .col-span-5,
-  .col-span-6,
-  .col-span-7,
-  .col-span-8,
-  .col-span-9,
-  .col-span-10,
-  .col-span-11,
-  .col-span-12 {
-    grid-column: span 12 !important;
-  }
+/* Safety: always stack on tiny screens */
+@media (max-width: 440px) {
+  .form-actions { flex-direction: column; }
+  .multi-form-button { width: 100%; }
 }

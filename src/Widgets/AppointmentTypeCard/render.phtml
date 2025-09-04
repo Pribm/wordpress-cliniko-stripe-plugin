@@ -1,9 +1,12 @@
 <?php
 
+use App\Model\AppointmentType;
 use Elementor\Icons_Manager;
 if (!defined('ABSPATH'))
   exit;
-$price = $type['price'] ?? '';
+
+/** @var AppointmentType $type */
+$price = $type->getBillableItemsFinalPrice() ?? '';
 ?>
 
 <style>
@@ -40,7 +43,7 @@ $price = $type['price'] ?? '';
     ?>
 
     <div class="appointment-card-price <?= $price_class ?>">
-      <?= esc_html($settings['price_label']) . ' $' . $type['price'] ?>
+      <?= esc_html($settings['price_label']) . ' $' . number_format($type->getBillableItemsFinalPrice() / 100,  2)?>
     </div>
   <?php endif; ?>
 
@@ -50,8 +53,8 @@ $price = $type['price'] ?? '';
     </div>
   <?php endif; ?>
 
-  <h3 class="appointment-card-title"><?php echo esc_html($type['name']); ?></h3>
-  <p class="appointment-card-description"><?php echo esc_html($type['description']); ?></p>
+  <h3 class="appointment-card-title"><?php echo esc_html($type->getName()); ?></h3>
+  <p class="appointment-card-description"><?php echo esc_html($type->getDescription()); ?></p>
 
 
 

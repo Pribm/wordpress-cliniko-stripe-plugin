@@ -6,14 +6,18 @@ use App\Client\Cliniko\Client;
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH'))
+    exit;
 
-class PatientForms {
-    public static function init(): void {
+class PatientForms
+{
+    public static function init(): void
+    {
         add_action('admin_menu', [self::class, 'registerMenus']);
     }
 
-    public static function registerMenus(): void {
+    public static function registerMenus(): void
+    {
         add_submenu_page(
             'wp-cliniko-stripe-settings',
             'Patient Forms',
@@ -51,7 +55,8 @@ class PatientForms {
         }
     }
 
-    public static function renderFormsPage(): void {
+    public static function renderFormsPage(): void
+    {
         try {
             $client = Client::getInstance();
             $forms = PatientFormTemplate::all($client);
@@ -59,10 +64,48 @@ class PatientForms {
             throw new ApiException($e->getMessage());
         }
 
-        include __DIR__ . '/views/patient-forms-list.php';
+        ?>
+        <div class="wrap">
+            <h1>Cliniko Patient Forms</h1>
+            <p>These are the patient form templates currently available in your Cliniko account.</p>
+
+            <table class="widefat striped">
+                <thead>
+                    <tr>
+                        <th>Form ID</th>
+                        <th>Name</th>
+                        <th>Email to Patient</th>
+                        <th>Restricted</th>
+                        <th>Archived</th>
+                        <th>Created At</th>
+
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($forms)): ?>
+                        <tr>
+                            <td colspan="7">No patient forms found.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($forms as $form): ?>
+                            <tr>
+                                <td><?php echo esc_html($form->getId()); ?></td>
+                                <td><?php echo esc_html($form->getName()); ?></td>
+                                <td><?php echo $form->isEmailToPatientOnCompletion() ? 'Yes' : 'No'; ?></td>
+                                <td><?php echo $form->isRestrictedToPractitioner() ? 'Yes' : 'No'; ?></td>
+                                <td><?php echo $form->isArchived() ? 'Yes' : 'No'; ?></td>
+                                <td><?php echo esc_html(date('Y-m-d', strtotime($form->getCreatedAt()))); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php
     }
 
-    public static function renderSingleFormView(): void {
+    public static function renderSingleFormView(): void
+    {
         if (!isset($_GET['id'])) {
             echo '<div class="notice notice-error"><p>Missing patient form ID.</p></div>';
             return;

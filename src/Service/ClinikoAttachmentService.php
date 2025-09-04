@@ -105,4 +105,16 @@ class ClinikoAttachmentService
         $uploadUrl = $this->uploadToS3($filePath, $presigned);
         return $this->createAttachmentRecord($patientId, $uploadUrl, $description);
     }
+
+    public function deletePatientAttachment($id, ApiClientInterface $client)   {
+        $response = $client->post("patient_attachments/" . $id . "/archive", []);
+
+        if (!$response->isSuccessful()) {
+            throw new ApiException("Request to create patient form failed.", [
+                "error" => $response->error,
+            ]);
+        }
+
+        return true;
+    }
 }

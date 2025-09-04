@@ -73,7 +73,7 @@ class Widget extends Widget_Base
     );
 
     try {
-      $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true));
+      $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true), false);
       $sections = $templateModel ? $templateModel->getSections() : [];
     } catch (\Exception $e) {
       new ApiException($e->getMessage());
@@ -113,6 +113,18 @@ class Widget extends Widget_Base
         []
       );
 
+      wp_enqueue_script(
+        'save-on-exit',
+        plugin_dir_url(__FILE__) . 'assets/js/save-on-exit.js',
+        ["jquery"],
+        null,
+        [
+          'save_on_exit' => $settings['save_on_exit'] === 'yes',
+        ]
+      );
+
+
+
       require __DIR__ . '/templates/card_form_real.phtml';
     }
 
@@ -121,8 +133,10 @@ class Widget extends Widget_Base
     $template = isset($settings['booking_html_template']) ? ltrim($settings['booking_html_template']) : '';
     $field_mapping_array = $settings['field_mapping'] ?? [];
 
+
     $appearance = [
       'theme' => $settings['theme'] ?? 'flat',
+      'progress_type' => $settings['progress_type'],
       'variables' => [
         'colorPrimary' => esc_attr($settings['color_primary'] ?? '#0073e6'),
         'colorText' => esc_attr($settings['color_text'] ?? '#333'),
@@ -163,7 +177,8 @@ class Widget extends Widget_Base
         'is_payment_enabled' => $settings['enable_payment'],
         'module_id' => esc_attr($settings['module_id']),
         'patient_form_template_id' => $form_template_id,
-        'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
+       // 'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
+        'payment_url' => get_site_url() . '/wp-json/v1/payments/charge',
         'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect']),
         'appearance' => $appearance,
         'logo_url' => $logo_url,

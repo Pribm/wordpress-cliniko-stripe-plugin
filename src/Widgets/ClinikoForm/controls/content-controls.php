@@ -1,6 +1,7 @@
 <?php
 if (!defined('ABSPATH'))
     exit;
+
 use App\Model\PatientFormTemplate;
 use App\Client\Cliniko\Client;
 use App\Model\AppointmentType;
@@ -9,11 +10,10 @@ use Elementor\Repeater;
 
 function register_content_controls($widget)
 {
-
     $widget->start_controls_section('section_content', [
         'label' => 'Payment Form',
         'tab' => Controls_Manager::TAB_CONTENT,
-           'condition' => ['enable_payment' => 'yes']
+        'condition' => ['enable_payment' => 'yes']
     ]);
 
     // Payment Settings
@@ -21,7 +21,6 @@ function register_content_controls($widget)
         'label' => 'Button Label',
         'type' => Controls_Manager::TEXT,
         'default' => 'Pay Now',
-     
     ]);
 
     $widget->add_control('onpayment_success_redirect', [
@@ -56,7 +55,7 @@ function register_content_controls($widget)
     $widget->add_control('back_button_color', [
         'label' => 'Text Color',
         'type' => Controls_Manager::COLOR,
-       'default' => 'var(--e-global-color-primary)',
+        'default' => 'var(--e-global-color-primary)',
         'condition' => ['show_back_button' => 'yes'],
     ]);
 
@@ -83,8 +82,73 @@ function register_content_controls($widget)
         'condition' => ['show_back_button' => 'yes'],
     ]);
 
-    $widget->end_controls_section();
+    // ===============================
+    // Email notifications (new)
+    // ===============================
 
+    $widget->add_control('send_email_on_success', [
+        'label' => 'Send Email on Success',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'no',
+        'separator' => 'before',
+        'description' => 'If enabled, an email is sent after successful payment/creation.',
+    ]);
+
+    $widget->add_control('success_email_template', [
+        'label' => 'Success Email Template',
+        'type' => Controls_Manager::TEXTAREA, // Changed from WYSIWYG
+        'rows' => 10, // Adjust height for usability
+        'default' =>
+            '<p>Hi {first_name},</p>' .
+            '<p>Thanks for your payment of {amount} {currency}. Your appointment is being scheduled.</p>' .
+            '<p>Reference: {payment_reference}</p>' .
+            '<p>We will send you the appointment details shortly.</p>' .
+            '<p>— Support</p>',
+        'description' => 'Enter raw HTML (no &lt;html&gt; or &lt;body&gt; tags). ' .
+            'Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, ' .
+            '{payment_reference}, {appointment_label}. ' .
+            'Inline styles and tables are allowed.',
+        'condition' => [
+            'enable_payment' => 'yes',
+            'send_email_on_success' => 'yes'
+        ],
+    ]);
+
+    $widget->add_control('send_email_on_failure', [
+        'label' => 'Send Email on Failure',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'yes',
+        'separator' => 'before',
+        'description' => 'If enabled, an email is sent if scheduling fails and a refund is initiated.',
+    ]);
+
+    $widget->add_control('failure_email_template', [
+        'label' => 'Failure Email Template',
+        'type' => Controls_Manager::TEXTAREA, // Changed from WYSIWYG
+        'rows' => 10, // Adjust height for usability
+        'default' =>
+            '<p>Hi {first_name},</p>' .
+            '<p>We were unable to schedule your appointment.</p>' .
+            '<p>A refund of {amount} {currency} has been initiated.</p>' .
+            '<p>Reference: {payment_reference}</p>' .
+            '<p>— Support</p>',
+        'description' => 'Enter raw HTML (no &lt;html&gt; or &lt;body&gt; tags). ' .
+            'Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, ' .
+            '{payment_reference}, {appointment_label}. ' .
+            'Inline styles and tables are allowed.',
+        'condition' => [
+            'enable_payment' => 'yes',
+            'send_email_on_failure' => 'yes'
+        ],
+    ]);
+
+    $widget->end_controls_section();
 }
 
 function get_cliniko_form_templates()
@@ -93,19 +157,16 @@ function get_cliniko_form_templates()
     $patientFormTemplates = PatientFormTemplate::all($client);
 
     $templates = [];
-
     if (!empty($patientFormTemplates)) {
         foreach ($patientFormTemplates as $patientFormTemplate) {
             $templates[$patientFormTemplate->getId()] = $patientFormTemplate->getName();
         }
     }
-
     return $templates;
 }
 
 function register_cliniko_form_controls($widget)
 {
-
     $templates = get_cliniko_form_templates();
 
     $widget->start_controls_section('cliniko_form_section', [
@@ -121,7 +182,7 @@ function register_cliniko_form_controls($widget)
         'description' => 'Choose a patient form template from Cliniko.',
     ]);
 
-        // Appointment Types
+    // Appointment Types
     $module_options = ['' => 'Select an appointment type'];
     $client = Client::getInstance();
     $modules = AppointmentType::all($client);
@@ -145,6 +206,18 @@ function register_cliniko_form_controls($widget)
         'return_value' => 'yes',
         'default' => 'yes',
     ]);
+
+   $widget->add_control(
+    'save_on_exit',
+    [
+        'label'        => __('Save on Exit', 'plugin-name'),
+        'type'         => Controls_Manager::SWITCHER,
+        'label_on'     => __('Yes', 'plugin-name'),
+        'label_off'    => __('No', 'plugin-name'),
+        'return_value' => 'yes',
+        'default'      => 'no',
+    ]
+);
 
     $widget->end_controls_section();
 }

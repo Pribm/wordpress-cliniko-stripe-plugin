@@ -30,8 +30,11 @@ class ClinikoService
             if($patientData){
                 return $patientData;
             }
-
-        return Patient::create($createPatientDTO, $this->client);
+            
+            
+            $patientData = Patient::create($createPatientDTO, $this->client);
+          
+            return $patientData;
     }
 
      public function getNextAvailableTime(

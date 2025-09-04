@@ -23,71 +23,80 @@ function parseFormToStructuredBody(formEl) {
 
   const structured = {
     content: {
-      sections: sectionsData.map((section) => {
-        const questions = section.questions
-          .map((q) => {
-            const question = {
-              name: q.name,
-              required: !!q.required,
-              type: q.type,
-            };
+      sections: sectionsData
+        .map((section) => {
+          const questions = section.questions
+            .map((q) => {
+              const question = {
+                name: q.name,
+                type: q.type,
+                required: !!q.required,
+              };
 
-            if (q.type === "checkboxes" && Array.isArray(q.answers)) {
-              const selectedValues = formData.getAll(q.name + "[]") || [];
+              // CHECKBOXES
+              if (q.type === "checkboxes" && Array.isArray(q.answers)) {
+                const rawSelected = formData.getAll(q.name + "[]") || [];
 
-              question.answers = q.answers
-                .filter((opt) => selectedValues.includes(opt.value))
-                .map((opt) => ({
-                  value: opt.value,
-                  selected: true,
-                }));
+                // include all options; mark only selected
+                question.answers = q.answers.map((opt) => {
+                  const entry = { value: opt.value };
+                  if (rawSelected.includes(opt.value)) entry.selected = true;
+                  return entry;
+                });
 
-              if (q.other?.enabled) {
-                const otherValue = formData.get(q.name + "_other");
-                if (otherValue) {
-                  question.other = { value: otherValue };
+                if (q.other?.enabled) {
+                  const otherChecked =
+                    rawSelected.includes("__other__") || rawSelected.includes("other");
+                  const otherValue = (formData.get(q.name + "_other") || "").trim();
+
+                  question.other = otherChecked
+                    ? { value: otherValue, enabled: true, selected: true } // value may be "" (allowed)
+                    : { enabled: true };
                 }
-              }
-            } else if (q.type === "radiobuttons" && Array.isArray(q.answers)) {
-              const selected = formData.get(q.name);
-              question.answers = q.answers
-                .filter((opt) => selected === opt.value)
-                .map((opt) => ({
-                  value: opt.value,
-                  selected: true,
-                }));
 
-              if (q.other?.enabled) {
-                const otherValue = formData.get(q.name + "_other");
-                if (otherValue && selected === "other") {
-                  question.other = { value: otherValue };
+              // RADIOBUTTONS
+              } else if (q.type === "radiobuttons" && Array.isArray(q.answers)) {
+                const selected = formData.get(q.name);
+
+                question.answers = q.answers.map((opt) => {
+                  const entry = { value: opt.value };
+                  if (selected === opt.value) entry.selected = true;
+                  return entry;
+                });
+
+                if (q.other?.enabled) {
+                  const isOther = selected === "__other__" || selected === "other";
+                  const otherValue = (formData.get(q.name + "_other") || "").trim();
+                  question.other = isOther
+                    ? { value: otherValue, enabled: true, selected: true }
+                    : { enabled: true };
                 }
+
+              // SIMPLE INPUTS
+              } else {
+                question.answer = formData.get(q.name);
               }
-            } else {
-              question.answer = formData.get(q.name);
-            }
 
-            return question;
-          })
-          .filter((q) => {
-            if (q.type === "signature") return false;
-            if (q.answers && Array.isArray(q.answers) && q.answers.length === 0)
-              return false;
-            if (
-              "answer" in q &&
-              typeof q.answer === "string" &&
-              q.answer.trim() === ""
-            )
-              return false;
-            return true;
-          });
+              return question;
+            })
+            .filter((q) => {
+              // ✅ keep original behavior: drop signature questions
+              if (q.type === "signature") return false;
 
-        return {
-          name: section.name,
-          description: section.description,
-          questions: questions,
-        };
-      }).filter(section => section.questions.length > 0),
+              // keep original “empty question” guards
+              if (q.answers && Array.isArray(q.answers) && q.answers.length === 0) return false;
+              if ("answer" in q && typeof q.answer === "string" && q.answer.trim() === "") return false;
+
+              return true;
+            });
+
+          return {
+            name: section.name,
+            description: section.description,
+            questions,
+          };
+        })
+        .filter((section) => section.questions.length > 0),
     },
     ...extractNestedFields(formEl, "patient"),
   };
@@ -95,7 +104,21 @@ function parseFormToStructuredBody(formEl) {
   return structured;
 }
 
-function showToast(message) {
+function showToast(message, type = "error") {
+  const isSuccess = type === "success";
+
+  const icon = isSuccess
+    ? `<svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" fill="#2e7d32" viewBox="0 0 24 24">
+         <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+       </svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" fill="#f44336" viewBox="0 0 24 24">
+         <path d="M1 21h22L12 2 1 21zm13-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+       </svg>`;
+
+  const bgColor = isSuccess ? "#f1f8f4" : "#fff";
+  const borderColor = isSuccess ? "#c8e6c9" : "#eee";
+  const textColor = isSuccess ? "#2e7d32" : "#333";
+
   Toastify({
     text: `
       <div style="
@@ -103,11 +126,9 @@ function showToast(message) {
         align-items: center;
         gap: 12px;
       ">
-        <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" fill="#f44336" viewBox="0 0 24 24">
-          <path d="M1 21h22L12 2 1 21zm13-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-        </svg>
+        ${icon}
         <span style="
-          color: #333;
+          color: ${textColor};
           font-size: 14px;
           font-weight: 500;
         ">${message}</span>
@@ -119,8 +140,8 @@ function showToast(message) {
     stopOnFocus: true,
     escapeMarkup: false,
     style: {
-      background: "#fff",
-      border: "1px solid #eee",
+      background: bgColor,
+      border: `1px solid ${borderColor}`,
       boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
       borderRadius: "8px",
       padding: "12px 16px",
@@ -130,40 +151,108 @@ function showToast(message) {
   }).showToast();
 }
 
+function bindOtherToggle(form) {
+  if (!form) return;
+
+  const onToggle = (cb) => {
+
+    const targetId = cb.getAttribute('data-other-target');
+    const wrap = targetId ? document.getElementById(targetId) : null;
+        console.log("toggle dat wrap", wrap)
+    if (!wrap) return;
+
+    const textInput = wrap.querySelector('input[type="text"]');
+    const isRequiredGroup = cb.hasAttribute('data-required');
+
+    if (cb.checked) {
+      wrap.style.display = 'block';
+      cb.setAttribute('aria-expanded', 'true');
+      if (isRequiredGroup && textInput) textInput.setAttribute('required', 'required');
+      if (textInput) textInput.focus();
+    } else {
+      wrap.style.display = 'none';
+      cb.setAttribute('aria-expanded', 'false');
+      if (textInput) {
+        textInput.removeAttribute('required');
+        textInput.value = '';
+      }
+    }
+  };
+
+  form.querySelectorAll('input.other-toggle').forEach(cb => {
+    cb.addEventListener('change', () => onToggle(cb));
+  });
+}
 function mountForm() {
+  const form = document.getElementById("prepayment-form");
+  bindOtherToggle(form);
   setupSignatureCanvas();
-  let currentStep = 0;
+
+  window.currentStep = 0;
   let stripeInitStarted = false;
 
   const steps = document.querySelectorAll(".form-step");
-  const indicators = document.querySelectorAll(".progress-step");
   const nextBtn = document.getElementById("step-next");
-
-  let nextBtnLabel = nextBtn.innerHTML;
+if (nextBtn) {
+  window.nextBtnLabel = nextBtn.innerHTML;
+}
 
   const prevBtn = document.getElementById("step-prev");
-  const activeColor = formHandlerData.btn_bg;
-  const inactiveColor = "white";
+  const nextBtnLabel = nextBtn.innerHTML;
+
+  // Keep Stripe references global to this form instance
+  let stripeInstance = null;
+  let cardElementInstance = null;
+  let errorElementInstance = null;
+
+  async function safeInitStripe() {
+    // Already initialized and mounted?
+    if (stripeInstance && cardElementInstance) {
+      return;
+    }
+    const { stripe, cardElement, errorEl } = await initializeStripeElements();
+    stripeInstance = stripe;
+    cardElementInstance = cardElement;
+    errorElementInstance = errorEl;
+    handlePaymentAndFormSubmission(stripeInstance, cardElementInstance, errorElementInstance);
+  }
 
   function updateIndicators(index) {
-    indicators.forEach((el, i) => {
-      el.style.backgroundColor = i === index ? activeColor : inactiveColor;
-      el.style.color = i === index ? "white" : activeColor;
-      el.style.border = i === index ? "" : "solid " + activeColor + " 1px";
-    });
+    const type = formHandlerData.appearance.progress_type;
+
+    if (type === "steps") {
+      document.querySelectorAll(".progress-step").forEach((el, i) => {
+        el.classList.toggle("is-active", i === index);
+      });
+    } else if (type === "dots") {
+      document.querySelectorAll(".progress-dot").forEach((el, i) => {
+        el.classList.toggle("is-active", i === index);
+      });
+    } else if (type === "bar") {
+      const total = steps.length;
+      const fill = document.querySelector(".progress-fill");
+      if (fill) {
+        fill.style.width = ((index + 1) / total) * 100 + "%";
+      }
+    } else if (type === "fraction") {
+      const text = document.querySelector(".form-progress--fraction .progress-text");
+      if (text) {
+        text.textContent = index + 1 + "/" + steps.length;
+      }
+    } else if (type === "percentage") {
+      const text = document.querySelector(".form-progress--percentage .progress-text");
+      if (text) {
+        text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
+      }
+    }
   }
 
   function showStep(i) {
     window.scrollTo({ top: 0, behavior: "smooth" });
     steps.forEach((step, index) => {
-      if (index === i) {
-        step.style.display = "block";
-      } else {
-        step.style.display = "none";
-      }
+      step.style.display = index === i ? "block" : "none";
     });
     prevBtn.style.display = i === 0 ? "none" : "flex";
-
     if (i === steps.length - 1) {
       nextBtn.textContent = "Submit";
     }
@@ -171,26 +260,23 @@ function mountForm() {
   }
 
 function isCurrentStepValid() {
-  const currentFields = steps[currentStep].querySelectorAll(
-    "[required], [data-required-group]"
-  );
+  const currentFields = steps[window.currentStep].querySelectorAll("[required], [data-required-group]");
   let isValid = true;
 
   for (let field of currentFields) {
-    const parent = field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || field.parentElement;
+    const parent =
+      field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || field.parentElement;
     const existingError = parent.querySelector(".field-error");
     if (existingError) existingError.remove();
 
-    // Handle required checkbox group
+    // Required checkbox group
     if (field.hasAttribute("data-required-group")) {
       const groupName = field.getAttribute("data-required-group");
       const groupInputs = field.querySelectorAll(`input[name="${groupName}[]"]`);
       const isChecked = Array.from(groupInputs).some((input) => input.checked);
-
       if (!isChecked) {
         groupInputs.forEach((input) => (input.style.outline = "2px solid red"));
         isValid = false;
-
         if (!existingError) {
           const msg = document.createElement("div");
           msg.className = "field-error";
@@ -200,18 +286,13 @@ function isCurrentStepValid() {
       } else {
         groupInputs.forEach((input) => (input.style.outline = "none"));
       }
-
       continue;
     }
 
-    // Handle required radio buttons
-    if (
-      field.type === "radio" &&
-      !document.querySelector(`input[name="${field.name}"]:checked`)
-    ) {
+    // Required radio
+    if (field.type === "radio" && !document.querySelector(`input[name="${field.name}"]:checked`)) {
       field.style.borderColor = "red";
       isValid = false;
-
       if (!existingError) {
         const msg = document.createElement("div");
         msg.className = "field-error";
@@ -223,13 +304,12 @@ function isCurrentStepValid() {
 
     const value = field.value.trim();
 
-    // Email validation
+    // Email
     if (field.type === "email") {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(value)) {
         field.style.borderColor = "red";
         isValid = false;
-
         const msg = document.createElement("div");
         msg.className = "field-error";
         msg.textContent = "Please enter a valid email address.";
@@ -240,16 +320,15 @@ function isCurrentStepValid() {
       continue;
     }
 
-    // Masked phone validation
+    // Phone (AU: 10 digits)
     if (field.name === "patient[phone]") {
       const clean = value.replace(/\D/g, "");
-      if (clean.length < 10) {
+      if (clean.length !== 10) {
         field.style.borderColor = "red";
         isValid = false;
-
         const msg = document.createElement("div");
         msg.className = "field-error";
-        msg.textContent = "Please enter a valid phone number.";
+        msg.textContent = "Phone number must be 10 digits.";
         parent.appendChild(msg);
         continue;
       }
@@ -257,12 +336,11 @@ function isCurrentStepValid() {
       continue;
     }
 
-    // Masked postcode validation
+    // Postcode (4 digits)
     if (field.name === "patient[post_code]") {
       if (!/^\d{4}$/.test(value)) {
         field.style.borderColor = "red";
         isValid = false;
-
         const msg = document.createElement("div");
         msg.className = "field-error";
         msg.textContent = "Please enter a 4-digit postcode.";
@@ -273,11 +351,42 @@ function isCurrentStepValid() {
       continue;
     }
 
-    // General required validation
+    // Medicare number (10 digits, ignoring spaces)
+    if (field.name === "patient[medicare]") {
+      const clean = value.replace(/\D/g, "");
+      if (clean.length !== 10) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Medicare number must contain exactly 10 digits.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Medicare reference number (1 digit, 1–9)
+    if (field.name === "patient[medicare_reference_number]") {
+      const clean = value.replace(/\D/g, "");
+      if (!/^[1-9]$/.test(clean)) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Medicare reference number must be a single digit between 1 and 9.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // General required
     if (!value) {
       field.style.borderColor = "red";
       isValid = false;
-
       const msg = document.createElement("div");
       msg.className = "field-error";
       msg.textContent = "This field is required.";
@@ -286,114 +395,105 @@ function isCurrentStepValid() {
       field.style.borderColor = "";
     }
   }
-
   return isValid;
 }
 
 
-nextBtn.addEventListener("click", async () => {
-  const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
+  nextBtn.addEventListener("click", async () => {
+    const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
 
-  if (currentStep < steps.length - 1) {
-    if (!isCurrentStepValid()) {
-      showToast("Please review the highlighted fields before continuing.");
-      return;
-    }
-
-    // Preload Stripe if payment is enabled and we're at the step before the last
-    if (isPaymentEnabled && currentStep === steps.length - 2 && !stripeInitStarted) {
-      stripeInitStarted = true;
-      if (!window.stripe) initStripe();
-    }
-
-    currentStep++;
-    showStep(currentStep);
-  } else {
-    if (!isCurrentStepValid()) {
-      showToast("Please review the highlighted fields before continuing.");
-      return;
-    }
-
-    if (isPaymentEnabled) {
-      document.getElementById("prepayment-form").style.display = "none";
-      document.getElementById("payment_form").style.display = "flex";
-
-      if (!window.stripe) initStripe();
-
-      const backBtn = document.getElementById("go-back-button");
-      if (backBtn) {
-        backBtn.addEventListener("click", () => {
-          document.getElementById("prepayment-form").style.display = "block";
-          document.getElementById("payment_form").style.display = "none";
-          showStep(currentStep);
-        });
+    if (window.currentStep < steps.length - 1) {
+      if (!isCurrentStepValid()) {
+        showToast("Please review the highlighted fields before continuing.");
+        return;
       }
+
+      if (isPaymentEnabled && window.currentStep === steps.length - 2 && !stripeInitStarted) {
+        stripeInitStarted = true;
+        await safeInitStripe();
+      }
+
+      window.currentStep++;
+      showStep(window.currentStep);
     } else {
+      if (!isCurrentStepValid()) {
+        showToast("Please review the highlighted fields before continuing.");
+        return;
+      }
+
+      if (isPaymentEnabled) {
+        document.getElementById("prepayment-form").style.display = "none";
+        document.getElementById("payment_form").style.display = "flex";
+        await safeInitStripe();
+
+        const backBtn = document.getElementById("go-back-button");
+        if (backBtn) {
+          backBtn.addEventListener("click", () => {
+            document.getElementById("prepayment-form").style.display = "block";
+            document.getElementById("payment_form").style.display = "none";
+            showStep(window.currentStep);
+          });
+        }
+      } else {
         showPaymentLoader();
         await submitBookingForm();
+      }
     }
-  }
-});
-
+  });
 
   prevBtn.addEventListener("click", () => {
-    if (currentStep > 0) {
-      currentStep--;
-      showStep(currentStep);
+    if (window.currentStep > 0) {
+      window.currentStep--;
+      showStep(window.currentStep);
     }
-
-    if ((currentStep + 1, steps.length - 1)) {
+    if (window.currentStep + 1 < steps.length) {
       nextBtn.innerHTML = nextBtnLabel;
     }
   });
 
-  showStep(currentStep);
+  showStep(window.currentStep);
 
-function attachValidationListeners() {
-  document
-    .querySelectorAll(
-      "#prepayment-form input[required], #prepayment-form textarea[required]"
-    )
-    .forEach((input) => {
-      input.addEventListener("input", () => {
-        input.style.borderColor = "";
-
-        const parent = input.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || input.parentElement;
-        const existingError = parent.querySelector(".field-error");
-        if (existingError) existingError.remove();
-      });
-    });
-
-  // Radio buttons
-  document
-    .querySelectorAll("#prepayment-form input[type='radio'][required]")
-    .forEach((radio) => {
-      radio.addEventListener("change", () => {
-        const group = document.getElementsByName(radio.name);
-        group.forEach((el) => {
-          el.style.borderColor = "";
-          const parent = el.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || el.parentElement;
+  function attachValidationListeners() {
+    document
+      .querySelectorAll("#prepayment-form input[required], #prepayment-form textarea[required]")
+      .forEach((input) => {
+        input.addEventListener("input", () => {
+          input.style.borderColor = "";
+          const parent =
+            input.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || input.parentElement;
           const existingError = parent.querySelector(".field-error");
           if (existingError) existingError.remove();
         });
       });
-    });
 
-  // Required checkbox groups
-  document
-    .querySelectorAll("[data-required-group]")
-    .forEach((groupContainer) => {
+    // Radio buttons
+    document
+      .querySelectorAll("#prepayment-form input[type='radio'][required]")
+      .forEach((radio) => {
+        radio.addEventListener("change", () => {
+          const group = document.getElementsByName(radio.name);
+          group.forEach((el) => {
+            el.style.borderColor = "";
+            const parent =
+              el.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || el.parentElement;
+            const existingError = parent.querySelector(".field-error");
+            if (existingError) existingError.remove();
+          });
+        });
+      });
+
+    // Required checkbox groups
+    document.querySelectorAll("[data-required-group]").forEach((groupContainer) => {
       const groupName = groupContainer.getAttribute("data-required-group");
-      const checkboxes = groupContainer.querySelectorAll(
-        `input[name="${groupName}[]"]`
-      );
+      const checkboxes = groupContainer.querySelectorAll(`input[name="${groupName}[]"]`);
       checkboxes.forEach((cb) => {
         cb.addEventListener("change", () => {
           const hasChecked = [...checkboxes].some((c) => c.checked);
           if (hasChecked) {
             checkboxes.forEach((c) => {
               c.style.outline = "none";
-              const parent = c.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || c.parentElement;
+              const parent =
+                c.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") || c.parentElement;
               const existingError = parent.querySelector(".field-error");
               if (existingError) existingError.remove();
             });
@@ -401,7 +501,7 @@ function attachValidationListeners() {
         });
       });
     });
-}
+  }
 
   attachValidationListeners();
 }
@@ -410,62 +510,83 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
   const formElement = document.getElementById("prepayment-form");
   const { content, patient } = parseFormToStructuredBody(formElement);
 
-  const formData = new FormData();
-  formData.append("content", JSON.stringify(content));
-  formData.append("patient", JSON.stringify(patient));
-  formData.append("moduleId", formHandlerData.module_id);
-  formData.append("patient_form_template_id", formHandlerData.patient_form_template_id);
-
-  if (stripeToken) {
-    formData.append("stripeToken", stripeToken);
-  }
-
-  const signatureData = document.getElementById("signature-data")?.value;
-  if (signatureData?.startsWith("data:image/")) {
-    const blob = dataURLToBlob(signatureData);
-    const file = new File([blob], "signature.png", { type: "image/png" });
-    formData.append("signature_file", file);
-  }
+  // Build JSON payload for the new charge route
+  const payload = {
+    content,
+    patient,
+    moduleId: formHandlerData.module_id,
+    patient_form_template_id: formHandlerData.patient_form_template_id,
+    stripeToken, 
+  };
 
   try {
-    const response = await fetch(formHandlerData.booking_url, {
+    const response = await fetch(formHandlerData.payment_url, {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
 
     const result = await response.json();
 
-    if (result.status === "success") {
+    if (result.status === "success" && result.payment?.id) {
+      showToast("Payment received! We’re scheduling your appointment now…", "success");
+
+      window.formIsSubmitting = true;
+
       const redirectBase = formHandlerData.redirect_url;
       const queryParams = new URLSearchParams({
-        patient_name: result.patient?.name ?? "",
-        email: result.patient?.email ?? "",
-        start: result.appointment?.starts_at ?? "",
-        end: result.appointment?.ends_at ?? "",
-        ref: result.appointment?.payment_reference ?? "",
-        link: result.appointment?.telehealth_url ?? "",
+        // We no longer have appointment times here; worker will create them later
+        patient_name:
+          (patient?.first_name && patient?.last_name)
+            ? `${patient.first_name} ${patient.last_name}`
+            : "",
+        email: patient?.email ?? "",
+        ref: result.payment.id,           // Stripe charge id
+        status: "scheduling_queued",      // for your success page UI
+        receipt: result.payment.receipt_url ?? "",
       });
 
       window.location.href = `${redirectBase}?${queryParams.toString()}`;
     } else {
-      if (errorEl) {
-        errorEl.textContent = result.message || "Error booking appointment. Please try again.";
-      } else {
-        showToast(result.message || "Error booking appointment.");
-      }
+      // Errors from payment route
+      handleChargeErrors(result, errorEl);
     }
   } catch (err) {
-    console.error("Booking failed", err);
+    console.error("Payment request failed", err);
     const message = "Unexpected error. Please try again.";
-    if (errorEl) {
-      errorEl.textContent = message;
-    } else {
-      showToast(message);
-    }
+    if (errorEl) errorEl.textContent = message;
+    else showToast(message);
   } finally {
     jQuery.LoadingOverlay("hide");
   }
 }
+
+// Helper to render payment errors (mirrors your existing UI pattern)
+function handleChargeErrors(result, errorEl) {
+  const message = result?.message || "Payment failed. Please try again.";
+  if (errorEl) {
+    errorEl.innerHTML = "";
+    if (Array.isArray(result?.errors) && result.errors.length > 0) {
+      const ul = document.createElement("ul");
+      ul.style.marginTop = "0.5rem";
+      ul.style.fontSize = "0.8rem";
+      ul.style.paddingLeft = "1.2rem";
+      ul.style.color = "#c62828";
+      ul.style.fontWeight = "500";
+      result.errors.forEach(e => {
+        const li = document.createElement("li");
+        li.textContent = `${e.label || "Error"}: ${e.detail || e.code || "Unknown"}`;
+        ul.appendChild(li);
+      });
+      errorEl.appendChild(ul);
+    } else {
+      errorEl.textContent = message;
+    }
+  } else {
+    showToast(message);
+  }
+}
+
 
 
 function showPaymentLoader() {

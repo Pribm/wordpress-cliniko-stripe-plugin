@@ -15,7 +15,10 @@ class PatientDTO
         public ?string $address,
         public ?string $notes,
         public ?string $occupation,
-        public ?string $selfUrl
+        public ?string $selfUrl,
+        public ?string $medicare,
+        public ?string $medicareReferenceNumber,
+        public ?string $patientApointmentsUrl
     ) {}
 
     public static function fromArray(array $data): self
@@ -29,10 +32,13 @@ class PatientDTO
             $data['state'] ?? null,
             $data['post_code'] ?? null,
             $data['country'] ?? null,
+            $data['medicare'] ?? null,
+            $data['medicare_reference_number'] ?? null,
+            $data['appointments']['links']['self'] ?? null
         ]));
 
         return new self(
-            $data['id'],
+            $data['id'] ?? '',
             $data['first_name'] ?? '',
             $data['last_name'] ?? '',
             $data['preferred_first_name'] ?? null,
@@ -43,7 +49,10 @@ class PatientDTO
             $address,
             $data['notes'] ?? null,
             $data['occupation'] ?? null,
-            $data['links']['self'] ?? null
+            $data['links']['self'] ?? null,
+            $data['medicare'] ?? null,
+            $data['medicare_reference_number'] ?? null,
+            $data['appointments']['links']['self'] ?? null
         );
     }
 }

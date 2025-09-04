@@ -1,4 +1,8 @@
 <?php
+
+use App\Model\AppointmentType;
+
+
 if (!defined('ABSPATH')) exit;
 use App\Widgets\AppointmentTypeCard\Helpers;
 use Elementor\Controls_Manager;
@@ -11,8 +15,16 @@ $this->start_controls_section('section_content', [
   'label' => __('Content', 'plugin-name'),
 ]);
 
-$types = Helpers::get_appointment_types();
-$options = array_column($types, 'name', 'id');
+$client = cliniko_client(true);
+$types = AppointmentType::all($client, true);
+
+// $options = array_column($types, 'name', 'id');
+
+$options = [];
+foreach ($types as $type) {
+    /** @var AppointmentType $type */
+    $options[$type->getId()] = $type->getName();
+}
 
 $this->add_control('selected_appointment_type', [
   'label' => __('Select Appointment Type', 'plugin-name'),
@@ -60,36 +72,6 @@ $this->start_controls_section('layout_section', [
   'label' => __('Card Layout', 'plugin-name'),
   'tab' => Controls_Manager::TAB_STYLE,
 ]);
-
-// $this->add_control('card_display', [
-//   'label' => __('Display', 'plugin-name'),
-//   'type' => Controls_Manager::SELECT,
-//   'default' => 'block',
-//   'options' => [
-//     'block' => 'Block',
-//     'flex'  => 'Flex',
-//     'grid'  => 'Grid',
-//   ],
-//   'selectors' => [
-//     '{{WRAPPER}} .appointment-card' => 'display: {{VALUE}};',
-//   ],
-// ]);
-
-// $this->add_control('flex_direction', [
-//   'label' => __('Flex Direction', 'plugin-name'),
-//   'type' => Controls_Manager::SELECT,
-//   'default' => 'column',
-//   'options' => [
-//     'row' => 'Row',
-//     'column' => 'Column',
-//     'row-reverse' => 'Row Reverse',
-//     'column-reverse' => 'Column Reverse',
-//   ],
-//   'condition' => ['card_display' => 'flex'],
-//   'selectors' => [
-//     '{{WRAPPER}} .appointment-card' => 'flex-direction: {{VALUE}};',
-//   ],
-// ]);
 
 $this->add_control('card_gap', [
   'label' => __('Gap Between Elements', 'plugin-name'),
@@ -372,4 +354,3 @@ $this->add_group_control(Group_Control_Typography::get_type(), [
 ]);
 
 $this->end_controls_section();
-

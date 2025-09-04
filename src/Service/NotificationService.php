@@ -1,0 +1,129 @@
+<?php
+namespace App\Service;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class NotificationService
+{
+    private const SUCCESS_OPTION_ENABLED = 'wp_cliniko_send_email_on_success';
+    private const SUCCESS_OPTION_TEMPLATE = 'wp_cliniko_success_email_tpl';
+
+    private const FAILURE_OPTION_ENABLED = 'wp_cliniko_send_email_on_failure';
+    private const FAILURE_OPTION_TEMPLATE = 'wp_cliniko_failure_email_tpl';
+
+    public function sendSuccess(array $args, array $patient, string $paymentRef, ?int $amountCents): void
+    {
+        // check if user enabled it in Elementor
+        if (get_option(self::SUCCESS_OPTION_ENABLED) !== 'yes') {
+            error_log("[NotificationService] Success email disabled for $paymentRef");
+            return;
+        }
+
+        $this->dispatchMail(
+            $args,
+            $patient,
+            $paymentRef,
+            $amountCents,
+            self::SUCCESS_OPTION_TEMPLATE,
+            'Your request has been confirmed',
+            'cliniko_notify_success_',
+            true
+        );
+    }
+
+    public function sendFailure(array $args, array $patient, string $paymentRef, ?int $amountCents): void
+    {
+        if (get_option(self::FAILURE_OPTION_ENABLED) !== 'yes') {
+            error_log("[NotificationService] Failure email disabled for $paymentRef");
+            return;
+        }
+
+        $this->dispatchMail(
+            $args,
+            $patient,
+            $paymentRef,
+            $amountCents,
+            self::FAILURE_OPTION_TEMPLATE,
+            'We could not complete your request — refund on the way',
+            'cliniko_notify_failure_',
+            false
+        );
+    }
+
+    private function dispatchMail(
+        array $args,
+        array $patient,
+        string $paymentRef,
+        ?int $amountCents,
+        string $templateOption,
+        string $fallbackSubject,
+        string $notifyKeyPrefix,
+        bool $isSuccess
+    ): void {
+        $toEmail = (string) ($patient['email'] ?? '');
+        if (!$toEmail) {
+            error_log("[NotificationService] No email found for ref=$paymentRef");
+            return;
+        }
+
+        $notifyKey = $notifyKeyPrefix . md5($paymentRef);
+        if (get_transient($notifyKey)) {
+            error_log("[NotificationService] Email suppressed (already sent) for $paymentRef");
+            return;
+        }
+
+        $subject = $fallbackSubject;
+        $body = $this->renderTemplate($templateOption, $args, $patient, $paymentRef, $amountCents, $isSuccess);
+
+        $headers = ['Content-Type: text/html; charset=UTF-8'];
+        $mailOk = wp_mail($toEmail, $subject, $body, $headers);
+
+        error_log("[NotificationService] Email " . ($mailOk ? 'SENT' : 'NOT SENT') . " to $toEmail for $paymentRef");
+
+        if ($mailOk) {
+            set_transient($notifyKey, 1, 86400);
+        }
+    }
+
+    private function renderTemplate(
+        string $optionKey,
+        array $args,
+        array $patient,
+        string $paymentRef,
+        ?int $amountCents,
+        bool $isSuccess
+    ): string {
+        $tpl = get_option($optionKey, '');
+        $amountTxt = is_int($amountCents) ? number_format($amountCents / 100, 2) : '';
+
+        $vars = [
+            '{first_name}'        => esc_html((string) ($patient['first_name'] ?? '')),
+            '{last_name}'         => esc_html((string) ($patient['last_name'] ?? '')),
+            '{email}'             => esc_html((string) ($patient['email'] ?? '')),
+            '{amount}'            => $amountTxt,
+            '{currency}'          => strtoupper((string) ($args['currency'] ?? 'AUD')),
+            '{payment_reference}' => $paymentRef,
+            '{appointment_label}' => (string) ($args['appointment_label'] ?? ''),
+        ];
+
+        if (!empty($tpl)) {
+            return strtr($tpl, $vars);
+        }
+
+        // fallback if Elementor template not set
+        $greet = $vars['{first_name}'] ? 'Hi ' . $vars['{first_name}'] : 'Hi';
+        if ($isSuccess) {
+            return "<p>$greet,</p>"
+                . "<p>Your {$vars['{appointment_label}']} request has been confirmed.</p>"
+                . ($amountTxt ? "<p>We received your payment of <strong>\${$amountTxt} {$vars['{currency}']}</strong>.</p>" : '')
+                . "<p>Thank you for choosing EasyScripts.</p>";
+        }
+
+        return "<p>$greet,</p>"
+            . "<p>We were unable to complete your {$vars['{appointment_label}']} request.</p>"
+            . ($amountTxt ? "<p>A refund of <strong>\${$amountTxt} {$vars['{currency}']}</strong> has been initiated.</p>" : '')
+            . "<p>Please contact support if you need assistance.</p>";
+    }
+}

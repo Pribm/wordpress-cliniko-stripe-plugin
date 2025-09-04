@@ -33,6 +33,7 @@ class AppointmentDTO
 
     public function __construct(array $data)
     {
+  
         $this->id = $data['id'];
         $this->startsAt = $data['starts_at'];
         $this->endsAt = $data['ends_at'];
