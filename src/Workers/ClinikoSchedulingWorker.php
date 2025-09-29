@@ -92,14 +92,15 @@ class ClinikoSchedulingWorker
 
         // ---------- Inputs ----------
         $paymentRef = (string) ($args['payment_reference'] ?? '');
-        if (!$paymentRef) {
-            return;
+        $isFree     = empty($paymentRef);
+
+        if (!$isFree) {
+            $paymentRef = substr(trim($paymentRef), 0, 191);
         }
-        $paymentRef = substr(trim($paymentRef), 0, 191);
 
         $moduleId = $args['moduleId'] ?? null;
         $patientFormTemplateId = $args['patient_form_template_id'] ?? null;
-        $amountCents = isset($args['amount']) ? (int) $args['amount'] : null;
+        $amountCents = isset($args['amount']) ? (int) $args['amount'] : 0;
 
         $patient = is_array($args['patient'] ?? null) ? $args['patient'] : [];
         $content = is_array($args['content'] ?? null) ? $args['content'] : [];
@@ -121,7 +122,8 @@ class ClinikoSchedulingWorker
         }
 
         // ---------- Mutex ----------
-        $lockKey = 'wp_cliniko_job_lock_' . md5($paymentRef);
+        $lockSource = $isFree ? ($payloadKey ?? uniqid('free_', true)) : $paymentRef;
+        $lockKey = 'wp_cliniko_job_lock_' . md5($lockSource);
         if (!wp_cache_add($lockKey, 1, '', self::MUTEX_TTL)) {
             return; // already processing
         }
@@ -130,7 +132,7 @@ class ClinikoSchedulingWorker
         $now = current_time('mysql');
 
         try {
-            $useLedger = self::ensureLedgerAvailable();
+            $useLedger = !$isFree && self::ensureLedgerAvailable();
 
             // ---------- Claim job ----------
             if ($useLedger) {
@@ -288,30 +290,30 @@ class ClinikoSchedulingWorker
             }
 
             // ----- SUCCESS: send success email -----
-            $notifier->sendSuccess($args, $patient, $paymentRef, $amountCents);
+            $notifier->sendSuccess($args, $patient, $isFree ? null : $paymentRef, $amountCents);
 
         } catch (\Throwable $e) {
-            // Refund + notify
-            try {
-                (new StripeService())->refundCharge(
-                    $paymentRef,
-                    $amountCents,
-                    'requested_by_customer',
-                    [
-                        'moduleId'          => (string) ($args['moduleId'] ?? ''),
-                        'patient_email'     => (string) ($patient['email'] ?? ''),
-                        'failure'           => 'cliniko_scheduling_failed',
-                        'error_message'     => substr($e->getMessage(), 0, 500),
-                        'payment_reference' => $paymentRef,
-                    ]
-                );
-            } catch (\Throwable $refundError) {
-                error_log("[ClinikoSchedulingWorker] Refund failed for $paymentRef: " . $refundError->getMessage());
-            } finally {
-                $notifier->sendFailure($args, $patient, $paymentRef, $amountCents);
+            if (!$isFree && !empty($paymentRef)) {
+                try {
+                    (new StripeService())->refundCharge(
+                        $paymentRef,
+                        $amountCents,
+                        'requested_by_customer',
+                        [
+                            'moduleId'          => (string) ($args['moduleId'] ?? ''),
+                            'patient_email'     => (string) ($patient['email'] ?? ''),
+                            'failure'           => 'cliniko_scheduling_failed',
+                            'error_message'     => substr($e->getMessage(), 0, 500),
+                            'payment_reference' => $paymentRef,
+                        ]
+                    );
+                } catch (\Throwable $refundError) {
+                    error_log("[ClinikoSchedulingWorker] Refund failed for $paymentRef: " . $refundError->getMessage());
+                }
             }
 
-            error_log("[ClinikoSchedulingWorker] Scheduling failed for $paymentRef: " . $e->getMessage());
+            $notifier->sendFailure($args, $patient, $isFree ? null : $paymentRef, $amountCents);
+            error_log("[ClinikoSchedulingWorker] Scheduling failed: " . $e->getMessage());
         }
     }
 }
