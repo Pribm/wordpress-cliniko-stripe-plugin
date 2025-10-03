@@ -5,12 +5,11 @@
 $priceLabel  = $settings['price_label'] ?? 'Price:';
 $customPrice = $settings['custom_price'] ?? null;
 
-// By now, $type is passed from Widget::render()
-// $type->getPriceFormatted() should return something like "$100.00"
 $displayPrice = $customPrice ?: $type->getBillableItemsFinalPrice() / 100;
+$displayPrice = number_format($displayPrice, 2);
 ?>
 
-<div class="cliniko-appointment-type-price-tag">
+<div class="cliniko-appointment-type-price-tag" style="gap: 0;">
   <span class="cliniko-price-label"><?php echo esc_html($priceLabel);?></span>
   <span class="cliniko-price-value"><?php echo esc_html($displayPrice);?></span>
 </div>
