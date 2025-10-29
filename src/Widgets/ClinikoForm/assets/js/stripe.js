@@ -1,5 +1,4 @@
 // --- Keep Stripe instance globally (singleton pattern) ---
-let stripeInstance = null;
 let paymentHandlerAttached = false;
 
 /**

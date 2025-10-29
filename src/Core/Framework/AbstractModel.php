@@ -17,7 +17,7 @@ abstract class AbstractModel
 
     public function __construct(?object $dto, ApiClientInterface $client)
     {
-        $this->dto    = $dto;
+        $this->dto = $dto;
         $this->client = $client;
     }
 
@@ -47,7 +47,7 @@ abstract class AbstractModel
     protected static function getDtoClass(): string
     {
         $className = (new \ReflectionClass(static::class))->getShortName();
-        $dtoClass  = "App\\DTO\\{$className}DTO";
+        $dtoClass = "App\\DTO\\{$className}DTO";
 
         if (!class_exists($dtoClass)) {
             throw new \RuntimeException(
@@ -62,8 +62,8 @@ abstract class AbstractModel
      */
     protected static function getCreateDtoClass(): ?string
     {
-        $className       = (new \ReflectionClass(static::class))->getShortName();
-        $createDtoClass  = "App\\DTO\\Create{$className}DTO";
+        $className = (new \ReflectionClass(static::class))->getShortName();
+        $createDtoClass = "App\\DTO\\Create{$className}DTO";
         return class_exists($createDtoClass) ? $createDtoClass : null;
     }
 
@@ -112,7 +112,7 @@ abstract class AbstractModel
      */
     public static function find(string $id, ApiClientInterface $client, bool $throwOnError = false): ?static
     {
-        $path     = static::getResourcePath();
+        $path = static::getResourcePath();
         $response = $client->get("{$path}/{$id}");
 
         if (!$response->isSuccessful()) {
@@ -140,7 +140,7 @@ abstract class AbstractModel
      */
     public static function all(ApiClientInterface $client, bool $throwOnError = false): array
     {
-        $path     = static::getResourcePath();
+        $path = static::getResourcePath();
         $response = $client->get($path);
 
         if (!$response->isSuccessful()) {
@@ -150,9 +150,9 @@ abstract class AbstractModel
             return [];
         }
 
-        $items    = [];
+        $items = [];
         $dtoClass = static::getDtoClass();
-        $listKey  = $path;
+        $listKey = $path;
 
         $rows = $response->data[$listKey] ?? [];
         if (!is_array($rows)) {
@@ -162,7 +162,7 @@ abstract class AbstractModel
 
         foreach ($rows as $item) {
             /** @var object $dto */
-            $dto     = $dtoClass::fromArray($item);
+            $dto = $dtoClass::fromArray($item);
             $items[] = static::newInstance($dto, $client);
         }
 
@@ -176,7 +176,7 @@ abstract class AbstractModel
      */
     public static function create($data, ApiClientInterface $client): ?static
     {
-        $path           = static::getResourcePath();
+        $path = static::getResourcePath();
         $createDtoClass = static::getCreateDtoClass();
 
         // If it's an object with toArray(), prefer it. Allow null (bodyless endpoints).
@@ -224,8 +224,8 @@ abstract class AbstractModel
      */
     public static function update(string $id, ?array $data, ApiClientInterface $client): ?static
     {
-        $path     = static::getResourcePath();
-        $payload  = $data ?? [];
+        $path = static::getResourcePath();
+        $payload = $data ?? [];
 
         $response = $client->put("{$path}/{$id}", $payload);
 
@@ -260,7 +260,7 @@ abstract class AbstractModel
      */
     public static function delete(string $id, ApiClientInterface $client): bool
     {
-        $path     = static::getResourcePath();
+        $path = static::getResourcePath();
         $response = $client->post("{$path}/{$id}/archive", []);
 
         if (!$response->isSuccessful()) {
@@ -296,9 +296,101 @@ abstract class AbstractModel
         return static::newInstance($dto, $client);
     }
 
+    /**
+     * Busca usando uma query string do próprio Cliniko (ex.: "?sort=...&order=...&q[]=...").
+     * Retorna o primeiro item da lista ou null.
+     *
+     * @return static|null
+     * @throws ApiException
+     */
+    public static function queryOneByQueryString(string $query, ApiClientInterface $client, bool $throwOnError = false): ?static
+    {
+        $instance = new static(null, $client);
+
+        // garante que começa com '?'
+        if ($query !== '' && $query[0] !== '?') {
+            $query = '?' . $query;
+        }
+
+        $path = $instance->getResourcePath();
+        $url = "{$path}{$query}";
+        $response = $client->get($url);
+
+        if (!$response->isSuccessful()) {
+            if ($throwOnError) {
+                throw new ApiException("Failed to query resources at {$path}{$query}.", ['error' => $response->error]);
+            }
+            return null;
+        }
+
+        $listKey = $instance->getListKey();                // ex.: 'bookings'
+        $rows = $response->data[$listKey] ?? [];
+
+        if (!is_array($rows) || empty($rows)) {
+            return null;
+        }
+
+        $dtoClass = $instance->getDtoClass();
+        /** @var object $dto */
+        $dto = $dtoClass::fromArray($rows[0]);
+
+        return new static($dto, $client);
+    }
+
+    /**
+     * Busca usando uma query string do próprio Cliniko (ex.: "?sort=...&order=...&q[]=...").
+     * Retorna todos os itens da página (array de instâncias).
+     *
+     * @phpstan-return list<static>
+     * @throws ApiException
+     */
+    public static function queryManyByQueryString(string $query, ApiClientInterface $client, bool $throwOnError = false): array
+    {
+        $instance = new static(null, $client);
+
+        // garante que começa com '?'
+        if ($query !== '' && $query[0] !== '?') {
+            $query = '?' . $query;
+        }
+
+        $path = $instance->getResourcePath();
+        $response = $client->get("{$path}{$query}");
+
+        if (!$response->isSuccessful()) {
+            if ($throwOnError) {
+                throw new ApiException("Failed to query resources at {$path}{$query}.", ['error' => $response->error]);
+            }
+            return [];
+        }
+
+        $listKey = $instance->getListKey();                // ex.: 'bookings'
+        $rows = $response->data[$listKey] ?? [];
+
+        if (!is_array($rows) || empty($rows)) {
+            return [];
+        }
+
+        $dtoClass = $instance->getDtoClass();
+        $items = [];
+
+        foreach ($rows as $row) {
+            /** @var object $dto */
+            $dto = $dtoClass::fromArray($row);
+            $items[] = new static($dto, $client);
+        }
+
+        return $items;
+    }
+
     // -----------------------------
     // Utilities
     // -----------------------------
+
+    /** Ex.: Bookings -> "bookings" */
+    protected static function getListKey(): string
+    {
+        return static::getResourcePath();
+    }
 
     /**
      * @phpstan-return array<string,mixed>

@@ -118,7 +118,7 @@ class NotificationService
             return "<p>$greet,</p>"
                 . "<p>Your {$vars['{appointment_label}']} request has been confirmed.</p>"
                 . ($amountTxt ? "<p>We received your payment of <strong>\${$amountTxt} {$vars['{currency}']}</strong>.</p>" : '')
-                . "<p>Thank you for choosing EasyScripts.</p>";
+                . "<p>Thank you for choosing Our service.</p>";
         }
 
         return "<p>$greet,</p>"

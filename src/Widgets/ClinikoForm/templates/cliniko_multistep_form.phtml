@@ -1,10 +1,14 @@
 <?php
-if (!defined('ABSPATH')) exit;
 
+use App\Admin\Modules\Credentials;
+use App\Model\AppointmentType;
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 
-function hex2rgb($hex) {
+if (!defined('ABSPATH')) exit;
+
+function hex2rgb($hex)
+{
   $hex = str_replace('#', '', $hex);
   if (strlen($hex) === 3) {
     $r = hexdec(str_repeat($hex[0], 2));
@@ -20,6 +24,25 @@ function hex2rgb($hex) {
 
 $settings = $this->get_settings();
 $form_template_id = $settings['cliniko_form_template_id'] ?? null;
+
+// ---------- Resolve Appointment Type / Practitioner IDs ----------
+$appointmentType = null;
+try {
+  $appointmentType = AppointmentType::find($settings["module_id"] ?? null, cliniko_client(true));
+} catch (\Throwable $e) {
+  // allow rendering without IDs; embed step will be skipped if not configured
+}
+
+$practitionerID   = null;
+$appointmentTypeID= null;
+
+if ($appointmentType) {
+  $practitioners = $appointmentType->getPractitioners();
+  if (!empty($practitioners) && isset($practitioners[0])) {
+    $practitionerID = $practitioners[0]->getId();
+  }
+  $appointmentTypeID = $appointmentType->getId();
+}
 
 if (empty($form_template_id)) {
   echo '<p style="color: red;">No sections found in the Cliniko form template.</p>';
@@ -38,32 +61,32 @@ if (empty($sections)) {
   return;
 }
 
-// Settings
-$bg = esc_attr($settings['form_background_color'] ?? '#ffffff');
-$text = esc_attr($settings['form_text_color'] ?? '#000000');
-$font = esc_attr($settings['form_font_family'] ?? 'Arial, sans-serif');
-$label = esc_attr($settings['form_label_color'] ?? '#333333');
+// ---------- UI Settings ----------
+$bg           = esc_attr($settings['form_background_color'] ?? '#ffffff');
+$text         = esc_attr($settings['form_text_color'] ?? '#000000');
+$font         = esc_attr($settings['form_font_family'] ?? 'Arial, sans-serif');
+$label        = esc_attr($settings['form_label_color'] ?? '#333333');
 $input_border = esc_attr($settings['form_input_border'] ?? '1px solid #ccc');
-$border_radius = esc_attr(($settings['form_border_radius']['size'] ?? 6) . ($settings['form_border_radius']['unit'] ?? 'px'));
+$border_radius= esc_attr(($settings['form_border_radius']['size'] ?? 6) . ($settings['form_border_radius']['unit'] ?? 'px'));
 
 $titles_color = esc_attr($settings['titles_color'] ?? '#000000');
-$btn_bg = esc_attr($settings['form_button_color'] ?? '#0073e6');
-$btn_text = esc_attr($settings['form_button_text_color'] ?? '#ffffff');
-$btn_bg_rgb = hex2rgb($btn_bg);
+$btn_bg       = esc_attr($settings['form_button_color'] ?? '#0073e6');
+$btn_text     = esc_attr($settings['form_button_text_color'] ?? '#ffffff');
+$btn_bg_rgb   = hex2rgb($btn_bg);
 
-$pad = $settings['form_button_padding'] ?? null;
-$btn_pad = isset($pad['top'], $pad['right'], $pad['bottom'], $pad['left'], $pad['unit']) ?
-  "{$pad['top']}{$pad['unit']} {$pad['right']}{$pad['unit']} {$pad['bottom']}{$pad['unit']} {$pad['left']}{$pad['unit']}" :
-  '12px 24px';
+$pad     = $settings['form_button_padding'] ?? null;
+$btn_pad = isset($pad['top'], $pad['right'], $pad['bottom'], $pad['left'], $pad['unit'])
+  ? "{$pad['top']}{$pad['unit']} {$pad['right']}{$pad['unit']} {$pad['bottom']}{$pad['unit']} {$pad['left']}{$pad['unit']}"
+  : '12px 24px';
 
-$radius = esc_attr(($settings['form_button_border_radius']['size'] ?? 6) . ($settings['form_button_border_radius']['unit'] ?? 'px'));
-$layout = $settings['form_button_layout'] ?? 'stacked';
-$width = $settings['form_button_width'] ?? 'full';
-$alignment = $settings['form_button_alignment'] ?? 'center';
-$icon_prev = $settings['form_button_icon_prev']['value'];
-$icon_next = $settings['form_button_icon_next']['value'];
+$radius        = esc_attr(($settings['form_button_border_radius']['size'] ?? 6) . ($settings['form_button_border_radius']['unit'] ?? 'px'));
+$layout        = $settings['form_button_layout'] ?? 'stacked';
+$width         = $settings['form_button_width'] ?? 'full';
+$alignment     = $settings['form_button_alignment'] ?? 'center';
+$icon_prev     = $settings['form_button_icon_prev']['value'] ?? '';
+$icon_next     = $settings['form_button_icon_next']['value'] ?? '';
 $icon_position = $settings['form_button_icon_position'] ?? 'before';
-$icon_spacing = isset($settings['form_button_icon_spacing']['size']) ? $settings['form_button_icon_spacing']['size'] . 'px' : '8px';
+$icon_spacing  = isset($settings['form_button_icon_spacing']['size']) ? $settings['form_button_icon_spacing']['size'] . 'px' : '8px';
 
 $container_flex_direction = $layout === 'row' ? 'row' : 'column';
 $justify_content = match ($alignment) {
@@ -75,17 +98,42 @@ $justify_content = match ($alignment) {
 };
 $button_flex = $width === 'full' ? '1 1 100%' : '0 0 auto';
 
-/**
- * PATCH: robust asset base (parent of templates/) + cache-busting
- */
-$base_url  = trailingslashit( plugin_dir_url( dirname(__FILE__) ) );  // .../ClinikoForm/
+// ---------- Assets (versioned) ----------
+$base_url   = trailingslashit(plugin_dir_url(dirname(__FILE__)));  // .../ClinikoForm/
 $assets_url = $base_url . 'assets/';
 
-$base_path = trailingslashit( plugin_dir_path( dirname(__FILE__) ) );
-$js_ver  = file_exists($base_path . 'assets/js/input-masks.js') ? filemtime($base_path . 'assets/js/input-masks.js') : null;
-$css_ver = file_exists($base_path . 'assets/css/multistep-form-style.css') ? filemtime($base_path . 'assets/css/multistep-form-style.css') : null;
-?>
+$base_path = trailingslashit(plugin_dir_path(dirname(__FILE__)));
+$js_ver    = file_exists($base_path . 'assets/js/input-masks.js') ? filemtime($base_path . 'assets/js/input-masks.js') : null;
+$css_ver   = file_exists($base_path . 'assets/css/multistep-form-style.css') ? filemtime($base_path . 'assets/css/multistep-form-style.css') : null;
 
+// ---------- Embed setup (only if configured) ----------
+$useClinikoEmbed = (($settings['appointment_source'] ?? '') === 'cliniko_embed');
+$embedHost       = Credentials::getEmbedHost();                   // e.g., easy-scripts.au4.cliniko.com
+$businessId      = get_option('wp_cliniko_business_id');
+
+// Require all pieces to render the embed step
+$hasEmbedStep    = $useClinikoEmbed && $embedHost && $businessId && $practitionerID && $appointmentTypeID;
+
+$embedSrc = null;
+if ($hasEmbedStep) {
+  $embedParams = http_build_query([
+    'business_id'         => $businessId,
+    'practitioner_id'     => $practitionerID,
+    'appointment_type_id' => $appointmentTypeID,
+    'embedded'            => 'true',
+  ]);
+  $embedSrc = sprintf('https://%s/bookings?%s', $embedHost, $embedParams);
+}
+
+// ---------- Step Indexing ----------
+// Order: [all template sections] -> [Patient step] -> [optional Cliniko embed step]
+$numSectionSteps   = count($sections);
+$patientStepIndex  = $numSectionSteps;
+$embedStepIndex    = $patientStepIndex + 1;
+$totalSteps        = $numSectionSteps + 1 + ($hasEmbedStep ? 1 : 0);
+$currentStep       = 1; // your JS can update this as the user navigates
+
+?>
 <!-- 🧠 Inject CSS Variables -->
 <style>
   #prepayment-form {
@@ -106,10 +154,7 @@ $css_ver = file_exists($base_path . 'assets/css/multistep-form-style.css') ? fil
     --btn-icon-gap: <?= $icon_spacing ?>;
   }
 
-  /* Optional: a light indent & spacing for the “Other” input */
-  .other-input-wrap {
-    margin: 6px 0 0 28px;
-  }
+  .other-input-wrap { margin: 6px 0 0 28px; }
 </style>
 
 <!-- External Libraries -->
@@ -117,55 +162,39 @@ $css_ver = file_exists($base_path . 'assets/css/multistep-form-style.css') ? fil
 <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 <script src="https://unpkg.com/imask"></script>
 
-<!-- PATCH: absolute, versioned asset URLs (no ../) -->
-<script src="<?= esc_url( $assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '') ) ?>"></script>
-<link rel="stylesheet" href="<?= esc_url( $assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '') ) ?>">
+<!-- Versioned assets -->
+<script src="<?= esc_url($assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '')) ?>"></script>
+<link rel="stylesheet" href="<?= esc_url($assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '')) ?>">
 
 <!-- Multistep Form -->
 <form id="prepayment-form">
   <!-- Progress -->
-<?php
-$totalSteps   = count($sections) + 1;
-$currentStep  = 1; // Replace with your actual current step logic
-$progressType = $settings['progress_type'] ?? 'bar';
-
-// Common wrapper with a modifier class
-?>
-<div id="form-progress-indicator" class="form-progress form-progress--<?= esc_attr($progressType) ?>">
-
-  <?php if ($progressType === 'bar'): ?>
-    <div class="progress-track">
-      <div class="progress-fill" style="width: <?= ($currentStep / $totalSteps) * 100 ?>%;"></div>
-    </div>
-
-  <?php elseif ($progressType === 'dots'): ?>
-    <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
-      <span class="progress-dot <?= $i === $currentStep ? 'is-active' : '' ?>"></span>
-    <?php endfor; ?>
-
-  <?php elseif ($progressType === 'steps'): ?>
-    <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
-      <?php if ($i > 1): ?>
-        <div class="form-progress__divider"></div>
-      <?php endif; ?>
-      <div class="progress-step <?= $i === $currentStep ? 'is-active' : '' ?>">
-        <?= $i ?>
+  <?php $progressType = $settings['progress_type'] ?? 'bar'; ?>
+  <div id="form-progress-indicator" class="form-progress form-progress--<?= esc_attr($progressType) ?>">
+    <?php if ($progressType === 'bar'): ?>
+      <div class="progress-track">
+        <div class="progress-fill" style="width: <?= ($totalSteps > 0 ? ($currentStep / $totalSteps) * 100 : 0) ?>%;"></div>
       </div>
-    <?php endfor; ?>
-
-  <?php elseif ($progressType === 'fraction'): ?>
-    <span class="progress-text"><?= $currentStep ?>/<?= $totalSteps ?></span>
-
-  <?php elseif ($progressType === 'percentage'): ?>
-    <span class="progress-text"><?= round(($currentStep / $totalSteps) * 100) ?>%</span>
-  <?php endif; ?>
-
-</div>
-
+    <?php elseif ($progressType === 'dots'): ?>
+      <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
+        <span class="progress-dot <?= $i === $currentStep ? 'is-active' : '' ?>"></span>
+      <?php endfor; ?>
+    <?php elseif ($progressType === 'steps'): ?>
+      <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
+        <?php if ($i > 1): ?><div class="form-progress__divider"></div><?php endif; ?>
+        <div class="progress-step <?= $i === $currentStep ? 'is-active' : '' ?>"><?= $i ?></div>
+      <?php endfor; ?>
+    <?php elseif ($progressType === 'fraction'): ?>
+      <span class="progress-text"><?= $currentStep ?>/<?= $totalSteps ?></span>
+    <?php elseif ($progressType === 'percentage'): ?>
+      <span class="progress-text"><?= $totalSteps > 0 ? round(($currentStep / $totalSteps) * 100) : 0 ?>%</span>
+    <?php endif; ?>
+  </div>
 
   <div id="cliniko-form-steps">
+    <!-- Template Sections -->
     <?php foreach ($sections as $index => $section): ?>
-      <div class="form-step <?= $index > 0 ? 'is-hidden' : '' ?>" data-step="<?= $index ?>">
+      <div class="form-step <?= $index > 0 ? 'is-hidden' : '' ?>" data-step="<?= (int)$index ?>">
         <h3 class="multi-form-title-color"><?= esc_html($section->name) ?></h3>
         <?php if (!empty($section->description)): ?>
           <p class="multi-form-title-color"><?= wp_kses_post($section->description) ?></p>
@@ -173,10 +202,10 @@ $progressType = $settings['progress_type'] ?? 'bar';
 
         <?php foreach ($section->questions as $question): ?>
           <?php
-            $input_name = esc_attr($question->name);
-            $required = !empty($question->required) ? 'required' : '';
-            $is_required = !empty($question->required);
-            $qid = substr(md5($input_name), 0, 8);
+          $input_name  = esc_attr($question->name);
+          $required    = !empty($question->required) ? 'required' : '';
+          $is_required = !empty($question->required);
+          $qid         = substr(md5($input_name), 0, 8);
           ?>
           <div class="inputGroup">
             <h4 class="question-title">
@@ -185,19 +214,12 @@ $progressType = $settings['progress_type'] ?? 'bar';
 
             <?php switch ($question->type):
               case 'paragraph': ?>
-                <textarea 
-                  rows="6" 
-                  name="<?= $input_name ?>" 
-                  <?= $required ?> 
-                  style="resize: vertical;"
-                ></textarea>
-
+                <textarea rows="6" name="<?= $input_name ?>" <?= $required ?> style="resize: vertical;"></textarea>
                 <?php break;
 
               case 'radiobuttons':
-                foreach ($question->answers as $i => $opt):
-                  $checked = $i === 0 ? 'checked' : '';
-                  ?>
+                 foreach ($question->answers as $i => $opt):
+                  $checked = $i === 0 ? 'checked' : ''; ?>
                   <label>
                     <input type="radio" name="<?= $input_name ?>" value="<?= esc_attr($opt['value']) ?>" <?= $required ?> <?= $checked ?>>
                     <span><?= esc_html($opt['value']) ?></span>
@@ -209,46 +231,30 @@ $progressType = $settings['progress_type'] ?? 'bar';
                 <div class="options-group" <?= $question->required ? "data-required-group='$input_name'" : '' ?>>
                   <?php foreach ($question->answers as $opt): ?>
                     <label>
-                      <input
-                        type="checkbox"
-                        name="<?= $input_name ?>[]"
-                        value="<?= esc_attr($opt['value']) ?>"
-                        <?= $is_required ? 'data-required="true"' : '' ?>
-                      >
+                      <input type="checkbox" name="<?= $input_name ?>[]" value="<?= esc_attr($opt['value']) ?>" <?= $is_required ? 'data-required="true"' : '' ?>>
                       <span><?= esc_html($opt['value']) ?></span>
                     </label>
                   <?php endforeach; ?>
 
                   <?php if (!empty($question->other) && !empty($question->other->enabled)): ?>
                     <?php
-                      $otherCheckboxId = 'other-toggle-' . $qid;
-                      $otherInputWrapId = 'other-input-wrap-' . $qid;
-                      $otherInputName = $input_name . '_other';
+                    $otherCheckboxId = 'other-toggle-' . $qid;
+                    $otherInputWrapId = 'other-input-wrap-' . $qid;
+                    $otherInputName   = $input_name . '_other';
                     ?>
                     <label for="<?= esc_attr($otherCheckboxId) ?>">
-                      <input
-                        id="<?= esc_attr($otherCheckboxId) ?>"
-                        class="other-toggle"
-                        type="checkbox"
-                        name="<?= $input_name ?>[]"
-                        value="__other__"
-                        <?= $is_required ? 'data-required="true"' : '' ?>
-                        aria-controls="<?= esc_attr($otherInputWrapId) ?>"
-                        aria-expanded="false"
+                      <input id="<?= esc_attr($otherCheckboxId) ?>" class="other-toggle" type="checkbox"
+                        name="<?= $input_name ?>[]" value="__other__" <?= $is_required ? 'data-required="true"' : '' ?>
+                        aria-controls="<?= esc_attr($otherInputWrapId) ?>" aria-expanded="false"
                         data-other-target="<?= esc_attr($otherInputWrapId) ?>"
                         data-other-input-name="<?= esc_attr($otherInputName) ?>"
-                        data-question-name="<?= esc_attr($input_name) ?>"
-                      >
+                        data-question-name="<?= esc_attr($input_name) ?>">
                       <span>Other</span>
                     </label>
 
                     <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap">
-                      <input
-                        type="text"
-                        name="<?= esc_attr($otherInputName) ?>"
-                        placeholder="Please specify"
-                        aria-label="Other for <?= esc_attr($input_name) ?>"
-                      >
+                      <input type="text" name="<?= esc_attr($otherInputName) ?>" placeholder="Please specify"
+                        aria-label="Other for <?= esc_attr($input_name) ?>">
                     </div>
                   <?php endif; ?>
                 </div>
@@ -274,75 +280,116 @@ $progressType = $settings['progress_type'] ?? 'bar';
       </div>
     <?php endforeach; ?>
 
-<!-- Patient Step -->
-<div class="form-step is-hidden" data-step="<?= count($sections) ?>">
-  <h3>Patient Details</h3>
-  <div class="patient-grid">
-    <?php
-    $fields = [
-      ['first_name', 'First Name', 'text', 6, true],
-      ['last_name', 'Last Name', 'text', 6, true],
-      ['email', 'Email', 'email', 8, true],
-      ['phone', 'Phone Number', 'text', 4, true],
-      // ➕ NEW FIELDS
-      // Medicare number (10 digits, displayed as 1234 56789 1)
-      // pattern allows optional spaces; we'll also IMask it
-      ['medicare', 'Medicare Number', 'text', 8, true],
-      // Medicare reference (1 digit next to the person’s name on the card)
-      ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
-      ['address_1', 'Address Line 1', 'text', 12, true],
-      ['address_2', 'Address Line 2', 'text', 12, false],
-      ['city', 'City', 'text', 6, true],
-      ['state', 'State', 'text', 2, true],
-      ['post_code', 'Post Code', 'text', 4, true],
-      ['country', 'Country', 'text', 6, true],
-      ['date_of_birth', 'Date of Birth', 'date', 6, true],
+    <!-- Patient Step (always after sections) -->
+    <div class="form-step is-hidden"
+         data-step="<?= (int)$patientStepIndex ?>"
+         <?= $hasEmbedStep ? '' : 'data-is-final="true"' ?>>
+      <h3>Patient Details</h3>
+      <div class="patient-grid">
+        <?php
+        $fields = [
+          ['first_name', 'First Name', 'text', 6, true],
+          ['last_name', 'Last Name', 'text', 6, true],
+          ['email', 'Email', 'email', 8, true],
+          ['phone', 'Phone Number', 'text', 4, true],
+          ['medicare', 'Medicare Number', 'text', 8, true],
+          ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
+          ['address_1', 'Address Line 1', 'text', 12, true],
+          ['address_2', 'Address Line 2', 'text', 12, false],
+          ['city', 'City', 'text', 6, true],
+          ['state', 'State', 'text', 2, true],
+          ['post_code', 'Post Code', 'text', 4, true],
+          ['country', 'Country', 'text', 6, true],
+          ['date_of_birth', 'Date of Birth', 'date', 6, true],
+        ];
 
-    ];
+        foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
+          <div class="col-span-<?= (int)$colSpan ?> field-col">
+            <label class="field-label" for="patient-<?= esc_attr($name) ?>">
+              <?= esc_html($label_text) ?> <?= $required ? '<span class="req">*</span>' : '' ?>
+            </label>
+            <?php
+            $attrs = [
+              'id'             => "patient-$name",
+              'type'           => $type,
+              'name'           => "patient[$name]",
+              'data-required'  => $required ? 'true' : 'false',
+            ];
+            if ($required) $attrs['required'] = true;
 
-    foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
-      <div class="col-span-<?= (int)$colSpan ?> field-col">
-        <label class="field-label" for="patient-<?= esc_attr($name) ?>">
-          <?= esc_html($label_text) ?> <?= $required ? '<span class="req">*</span>' : '' ?>
-        </label>
-        <input
-          id="patient-<?= esc_attr($name) ?>"
-          type="<?= esc_attr($type) ?>"
-          name="patient[<?= esc_attr($name) ?>]"
-          <?= $required ? 'required' : '' ?>
-          data-required="<?= $required ? 'true' : 'false' ?>"
-          <?php if ($name === 'medicare'): ?>
-            inputmode="numeric"
-            maxlength="13" 
-            pattern="\d{4}\s?\d{5}\s?\d"
-            title="Enter 10 digits (e.g. 1234 56789 1)"
-            placeholder="1234 56789 1"
-          <?php elseif ($name === 'medicare_reference_number'): ?>
-            inputmode="numeric"
-            maxlength="1"
-            pattern="\d"
-            title="Enter the 1-digit reference next to your name"
-            placeholder="1"
-          <?php endif; ?>
-        >
+            if ($name === 'medicare') {
+              $attrs += [
+                'inputmode' => 'numeric',
+                'maxlength' => '13',
+                'pattern'   => '\d{4}\s?\d{5}\s?\d',
+                'title'     => 'Enter 10 digits (e.g. 1234 56789 1)',
+                'placeholder'=> '1234 56789 1',
+              ];
+            } elseif ($name === 'medicare_reference_number') {
+              $attrs += [
+                'inputmode'  => 'numeric',
+                'maxlength'  => '1',
+                'pattern'    => '\d',
+                'title'      => 'Enter the 1-digit reference next to your name',
+                'placeholder'=> '1',
+              ];
+            }
+
+            $attrString = '';
+            foreach ($attrs as $k => $v) {
+              $attrString .= ($v === true) ? " $k" : " $k=\"" . esc_attr($v) . "\"";
+            }
+            ?>
+            <input<?= $attrString ?> />
+          </div>
+        <?php endforeach; ?>
       </div>
-    <?php endforeach; ?>
-  </div>
-</div>
+    </div>
 
+    <!-- Cliniko Embed Step (ONLY if configured) – always LAST -->
+    <?php if ($hasEmbedStep && $embedSrc): ?>
+      <div class="form-step is-hidden" data-step="<?= (int)$embedStepIndex ?>" data-is-final="true">
+        <iframe
+          id="cliniko-payment_iframe"
+          src="<?= esc_url($embedSrc) ?>"
+          frameborder="0"
+          scrolling="none"
+          width="100%"
+          height="220"
+          style="pointer-events: auto;"></iframe>
+      </div>
+    <?php endif; ?>
   </div>
 
-  <div class="form-actions">
-    <button type="button" id="step-prev" class="multi-form-button prev-button">
+  <div class="form-actions" style="display:flex; flex-direction:<?= esc_attr($container_flex_direction) ?>; justify-content:<?= esc_attr($justify_content) ?>; gap:12px;">
+    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden" style="flex:var(--btn-flex);">
       <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
       <span>Back</span>
       <?php if ($icon_prev && $icon_position === 'before'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
     </button>
 
-    <button type="button" id="step-next" class="multi-form-button next-button">
+    <button type="button" id="step-next" class="multi-form-button next-button" style="flex:var(--btn-flex);">
       <?php if ($icon_next && $icon_position === 'before'): ?><i class="<?= esc_attr($icon_next) ?>"></i><?php endif; ?>
       <span>Next</span>
       <?php if ($icon_next && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_next) ?>"></i><?php endif; ?>
     </button>
   </div>
 </form>
+
+<script>
+  // Optional: flip "Next" -> "Submit" when reaching the final step
+  (function () {
+    function updateNextButtonLabel() {
+      const steps = document.querySelectorAll('.form-step');
+      const activeIndex = Array.prototype.findIndex.call(steps, s => !s.classList.contains('is-hidden'));
+      const isFinal = activeIndex >= 0 && steps[activeIndex]?.dataset.isFinal === 'true';
+      const nextBtn = document.getElementById('step-next');
+      if (!nextBtn) return;
+      const span = nextBtn.querySelector('span') || nextBtn;
+      span.textContent = isFinal ? 'Submit' : 'Next';
+    }
+
+    document.addEventListener('DOMContentLoaded', updateNextButtonLabel);
+    // Call updateNextButtonLabel() in your own step-change logic as well.
+  })();
+</script>

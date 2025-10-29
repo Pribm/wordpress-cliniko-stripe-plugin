@@ -1,6 +1,7 @@
 <?php
 namespace App\Widgets\ClinikoForm;
 
+use App\Admin\Modules\Credentials;
 use Elementor\Plugin;
 if (!defined('ABSPATH'))
   exit;
@@ -50,7 +51,7 @@ class Widget extends Widget_Base
       [],
       null
     );
-    
+
     $settings = $this->get_settings();
 
     $is_editor = Plugin::$instance->editor->is_edit_mode();
@@ -96,7 +97,15 @@ class Widget extends Widget_Base
       []
     );
 
-      if ($settings['enable_payment'] === 'yes') {
+    wp_enqueue_script(
+      'save-on-exit',
+      plugin_dir_url(__FILE__) . 'assets/js/save-on-exit.js',
+      ["jquery"],
+      null,
+      []
+    );
+
+    if ($settings['enable_payment'] === 'yes') {
       wp_enqueue_script(
         'stripe-js',
         'https://js.stripe.com/v3/',
@@ -113,19 +122,7 @@ class Widget extends Widget_Base
         []
       );
 
-      wp_enqueue_script(
-        'save-on-exit',
-        plugin_dir_url(__FILE__) . 'assets/js/save-on-exit.js',
-        ["jquery"],
-        null,
-        [
-          'save_on_exit' => $settings['save_on_exit'] === 'yes',
-        ]
-      );
-
-
-
-      require __DIR__ . '/templates/card_form_real.phtml';
+   
     }
 
 
@@ -177,19 +174,31 @@ class Widget extends Widget_Base
         'is_payment_enabled' => $settings['enable_payment'],
         'module_id' => esc_attr($settings['module_id']),
         'patient_form_template_id' => $form_template_id,
-       // 'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
+        // 'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
         'payment_url' => get_site_url() . '/wp-json/v1/payments/charge',
+        'cliniko_embeded_form_sync_patient_form_url' => get_site_url() . '/wp-json/v1/send-patient-form',
+        'cliniko_embeded_host' => "https://".Credentials::getEmbedHost(),
         'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect']),
         'appearance' => $appearance,
         'logo_url' => $logo_url,
+        'cliniko_embed' => $settings['appointment_source']
       ]
     );
 
+    wp_localize_script("save-on-exit","saveOnExitData",[
+        'save_on_exit' => $settings['save_on_exit'] === 'yes',
+    ] );
+
     require_once __DIR__ . '/templates/cliniko_multistep_form.phtml';
+
+    //FINAL STEP
+    if($settings['appointment_source'] === "cliniko_embed") return;
 
     if ($is_editor) {
       require __DIR__ . '/templates/card_form_mock.phtml';
       return;
+    }else{
+      require __DIR__ . '/templates/card_form_real.phtml';
     }
 
 

@@ -19,6 +19,8 @@
   line-height: 1.5;
 }
 
+.is-hidden { display: none !important; }
+
 /* Typography helpers */
 .multi-form-title-color { color: var(--titles-color); }
 .question-title {

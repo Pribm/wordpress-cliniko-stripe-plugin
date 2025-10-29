@@ -142,7 +142,7 @@ public static function renderPage(): void
         $results = [];
 
         // Test Cliniko
-        $clinikoResponse = wp_remote_get('https://api.au4.cliniko.com/v1/businesses', [
+        $clinikoResponse = wp_remote_get(Credentials::getApiBase() . '/v1/businesses', [
             'headers' => [
                 'Authorization' => 'Basic ' . base64_encode($clinikoKey . ':'),
                 'Accept' => 'application/json',
