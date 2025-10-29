@@ -184,7 +184,7 @@ function register_cliniko_form_controls($widget)
                 'icon'  => 'eicon-form-horizontal',
             ],
         ],
-        'default' => 'cliniko_embed',
+        'default' => 'custom_form',
         'toggle'  => false,
     ]);
 

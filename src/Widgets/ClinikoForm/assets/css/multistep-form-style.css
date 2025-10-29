@@ -390,8 +390,9 @@
   justify-content: var(--actions-justify);
   align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap; /* prevent overflow */
+  flex-wrap: wrap;
 }
+
 
 /* Safety: always stack on tiny screens */
 @media (max-width: 440px) {

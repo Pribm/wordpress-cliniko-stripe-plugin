@@ -1,3 +1,26 @@
+## [1.3.4] - 2025-10-30
+### Added
+- **Smart Form Restore:** pressing “Continue” in the restore banner now **restores all saved inputs, signature data, and jumps directly to the last step** where the user left off.  
+- **Automatic Step Navigation:** introduced step restoration logic compatible with existing multistep navigation (`showStep()` or fallback to manual display).  
+- **`restoreform` CustomEvent:** dispatched after restore, allowing other scripts to hook into post-restore actions (e.g., analytics, UI updates).
+
+### Changed
+- Refactored `applyValues()` to avoid forcibly hiding/showing steps and instead rely on the form’s native navigation logic.  
+- Simplified restore behavior for improved consistency with manual step transitions and navigation button states.
+
+### Fixed
+- Form restore previously filled fields but didn’t navigate to the last saved step — now it restores both data and state seamlessly.  
+- Minor sync issues between restored step index and progress indicator resolved.
+
+### Upgrade Notes
+1. The restore flow will now **auto-jump** to the last saved step on pressing “Continue.”  
+2. Custom step managers can listen to:  
+   ```js
+   document.addEventListener("restoreform", e => {
+     console.log("Restored step:", e.detail.step);
+   });
+
+
 ## [1.3.3] - 2025-10-29
 ### Added
 - Settings: **Cliniko App Name** and **Cliniko Shard (Region)** with sanitization and inline guidance (derive both from your embed URL).

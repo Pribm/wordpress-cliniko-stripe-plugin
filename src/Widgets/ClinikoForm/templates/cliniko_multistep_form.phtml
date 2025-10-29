@@ -89,6 +89,9 @@ $icon_position = $settings['form_button_icon_position'] ?? 'before';
 $icon_spacing  = isset($settings['form_button_icon_spacing']['size']) ? $settings['form_button_icon_spacing']['size'] . 'px' : '8px';
 
 $container_flex_direction = $layout === 'row' ? 'row' : 'column';
+// echo "<pre>";
+// print_r($settings);
+// echo "</pre>";
 $justify_content = match ($alignment) {
   'start' => 'flex-start',
   'center' => 'center',
@@ -361,14 +364,14 @@ $currentStep       = 1; // your JS can update this as the user navigates
     <?php endif; ?>
   </div>
 
-  <div class="form-actions" style="display:flex; flex-direction:<?= esc_attr($container_flex_direction) ?>; justify-content:<?= esc_attr($justify_content) ?>; gap:12px;">
-    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden" style="flex:var(--btn-flex);">
+ <div class="form-actions">
+    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden">
       <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
       <span>Back</span>
       <?php if ($icon_prev && $icon_position === 'before'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
     </button>
 
-    <button type="button" id="step-next" class="multi-form-button next-button" style="flex:var(--btn-flex);">
+    <button type="button" id="step-next" class="multi-form-button next-button ">
       <?php if ($icon_next && $icon_position === 'before'): ?><i class="<?= esc_attr($icon_next) ?>"></i><?php endif; ?>
       <span>Next</span>
       <?php if ($icon_next && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_next) ?>"></i><?php endif; ?>
@@ -376,20 +379,3 @@ $currentStep       = 1; // your JS can update this as the user navigates
   </div>
 </form>
 
-<script>
-  // Optional: flip "Next" -> "Submit" when reaching the final step
-  (function () {
-    function updateNextButtonLabel() {
-      const steps = document.querySelectorAll('.form-step');
-      const activeIndex = Array.prototype.findIndex.call(steps, s => !s.classList.contains('is-hidden'));
-      const isFinal = activeIndex >= 0 && steps[activeIndex]?.dataset.isFinal === 'true';
-      const nextBtn = document.getElementById('step-next');
-      if (!nextBtn) return;
-      const span = nextBtn.querySelector('span') || nextBtn;
-      span.textContent = isFinal ? 'Submit' : 'Next';
-    }
-
-    document.addEventListener('DOMContentLoaded', updateNextButtonLabel);
-    // Call updateNextButtonLabel() in your own step-change logic as well.
-  })();
-</script>
