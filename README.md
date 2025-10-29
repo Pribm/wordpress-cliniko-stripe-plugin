@@ -194,7 +194,7 @@ window.addEventListener('message', (e) => {
 ---
 
 ## 📝 Changelog
-See **[CHANGELOG.md](./CHANGELOG.md)** for full release notes. Latest: **1.3.3**
+See **[CHANGELOG.md](./CHANGELOG.md)** for full release notes. Latest: **1.3.4**
 
 ---
 
