@@ -1,3 +1,46 @@
+## [1.3.3] - 2025-10-29
+### Added
+- Settings: **Cliniko App Name** and **Cliniko Shard (Region)** with sanitization and inline guidance (derive both from your embed URL).
+- Credentials helpers:  
+  `Credentials::getAppName()`, `Credentials::getShard()`, `Credentials::getApiBase()`, `Credentials::getEmbedHost()`.
+- Multistep form logic: when Cliniko embed is configured, **Patient** becomes the **penultimate** step and the **Cliniko iframe** is always the **final** step. If embed isn’t configured, **Patient** is the final step.
+- Frontend: `submitBookingForm(...)` now supports **iframe mode**, switching endpoint and payload automatically.
+- Frontend (iframe mode): **`patient_booked_time`** is now **required** and merged into the `patient` object.
+- Robust `postMessage` listeners for `cliniko-bookings-resize:*` and `cliniko-bookings-page:*` events.
+- Action Scheduler bundled and bootstrapped (with graceful **WP-Cron fallback** when unavailable).
+
+### Changed
+- **Shard-aware Cliniko API**: “Connect to Cliniko” now targets `https://api.<shard>.cliniko.com/v1/...` (removed hardcoded `au4`).
+- Improved admin copy and status messages during the connect flow.
+
+### Fixed
+- Prevented rendering the Cliniko embed step when configuration is incomplete (app name/shard/business/practitioner/appointment type).
+- Extra escaping/sanitization for attributes in the multistep form.
+- More reliable first-step controls after returning from iframe navigation.
+
+### Upgrade Notes
+1. Go to **Settings → API Credentials** and set **Cliniko App Name** (e.g., `lorem-ipsum`) and **Cliniko Shard** (e.g., `au4`). Save.
+2. Click **Connect to Cliniko** to load Businesses (now shard-aware).
+3. In the frontend, when using the iframe confirmation flow, call:
+   - `submitBookingForm(/* token */ null, /* errorEl */ null, /* isClinikoIframe */ true, { patientBookedTime: new Date().toISOString() })`.
+
+---
+
+## [1.3.2] - 2025-10-xx
+- Internal improvements and minor fixes.
+
+---
+
+## [1.3.1] - 2025-10-xx
+- Internal improvements and minor fixes.
+
+---
+
+## [1.3.0] - 2025-10-xx
+- Initial public release of the 1.3 series.
+
+---
+
 ## [1.2.8] - 2025-09-02
 
 ### Added

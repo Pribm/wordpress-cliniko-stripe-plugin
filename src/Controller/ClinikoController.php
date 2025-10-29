@@ -1,374 +1,71 @@
 <?php
 namespace App\Controller;
 
-use App\Client\Cliniko\Client;
-use App\DTO\CreatePatientCaseDTO;
-use App\DTO\CreatePatientDTO;
-use App\DTO\CreatePatientFormDTO;
-use App\Exception\ApiException;
-use App\Model\AppointmentType;
-use App\Model\IndividualAppointment;
-use App\Model\Patient;
-use App\Model\PatientCase;
-use App\Model\PatientForm;
-use App\Model\PatientFormTemplate;
-use App\Service\ClinikoAttachmentService;
-use App\Validator\AppointmentRequestValidator;
-use DateInterval;
-use DateTimeImmutable;
-use DateTimeZone;
+use App\Infra\JobDispatcher;
+use App\Validator\PatientFormValidator;
+
 
 if (!defined('ABSPATH'))
     exit;
 
-use App\Service\ClinikoService;
-use App\Service\StripeService;
+
 use WP_REST_Request;
 use WP_REST_Response;
 
 class ClinikoController
 {
-    protected ClinikoService $clinikoService;
-
-    public function __construct()
+    public function createPatientForm(WP_REST_Request $request): WP_REST_Response
     {
-        $this->clinikoService = new ClinikoService();
-    }
+        $body = json_decode($request->get_body(), true) ?: $request->get_params();
 
-    // public function scheduleAppointment(WP_REST_Request $request): WP_REST_Response
-    // {
-    //     // --- Build payload from request ---
-    //     $payload = [
-    //         'content' => json_decode($request->get_body_params()['content'] ?? '{}', true),
-    //         'patient' => json_decode($request->get_body_params()['patient'] ?? '{}', true),
-    //         'stripeToken' => $request->get_body_params()['stripeToken'] ?? null,
-    //         'moduleId' => $request->get_body_params()['moduleId'] ?? null,
-    //         'patient_form_template_id' => $request->get_body_params()['patient_form_template_id'] ?? null,
-    //     ];
+        // 1️⃣ Validação de payload
+        $errors = PatientFormValidator::validate($body);
+        if (!empty($errors)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Invalid request parameters.',
+                'errors' => $errors,
+            ], 400);
+        }
 
-    //     // --- Validation (using AppointmentRequestValidator) ---
-    //     $errors = AppointmentRequestValidator::validate($payload);
+        // 2️⃣ Extração dos dados principais
+        $templateId = $body['patient_form_template_id'] ?? null;
+        $patient = $body['patient'] ?? [];
+        $content = $body['content'] ?? [];
+        $moduleId = $body['moduleId'] ?? null;
+        $bookedTime = $patient['patient_booked_time'] ?? null;
 
-    //     if (!empty($errors)) {
-    //         return new WP_REST_Response([
-    //             'status' => 'error',
-    //             'message' => 'Some fields are missing or invalid.',
-    //             'errors' => $errors
-    //         ], 422);
-    //     }
+        // 3️⃣ Monta o payload completo (como no Worker)
+        $payload = [
+            'patient' => $patient,
+            'content' => $content,
+            'moduleId' => $moduleId,
+            'patient_form_template_id' => $templateId,
+            'patient_booked_time' => $bookedTime,
+        ];
 
-    //     $client = Client::getInstance();
-    //     $stripeService = new StripeService();
+        // 4️⃣ Armazena o payload no banco
+        $payloadKey = 'cliniko_pf_job_payload_' . uniqid();
+        error_log("[Dispatch] Saving payload $payloadKey...");
+        if (!add_option($payloadKey, $payload, '', false)) {
+            update_option($payloadKey, $payload, false);
+        }
+        error_log("[Dispatch] Added option: " . (get_option($payloadKey) ? 'yes' : 'no'));
+        $jobDispatcher = new JobDispatcher();
+        // 5️⃣ Enfileira o Worker de forma assíncrona
+        $jobDispatcher->enqueue('cliniko_async_create_patient_form', ['payload_key' => $payloadKey], 2);
 
-    //     // LIFO stack of compensations to rollback Cliniko side effects
-    //     $compensations = [];
-
-    //     // Keep references for rollback and response
-    //     $createdAppointment = null;
-    //     $patientCase = null;
-    //     $patient = null;
-    //     $patientForm = null;
-    //     $uploadedAttachmentId = null;
-
-    //     try {
-    //         // 1) Resolve appointment type (no side effects)
-    //         $appointmentType = AppointmentType::find($payload['moduleId'], $client);
-    //         if (!$appointmentType) {
-    //             throw new ApiException("Appointment type not found", ['moduleId' => $payload['moduleId']]);
-    //         }
-
-    //         // Check if payment is required and validate token before charging
-    //         $requiresPayment = $appointmentType->requiresPayment();
-    //         if ($requiresPayment) {
-    //             if (empty($payload['stripeToken']) || !preg_match('/^tok_/', $payload['stripeToken'])) {
-    //                 return new WP_REST_Response([
-    //                     'status' => 'error',
-    //                     'message' => 'Payment is required but token is missing or invalid.',
-    //                     'errors' => [
-    //                         [
-    //                             'field' => 'stripeToken',
-    //                             'label' => 'Payment Token',
-    //                             'code' => 'invalid',
-    //                             'detail' => 'Missing or invalid payment token.'
-    //                         ]
-    //                     ]
-    //                 ], 422);
-    //             }
-    //         }
-
-    //         // 2) Find or create patient
-    //         $dto = new CreatePatientDTO();
-    //         $dto->firstName = $payload['patient']["first_name"] ?? '';
-    //         $dto->lastName = $payload['patient']["last_name"] ?? '';
-    //         $dto->email = $payload['patient']["email"] ?? '';
-    //         $dto->medicare = $payload['patient']['medicare'] ?? "";
-    //         $dto->medicareReferenceNumber = $payload['patient']['medicare_reference_number'] ?? "";
-    //         $dto->address1 = $payload['patient']['address_1'];
-    //         $dto->address2 = $payload['patient']['address_2'];
-    //         $dto->patientPhoneNumbers[0] = [
-    //             "number" =>  $payload['patient']['phone'],
-    //             "phone_type" => "Home"
-    //         ];
-    //         $dto->acceptedPrivacyPolicy = true;
-    //         $dto->city = $payload['patient']['city'];
-    //         $dto->postCode = $payload['patient']['post_code'];
-    //         $dto->dateOfBirth = $payload['patient']['date_of_birth'];
-
-    //         $patient = $this->clinikoService->findOrCreatePatient($dto);
-    //         if (!$patient) {
-    //             throw new ApiException("Unable to find or create patient", ['email' => $dto->email]);
-    //         }
-
-    //         // 3) Get next available time
-    //         $now = new DateTimeImmutable('now', new DateTimeZone('Australia/Sydney'));
-    //         $to = $now->add(new DateInterval('P7D'));
-
-    //         $practitionerId = $appointmentType->getPractitioners()[0]->getId();
-    //         $appointmentTypeId = $appointmentType->getId();
-    //         $businessId = get_option('wp_cliniko_business_id');
-
-    //         $nextAvailableDTO = $this->clinikoService->getNextAvailableTime(
-    //             $businessId,
-    //             $practitionerId,
-    //             $appointmentTypeId,
-    //             $now->format('Y-m-d'),
-    //             $to->format('Y-m-d'),
-    //             $client
-    //         );
-
-    //         if (!$nextAvailableDTO || empty($nextAvailableDTO->appointmentStart)) {
-    //             throw new ApiException("No available appointment time found.");
-    //         }
-
-    //         $startDateTime = new DateTimeImmutable($nextAvailableDTO->appointmentStart);
-    //         $endDateTime = $startDateTime->add(new DateInterval("PT{$appointmentType->getDurationInMinutes()}M"));
-
-    //         // 4) Create patient case
-    //         $createPatientCaseDTO = new CreatePatientCaseDTO();
-    //         $createPatientCaseDTO->name = $appointmentType->getName();
-    //         $createPatientCaseDTO->issueDate = $now->format('Y-m-d');
-    //         $createPatientCaseDTO->patientId = $patient->getId();
-
-    //         $patientCase = PatientCase::create($createPatientCaseDTO, $client);
-    //         if (!$patientCase) {
-    //             throw new ApiException("Failed to create patient case");
-    //         }
-    //         $compensations[] = function () use ($patientCase, $client) {
-    //             try {
-    //                 PatientCase::delete($patientCase->getId(), $client);
-    //             } catch (\Throwable $e) {
-    //             }
-    //         };
-
-    //         // 5) Create appointment
-    //         $createdAppointment = IndividualAppointment::create([
-    //             "appointment_type_id" => $appointmentTypeId,
-    //             "business_id" => $businessId,
-    //             "starts_at" => $startDateTime->format(DATE_ATOM),
-    //             "ends_at" => $endDateTime->format(DATE_ATOM),
-    //             "patient_id" => $patient->getId(),
-    //             "practitioner_id" => $practitionerId,
-    //             "patient_case_id" => $patientCase->getId()
-    //         ], $client);
-
-    //         if (!$createdAppointment) {
-    //             throw new ApiException("Failed to create appointment");
-    //         }
-    //         $compensations[] = function () use ($createdAppointment, $client) {
-    //             try {
-    //                 IndividualAppointment::delete($createdAppointment->getId(), $client);
-    //             } catch (\Throwable $e) {
-    //             }
-    //         };
-
-    //         // 6) Upload signature file (if provided)
-    //         if (!empty($_FILES['signature_file']['tmp_name'])) {
-    //             $signaturePath = $_FILES['signature_file']['tmp_name'];
-    //             $attachmentService = new ClinikoAttachmentService();
-    //             $uploadedAttachmentId = $attachmentService->uploadPatientAttachment(
-    //                 $patient->getId(),
-    //                 $signaturePath,
-    //                 'Patient Signature'
-    //             );
-    //             if ($uploadedAttachmentId) {
-    //                 $compensations[] = function () use ($uploadedAttachmentId, $attachmentService, $client) {
-    //                     try {
-    //                         $attachmentService->deletePatientAttachment($uploadedAttachmentId, $client);
-    //                     } catch (\Throwable $e) {
-    //                     }
-    //                 };
-    //             }
-    //         }
-
-    //         // 7) Create patient form
-    //         $_form = PatientFormTemplate::find($payload["patient_form_template_id"], $client);
-    //         if (!$_form) {
-    //             throw new ApiException("Patient form template not found", ['patient_form_template_id' => $payload["patient_form_template_id"]]);
-    //         }
-
-    //         $appointmentFormatted = $startDateTime->setTimezone(new \DateTimeZone('Australia/Sydney'))
-    //             ->format('F j, Y \a\t g:i A (T)');
-
-    //         $patientFormDTOCreation = new CreatePatientFormDTO();
-    //         $patientFormDTOCreation->completed = true;
-    //         $patientFormDTOCreation->content_sections = $payload['content'];
-    //         $patientFormDTOCreation->business_id = $businessId;
-    //         $patientFormDTOCreation->patient_form_template_id = $payload["patient_form_template_id"];
-    //         $patientFormDTOCreation->patient_id = $patient->getId();
-    //         $patientFormDTOCreation->attendee_id = $patient->getId();
-    //         $patientFormDTOCreation->appointment_id = $createdAppointment->getId();
-    //         $patientFormDTOCreation->email_to_patient_on_completion = true;
-    //         $patientFormDTOCreation->name = sprintf('%s - Appointment on %s', $_form->getName(), $appointmentFormatted);
-
-    //         $patientForm = PatientForm::create($patientFormDTOCreation, $client);
-    //         if (!$patientForm) {
-    //             throw new ApiException("Failed to create patient form");
-    //         }
-    //         $compensations[] = function () use ($patientForm, $client) {
-    //             try {
-    //                 PatientForm::delete($patientForm->getId(), $client);
-    //             } catch (\Throwable $e) {
-    //             }
-    //         };
-
-    //         // 8) Charge payment (last step)
-    //         $paymentIntent = null;
-    //         if ($requiresPayment) {
-    //             unset($payload['patient']['medicare']);
-    //             unset($payload['patient']['medicare_reference_number']);
-
-    //             $paymentIntent = $stripeService->createChargeFromToken(
-    //                 $payload['stripeToken'],
-    //                 $appointmentType->getBillableItemsFinalPrice(),
-    //                 $appointmentType->getName(),
-    //                 $payload['patient'],
-    //                 $patient->getEmail()
-    //             );
-
-    //             if (!$paymentIntent || empty($paymentIntent->id)) {
-    //                 throw new ApiException("Payment failed, rolling back Cliniko operations", ['stripe' => 'charge_failed']);
-    //             }
-    //         }
-
-    //         // --- Success response ---
-    //         return new WP_REST_Response([
-    //             'status' => 'success',
-    //             'appointment' => [
-    //                 'id' => $createdAppointment->getId(),
-    //                 'starts_at' => $createdAppointment->getStartsAt(),
-    //                 'ends_at' => $createdAppointment->getEndsAt(),
-    //                 'telehealth_url' => $createdAppointment->getTelehealthUrl(),
-    //                 'payment_reference' => $paymentIntent->id ?? null,
-    //                 'payment_method' => $paymentIntent->payment_method ?? null,
-    //             ],
-    //             'patient' => [
-    //                 'id' => $patient->getId(),
-    //                 'name' => $patient->getFullName(),
-    //                 'email' => $patient->getEmail(),
-    //             ]
-    //         ], 201);
-
-    //     } catch (ApiException $e) {
-    //         // Rollback any Cliniko side-effects in reverse order
-    //         for ($i = count($compensations) - 1; $i >= 0; $i--) {
-    //             try {
-    //                 ($compensations[$i])();
-    //             } catch (\Throwable $ignored) {
-    //             }
-    //         }
-
-    //         return new WP_REST_Response([
-    //             'status' => 'error',
-    //             'message' => $e->getMessage(),
-    //             'errors' => [
-    //                 [
-    //                     'field' => 'api',
-    //                     'label' => 'API',
-    //                     'code' => 'exception',
-    //                     'detail' => $e->getMessage(),
-    //                 ]
-    //             ],
-    //             'context' => $e->getContext()
-    //         ], 500);
-
-    //     } catch (\Throwable $e) {
-    //         // Rollback any Cliniko side-effects in reverse order
-    //         for ($i = count($compensations) - 1; $i >= 0; $i--) {
-    //             try {
-    //                 ($compensations[$i])();
-    //             } catch (\Throwable $ignored) {
-    //             }
-    //         }
-
-    //         return new WP_REST_Response([
-    //             'status' => 'error',
-    //             'message' => 'Unexpected error occurred.',
-    //             'errors' => [
-    //                 [
-    //                     'field' => 'server',
-    //                     'label' => 'Server',
-    //                     'code' => 'unexpected',
-    //                     'detail' => $e->getMessage(),
-    //                 ]
-    //             ]
-    //         ], 500);
-    //     }
-    // }
-
-public function getPatient(WP_REST_Request $request)
-{
-    $params = $request->get_params();
-
-    $firstName   = sanitize_text_field($params['first_name'] ?? '');
-    $lastName    = sanitize_text_field($params['last_name'] ?? '');
-    $email       = sanitize_email($params['email'] ?? '');
-    $dateOfBirth = sanitize_text_field($params['date_of_birth'] ?? '');
-
-    // ✅ Validate email
-    if (!empty($params['email']) && !is_email($params['email'])) {
+        // 6️⃣ Retorna resposta imediata ao frontend
         return new WP_REST_Response([
-            'success' => false,
-            'message' => 'Invalid email format provided.',
-        ], 400);
+            'success' => true,
+            'message' => 'Patient form creation has been queued.',
+            'queued' => [
+                'payload_key' => $payloadKey,
+                'status' => 'queued',
+            ],
+        ], 202);
     }
-
-    // ✅ Convert date_of_birth to Cliniko format (YYYY-MM-DD)
-    $dobFormatted = '';
-    if ($dateOfBirth && preg_match('/^\d{8}$/', $dateOfBirth)) {
-        $dobFormatted = substr($dateOfBirth, 4, 4) . '-' . substr($dateOfBirth, 2, 2) . '-' . substr($dateOfBirth, 0, 2);
-    }
-
-    // ✅ Build q[] filters
-    $filters = [];
-    if ($firstName)   $filters[] = 'q[]=' . urlencode("first_name:={$firstName}");
-    if ($lastName)    $filters[] = 'q[]=' . urlencode("last_name:={$lastName}");
-    if ($email)       $filters[] = 'q[]=' . urlencode("email:={$email}");
-    if ($dobFormatted)$filters[] = 'q[]=' . urlencode("date_of_birth:={$dobFormatted}");
-
-    $queryString = '';
-    if (!empty($filters)) {
-        $queryString = '?' . implode('&', $filters);
-    }
-
-    // ✅ Run query
-    $client = cliniko_client(true); // your ApiClientInterface
-    $patient = Patient::query($queryString, $client);
-
-    if (!$patient) {
-        return new WP_REST_Response([
-            'success' => false,
-            'message' => 'Patient not found.',
-        ], 404);
-    }
-
-    return new WP_REST_Response([
-        'success' => true,
-        'patient' => $patient->getDTO(),
-    ], 200);
 }
 
 
-
-
-}
 

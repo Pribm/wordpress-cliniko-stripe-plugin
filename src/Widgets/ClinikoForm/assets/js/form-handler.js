@@ -1,3 +1,24 @@
+let isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
+let stripeInitStarted = false;
+let steps = document.querySelectorAll(".form-step");
+let stripeInstance = null;
+let cardElementInstance = null;
+let errorElementInstance = null;
+let nextBtn;
+let prevBtn;
+let isClinikoForm;
+
+document.addEventListener("DOMContentLoaded", () => {
+  isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
+  stripeInitStarted = false;
+  steps = document.querySelectorAll(".form-step");
+  nextBtn = document.getElementById("step-next");
+  prevBtn = document.getElementById("step-prev");
+  isClinikoForm = formHandlerData.cliniko_embed === "cliniko_embed";
+
+  mountForm();
+});
+
 function extractNestedFields(form, parentKey) {
   const formData = new FormData(form);
   const result = {};
@@ -123,6 +144,410 @@ function parseFormToStructuredBody(formEl) {
   return structured;
 }
 
+let embedFormStep = 0;
+
+function listenClinikoEmbed() {
+    if (!isClinikoForm) return;
+
+    const formActionsElement = document.querySelector(".form-actions");
+    const initialFormActionsDisplay = formActionsElement.style.display;
+    
+    function updateFormActionsVisibility() {
+        if (!formActionsElement) return;
+
+        if (embedFormStep === 0) {
+            formActionsElement.style.display = initialFormActionsDisplay;
+        } else {
+            formActionsElement.style.display = "none";
+        }
+    }
+
+    updateFormActionsVisibility();
+
+    window.addEventListener("message", async function (e) {
+        if (e.origin !== formHandlerData.cliniko_embeded_host) return;
+        
+        const prevStep = embedFormStep;
+
+        // --- 1. Resize Handler (Modified to detect return to step 0) ---
+        if (typeof e.data === "string" && e.data.startsWith("cliniko-bookings-resize:")) {
+            const iframe = document.querySelector("#cliniko-payment_iframe");
+            const height = e.data.split(":")[1];
+
+            if (iframe && height != 0) {
+                iframe.style.height = height + "px";
+                iframe.parentElement.style.maxHeight = height + "px";
+            }
+            
+            // CHECK FOR RETURN TO STEP 0 based on height change
+            // This is a heuristic: if the step is > 0 and the height drops significantly 
+            // after navigating back, we assume Step 0. This is risky but may solve the issue.
+            // Based on your log (961 -> 508), a drop below 600px might indicate Step 0.
+            if (embedFormStep > 0 && parseInt(height) < 600) { 
+                embedFormStep = 0; 
+            }
+        }
+        // --- 2. Page/Step Change Handler ---
+        else if (typeof e.data === "string" && e.data.startsWith("cliniko-bookings-page:")) {
+            const pageMessage = e.data;
+
+            if (pageMessage === "cliniko-bookings-page:schedule") {
+                embedFormStep = 1; 
+            } else if (pageMessage === "cliniko-bookings-page:patient") {
+                embedFormStep = 2; 
+            } else if (pageMessage === "cliniko-bookings-page:confirmed") {
+                embedFormStep = 3; 
+            } else {
+                // This is the intended logic for the first step.
+                embedFormStep = 0; 
+            }
+            
+            // --- Confirmed Booking Action (Only runs if confirmed) ---
+            if (embedFormStep === 3) {
+              showPaymentLoader();
+              const iframe = document.querySelector("#cliniko-payment_iframe");
+              if (iframe) iframe.style.display = "none";
+                await submitBookingForm(null, null, true, { patientBookedTime: new Date().toISOString() });
+               
+            }
+        }
+        
+        // --- 3. Visibility Update Check ---
+        if (embedFormStep !== prevStep) {
+            updateFormActionsVisibility();
+        }
+    });
+}
+
+function updateIndicators(index) {
+  const type = formHandlerData.appearance.progress_type;
+
+  if (type === "steps") {
+    document.querySelectorAll(".progress-step").forEach((el, i) => {
+      el.classList.toggle("is-active", i === index);
+    });
+  } else if (type === "dots") {
+    document.querySelectorAll(".progress-dot").forEach((el, i) => {
+      el.classList.toggle("is-active", i === index);
+    });
+  } else if (type === "bar") {
+    const total = steps.length;
+    const fill = document.querySelector(".progress-fill");
+    if (fill) {
+      fill.style.width = ((index + 1) / total) * 100 + "%";
+    }
+  } else if (type === "fraction") {
+    const text = document.querySelector(
+      ".form-progress--fraction .progress-text"
+    );
+    if (text) {
+      text.textContent = index + 1 + "/" + steps.length;
+    }
+  } else if (type === "percentage") {
+    const text = document.querySelector(
+      ".form-progress--percentage .progress-text"
+    );
+    if (text) {
+      text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
+    }
+  }
+}
+
+function isCurrentStepValid() {
+  const currentFields = steps[window.currentStep].querySelectorAll(
+    "[required], [data-required-group]"
+  );
+  let isValid = true;
+
+  for (let field of currentFields) {
+    const parent =
+      field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") ||
+      field.parentElement;
+    const existingError = parent.querySelector(".field-error");
+    if (existingError) existingError.remove();
+
+    // Required checkbox group
+    if (field.hasAttribute("data-required-group")) {
+      const groupName = field.getAttribute("data-required-group");
+      const groupInputs = field.querySelectorAll(
+        `input[name="${groupName}[]"]`
+      );
+      const isChecked = Array.from(groupInputs).some((input) => input.checked);
+      if (!isChecked) {
+        groupInputs.forEach((input) => (input.style.outline = "2px solid red"));
+        isValid = false;
+        if (!existingError) {
+          const msg = document.createElement("div");
+          msg.className = "field-error";
+          msg.textContent = "Please select at least one option.";
+          field.appendChild(msg);
+        }
+      } else {
+        groupInputs.forEach((input) => (input.style.outline = "none"));
+      }
+      continue;
+    }
+
+    // Required radio
+    if (
+      field.type === "radio" &&
+      !document.querySelector(`input[name="${field.name}"]:checked`)
+    ) {
+      field.style.borderColor = "red";
+      isValid = false;
+      if (!existingError) {
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Please select an option.";
+        parent.appendChild(msg);
+      }
+      continue;
+    }
+
+    const value = field.value.trim();
+
+    // Email
+    if (field.type === "email") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Please enter a valid email address.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Phone (AU: 10 digits)
+    if (field.name === "patient[phone]") {
+      const clean = value.replace(/\D/g, "");
+      if (clean.length !== 10) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Phone number must be 10 digits.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Postcode (4 digits)
+    if (field.name === "patient[post_code]") {
+      if (!/^\d{4}$/.test(value)) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Please enter a 4-digit postcode.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Medicare number (10 digits, ignoring spaces)
+    if (field.name === "patient[medicare]") {
+      const clean = value.replace(/\D/g, "");
+      if (clean.length !== 10) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent = "Medicare number must contain exactly 10 digits.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // Medicare reference number (1 digit, 1–9)
+    if (field.name === "patient[medicare_reference_number]") {
+      const clean = value.replace(/\D/g, "");
+      if (!/^[1-9]$/.test(clean)) {
+        field.style.borderColor = "red";
+        isValid = false;
+        const msg = document.createElement("div");
+        msg.className = "field-error";
+        msg.textContent =
+          "Medicare reference number must be a single digit between 1 and 9.";
+        parent.appendChild(msg);
+        continue;
+      }
+      field.style.borderColor = "";
+      continue;
+    }
+
+    // General required
+    if (!value) {
+      field.style.borderColor = "red";
+      isValid = false;
+      const msg = document.createElement("div");
+      msg.className = "field-error";
+      msg.textContent = "This field is required.";
+      parent.appendChild(msg);
+    } else {
+      field.style.borderColor = "";
+    }
+  }
+  return isValid;
+}
+
+function setHidden(el, hidden) {
+  if (!el) return;
+  el.classList.toggle('is-hidden', !!hidden);
+  el.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+}
+
+function showStep(i) {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // show only the current step
+  steps.forEach((step, index) => {
+    setHidden(step, index !== i);
+  });
+
+  // prev button: hidden on first step
+  setHidden(prevBtn, i === 0);
+
+  // next button: hide on last step ONLY when it's a Cliniko form
+  const hideNext = i === steps.length - 1 && isClinikoForm;
+  setHidden(nextBtn, hideNext ? true : false);
+
+  updateIndicators(i);
+}
+
+function updateStepIndicator(index) {
+  const type = formHandlerData.appearance.progress_type;
+
+  if (type === "steps") {
+    document.querySelectorAll(".progress-step").forEach((el, i) => {
+      el.classList.toggle("is-active", i === index);
+    });
+  } else if (type === "dots") {
+    document.querySelectorAll(".progress-dot").forEach((el, i) => {
+      el.classList.toggle("is-active", i === index);
+    });
+  } else if (type === "bar") {
+    const total = steps.length;
+    const fill = document.querySelector(".progress-fill");
+    if (fill) {
+      fill.style.width = ((index + 1) / total) * 100 + "%";
+    }
+  } else if (type === "fraction") {
+    const text = document.querySelector(
+      ".form-progress--fraction .progress-text"
+    );
+    if (text) {
+      text.textContent = index + 1 + "/" + steps.length;
+    }
+  } else if (type === "percentage") {
+    const text = document.querySelector(
+      ".form-progress--percentage .progress-text"
+    );
+    if (text) {
+      text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
+    }
+  }
+}
+
+async function safeInitStripe() {
+  // Already initialized and mounted?
+  if (stripeInstance && cardElementInstance) {
+    return;
+  }
+  const { stripe, cardElement, errorEl } = await initializeStripeElements();
+  stripeInstance = stripe;
+  cardElementInstance = cardElement;
+  errorElementInstance = errorEl;
+  handlePaymentAndFormSubmission(
+    stripeInstance,
+    cardElementInstance,
+    errorElementInstance
+  );
+}
+
+async function handleNextStep() {
+  if (!isCurrentStepValid()) {
+    showToast("Please review the highlighted fields before continuing.");
+    return;
+  }
+
+  // if there is more steps, go ahead
+  if (window.currentStep < steps.length - 1) {
+    updateStepIndicator(window.currentStep + 1);
+
+    // If the step is the last one before the payment, init stripe
+    if (
+      isPaymentEnabled &&
+      window.currentStep === steps.length - 2 &&
+      !stripeInitStarted &&
+      !isClinikoForm
+    ) {
+      stripeInitStarted = true;
+      await safeInitStripe();
+    }
+
+    window.currentStep++;
+    showStep(window.currentStep);
+    return;
+  }
+
+  // 3️⃣ Último passo → delega para handleFinalStep()
+  await handleFinalStep();
+}
+
+async function handleFinalStep() {
+  // Se o passo atual não é válido, aborta
+  if (!isCurrentStepValid()) {
+    showToast("Please review the highlighted fields before continuing.");
+    return;
+  }
+
+  // Caso Cliniko Embed esteja ativo → ignora Stripe
+  if (isClinikoForm) {
+    listenClinikoEmbed();
+    return;
+  }
+
+  // Caso pagamento Stripe esteja habilitado
+  if (isPaymentEnabled) {
+    await showStripePaymentForm();
+    return;
+  }
+
+  // Caso não tenha pagamento algum → apenas submete
+  showPaymentLoader();
+  await submitBookingForm();
+}
+
+async function showStripePaymentForm() {
+  const preForm = document.getElementById("prepayment-form");
+  const paymentForm = document.getElementById("payment_form");
+
+  preForm.style.display = "none";
+  paymentForm.style.display = "flex";
+
+  await safeInitStripe();
+
+  const backBtn = document.getElementById("go-back-button");
+  if (backBtn) {
+    backBtn.addEventListener("click", () => {
+      preForm.style.display = "block";
+      paymentForm.style.display = "none";
+      showStep(window.currentStep);
+    });
+  }
+}
+
 function showToast(message, type = "error") {
   const isSuccess = type === "success";
 
@@ -203,285 +628,24 @@ function bindOtherToggle(form) {
   });
 }
 function mountForm() {
+  window.currentStep = 0;
+   showStep(window.currentStep);
+
+  listenClinikoEmbed();
+
   const form = document.getElementById("prepayment-form");
   bindOtherToggle(form);
   setupSignatureCanvas();
 
-  window.currentStep = 0;
-  let stripeInitStarted = false;
 
-  const steps = document.querySelectorAll(".form-step");
-  const nextBtn = document.getElementById("step-next");
   if (nextBtn) {
     window.nextBtnLabel = nextBtn.innerHTML;
   }
 
-  const prevBtn = document.getElementById("step-prev");
   const nextBtnLabel = nextBtn.innerHTML;
 
-  // Keep Stripe references global to this form instance
-  let stripeInstance = null;
-  let cardElementInstance = null;
-  let errorElementInstance = null;
-
-  async function safeInitStripe() {
-    // Already initialized and mounted?
-    if (stripeInstance && cardElementInstance) {
-      return;
-    }
-    const { stripe, cardElement, errorEl } = await initializeStripeElements();
-    stripeInstance = stripe;
-    cardElementInstance = cardElement;
-    errorElementInstance = errorEl;
-    handlePaymentAndFormSubmission(
-      stripeInstance,
-      cardElementInstance,
-      errorElementInstance
-    );
-  }
-
-  function updateIndicators(index) {
-    const type = formHandlerData.appearance.progress_type;
-
-    if (type === "steps") {
-      document.querySelectorAll(".progress-step").forEach((el, i) => {
-        el.classList.toggle("is-active", i === index);
-      });
-    } else if (type === "dots") {
-      document.querySelectorAll(".progress-dot").forEach((el, i) => {
-        el.classList.toggle("is-active", i === index);
-      });
-    } else if (type === "bar") {
-      const total = steps.length;
-      const fill = document.querySelector(".progress-fill");
-      if (fill) {
-        fill.style.width = ((index + 1) / total) * 100 + "%";
-      }
-    } else if (type === "fraction") {
-      const text = document.querySelector(
-        ".form-progress--fraction .progress-text"
-      );
-      if (text) {
-        text.textContent = index + 1 + "/" + steps.length;
-      }
-    } else if (type === "percentage") {
-      const text = document.querySelector(
-        ".form-progress--percentage .progress-text"
-      );
-      if (text) {
-        text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
-      }
-    }
-  }
-
-  function showStep(i) {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    steps.forEach((step, index) => {
-      step.style.display = index === i ? "block" : "none";
-    });
-    prevBtn.style.display = i === 0 ? "none" : "flex";
-    if (i === steps.length - 1) {
-      nextBtn.textContent = "Submit";
-    }
-    updateIndicators(i);
-  }
-
-  function isCurrentStepValid() {
-    const currentFields = steps[window.currentStep].querySelectorAll(
-      "[required], [data-required-group]"
-    );
-    let isValid = true;
-
-    for (let field of currentFields) {
-      const parent =
-        field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") ||
-        field.parentElement;
-      const existingError = parent.querySelector(".field-error");
-      if (existingError) existingError.remove();
-
-      // Required checkbox group
-      if (field.hasAttribute("data-required-group")) {
-        const groupName = field.getAttribute("data-required-group");
-        const groupInputs = field.querySelectorAll(
-          `input[name="${groupName}[]"]`
-        );
-        const isChecked = Array.from(groupInputs).some(
-          (input) => input.checked
-        );
-        if (!isChecked) {
-          groupInputs.forEach(
-            (input) => (input.style.outline = "2px solid red")
-          );
-          isValid = false;
-          if (!existingError) {
-            const msg = document.createElement("div");
-            msg.className = "field-error";
-            msg.textContent = "Please select at least one option.";
-            field.appendChild(msg);
-          }
-        } else {
-          groupInputs.forEach((input) => (input.style.outline = "none"));
-        }
-        continue;
-      }
-
-      // Required radio
-      if (
-        field.type === "radio" &&
-        !document.querySelector(`input[name="${field.name}"]:checked`)
-      ) {
-        field.style.borderColor = "red";
-        isValid = false;
-        if (!existingError) {
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Please select an option.";
-          parent.appendChild(msg);
-        }
-        continue;
-      }
-
-      const value = field.value.trim();
-
-      // Email
-      if (field.type === "email") {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(value)) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Please enter a valid email address.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
-      }
-
-      // Phone (AU: 10 digits)
-      if (field.name === "patient[phone]") {
-        const clean = value.replace(/\D/g, "");
-        if (clean.length !== 10) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Phone number must be 10 digits.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
-      }
-
-      // Postcode (4 digits)
-      if (field.name === "patient[post_code]") {
-        if (!/^\d{4}$/.test(value)) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Please enter a 4-digit postcode.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
-      }
-
-      // Medicare number (10 digits, ignoring spaces)
-      if (field.name === "patient[medicare]") {
-        const clean = value.replace(/\D/g, "");
-        if (clean.length !== 10) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent = "Medicare number must contain exactly 10 digits.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
-      }
-
-      // Medicare reference number (1 digit, 1–9)
-      if (field.name === "patient[medicare_reference_number]") {
-        const clean = value.replace(/\D/g, "");
-        if (!/^[1-9]$/.test(clean)) {
-          field.style.borderColor = "red";
-          isValid = false;
-          const msg = document.createElement("div");
-          msg.className = "field-error";
-          msg.textContent =
-            "Medicare reference number must be a single digit between 1 and 9.";
-          parent.appendChild(msg);
-          continue;
-        }
-        field.style.borderColor = "";
-        continue;
-      }
-
-      // General required
-      if (!value) {
-        field.style.borderColor = "red";
-        isValid = false;
-        const msg = document.createElement("div");
-        msg.className = "field-error";
-        msg.textContent = "This field is required.";
-        parent.appendChild(msg);
-      } else {
-        field.style.borderColor = "";
-      }
-    }
-    return isValid;
-  }
-
   nextBtn.addEventListener("click", async () => {
-    const isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
-
-    if (window.currentStep < steps.length - 1) {
-      if (!isCurrentStepValid()) {
-        showToast("Please review the highlighted fields before continuing.");
-        return;
-      }
-
-      if (
-        isPaymentEnabled &&
-        window.currentStep === steps.length - 2 &&
-        !stripeInitStarted
-      ) {
-        stripeInitStarted = true;
-        await safeInitStripe();
-      }
-
-      window.currentStep++;
-      showStep(window.currentStep);
-    } else {
-      if (!isCurrentStepValid()) {
-        showToast("Please review the highlighted fields before continuing.");
-        return;
-      }
-
-      if (isPaymentEnabled) {
-        document.getElementById("prepayment-form").style.display = "none";
-        document.getElementById("payment_form").style.display = "flex";
-        await safeInitStripe();
-
-        const backBtn = document.getElementById("go-back-button");
-        if (backBtn) {
-          backBtn.addEventListener("click", () => {
-            document.getElementById("prepayment-form").style.display = "block";
-            document.getElementById("payment_form").style.display = "none";
-            showStep(window.currentStep);
-          });
-        }
-      } else {
-        showPaymentLoader();
-        await submitBookingForm();
-      }
-    }
+    await handleNextStep(steps);
   });
 
   prevBtn.addEventListener("click", () => {
@@ -494,7 +658,7 @@ function mountForm() {
     }
   });
 
-  showStep(window.currentStep);
+ 
 
   function attachValidationListeners() {
     document
@@ -561,21 +725,68 @@ function mountForm() {
   attachValidationListeners();
 }
 
-async function submitBookingForm(stripeToken = null, errorEl = null) {
+// UPDATED: add `isClinikoIframe` arg (default false)
+/**
+ * @param {string|null} stripeToken
+ * @param {HTMLElement|null} errorEl
+ * @param {boolean} isClinikoIframe
+ * @param {{ patientBookedTime?: string|Date }} opts   // <-- extra opts
+ */
+async function submitBookingForm(
+  stripeToken = null,
+  errorEl = null,
+  isClinikoIframe = false,
+  opts = {}
+) {
   const formElement = document.getElementById("prepayment-form");
   const { content, patient } = parseFormToStructuredBody(formElement);
 
-  // Build JSON payload for the new charge route
-  const payload = {
-    content,
-    patient,
-    moduleId: formHandlerData.module_id,
-    patient_form_template_id: formHandlerData.patient_form_template_id,
-    stripeToken,
-  };
+  // --- require patient_booked_time when iframe ---
+  let patientBookedTimeIso = null;
+  if (isClinikoIframe) {
+    const v = opts.patientBookedTime;
+    if (!v) {
+      const msg = "Missing patient_booked_time for Cliniko iframe flow.";
+      if (errorEl) errorEl.textContent = msg;
+      else showToast(msg, "error");
+      return; // hard stop
+    }
+    // accept Date or string; normalize to ISO8601
+    patientBookedTimeIso =
+      v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+    if (Number.isNaN(Date.parse(patientBookedTimeIso))) {
+      const msg =
+        "Invalid patient_booked_time. Provide a Date or ISO8601 string.";
+      if (errorEl) errorEl.textContent = msg;
+      else showToast(msg, "error");
+      return;
+    }
+  }
+
+  // --- payload ---
+  const payload = isClinikoIframe
+    ? {
+        content,
+        // spread patient and append patient_booked_time
+        patient: { ...patient, patient_booked_time: patientBookedTimeIso },
+        moduleId: formHandlerData.module_id,
+        patient_form_template_id: formHandlerData.patient_form_template_id,
+        stripeToken,
+      }
+    : {
+        content,
+        patient,
+        moduleId: formHandlerData.module_id,
+        patient_form_template_id: formHandlerData.patient_form_template_id,
+        stripeToken,
+      };
 
   try {
-    const response = await fetch(formHandlerData.payment_url, {
+    const submitURL = isClinikoIframe
+      ? formHandlerData.cliniko_embeded_form_sync_patient_form_url
+      : formHandlerData.payment_url;
+
+    const response = await fetch(submitURL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -583,19 +794,20 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
 
     const result = await response.json();
 
-    if (result.status === "success") {
-      const amount = result.payment?.amount ?? 0;
+    const okForCliniko =
+      isClinikoIframe && response.status === 202 && result?.success;
+    const okForPayment = !isClinikoIframe && result?.status === "success";
 
-      if (amount > 0 && result.payment?.id) {
+    if (okForCliniko || okForPayment) {
+      const amount = result?.payment?.amount ?? 0;
+
+      if (amount > 0 && result?.payment?.id) {
         showToast(
           "Payment received! We’re scheduling your appointment now…",
           "success"
         );
       } else {
-        showToast(
-          "No payment required. We’re scheduling your appointment now…",
-          "success"
-        );
+        showToast("We’re scheduling your appointment now…", "success");
       }
 
       window.formIsSubmitting = true;
@@ -607,18 +819,17 @@ async function submitBookingForm(stripeToken = null, errorEl = null) {
             ? `${patient.first_name} ${patient.last_name}`
             : "",
         email: patient?.email ?? "",
-        ref: result.payment?.id ?? "free", // Stripe charge id or "free"
+        ref: result?.payment?.id ?? "free",
         status: "scheduling_queued",
-        receipt: result.payment?.receipt_url ?? "",
+        receipt: result?.payment?.receipt_url ?? "",
       });
 
       window.location.href = `${redirectBase}?${queryParams.toString()}`;
     } else {
-      // Errors from payment route
       handleChargeErrors(result, errorEl);
     }
   } catch (err) {
-    console.error("Payment request failed", err);
+    console.error("Request failed", err);
     const message = "Unexpected error. Please try again.";
     if (errorEl) errorEl.textContent = message;
     else showToast(message);
@@ -798,5 +1009,3 @@ function setupSignatureCanvas() {
     return touch.clientY - rect.top;
   }
 }
-
-document.addEventListener("DOMContentLoaded", () => mountForm());

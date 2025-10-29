@@ -1,139 +1,233 @@
+# 📦 WordPress Cliniko ⇆ Stripe Integration
 
-# 📦 Cliniko Stripe Integration Plugin for WordPress
-
-This plugin integrates **Cliniko** and **Stripe** into your WordPress site using Elementor widgets and a custom backend connection. Designed for medical practices, it allows patients to book and pay for appointments in a smooth, customizable interface.
+A production-ready WordPress plugin that connects **Cliniko** (appointments, patient forms) with **Stripe** (payments), with **Elementor** widgets for a clean multi-step booking flow. Ideal for telehealth/clinics: collect patient info, take payment, then create/sync bookings.
 
 ---
 
-## 🚀 Features
+## ✨ Highlights
 
-- 🔗 **Cliniko API Integration** – Load real-time appointment types and patient forms.
-- 💳 **Stripe Integration** – Process payments before confirming appointments.
-- 🧱 **Elementor Widgets**:
-  - `Appointment Type Card` – Display single appointment type in card layout
-  - `Cliniko Stripe Booking Form` – Collect patient data, show dynamic form and payment step
-- 🧠 **Smart Flow** – Load patient forms from Cliniko and auto-send form data after payment.
-- ⚡ **API Caching** – Reduce API calls using WordPress transients
-- 🎨 **Customizable** – All widgets are styleable with Elementor controls and dynamic classes
+- **Cliniko API (shard-aware)**: Works with any region (e.g. `au4`, `us1`).
+- **Stripe Payments**: Pre-pay or pay-to-confirm with Stripe Elements.
+- **Elementor Widgets**:
+  - `Cliniko: Appointment Type Card`
+  - `Cliniko: Stripe Booking Form`
+- **Smart Flow**:
+  - If Cliniko Embed is configured → **Patient step** is **penultimate**, **Embed** is **final**.
+  - If not configured → **Patient** is the final step.
+- **PostMessage Handlers**: Responds to `cliniko-bookings-resize:*` and `cliniko-bookings-page:*`.
+- **Action Scheduler**: Async job queue (falls back to WP-Cron if unavailable).
+- **Hardened**: Extra escaping/sanitization for rendered attributes.
 
 ---
 
 ## 🧰 Requirements
 
-- WordPress >= 5.9
-- PHP >= 7.4
-- Elementor >= 3.10
-- Valid API keys for:
-  - [Cliniko](https://api.cliniko.com/v1)
-  - [Stripe](https://dashboard.stripe.com/apikeys)
+- **WordPress** ≥ 5.9
+- **PHP** ≥ 7.4 (tested up to 8.2)
+- **Elementor** ≥ 3.10
+- API keys:
+  - **Cliniko** (from *My Info → API Keys*)
+  - **Stripe** (Publishable + Secret)
 
 ---
 
-## 📦 Installation
+## 🚀 Installation
 
-1. Upload the plugin folder to `/wp-content/plugins/` or install via zip.
-2. Activate it via WordPress admin.
-3. Go to **Settings > Cliniko Stripe Integration**.
-4. Fill in:
+1. Upload to `/wp-content/plugins/` (or install as ZIP).
+2. Activate in **Plugins**.
+3. Go to **Settings → Cliniko Stripe Integration** and fill:
    - **Cliniko API Key**
+   - **Cliniko App Name** (e.g. `lorem-ipsum`)
+   - **Cliniko Shard** (e.g. `au4`)
    - **Stripe Publishable Key**
    - **Stripe Secret Key**
-   - **Business ID (Cliniko)** – used to load resources like appointment types and practitioners
+4. Click **Connect to Cliniko** to fetch **Businesses**, then select **Practitioner** and **Appointment Type**.
+
+> 🧭 **Where do I find App Name + Shard?**  
+> From your Cliniko embed URL, e.g.  
+> `https://lorem-ipsum.au4.cliniko.com/bookings?...`  
+> App Name = `lorem-ipsum` • Shard = `au4`.
 
 ---
 
 ## 🧩 Elementor Widgets
 
-### 1. `Cliniko: Appointment Type Card`
+### 1) Cliniko: Appointment Type Card
+A stylable card for a single appointment type (name, description, price, CTA).
 
-Displays a single appointment type with name, description, price, and a CTA button.
+**Controls**
+- Select Appointment Type
+- Icon / color
+- Price label + position
+- Button text/link/icon
+- Custom classes (e.g. Tailwind)
 
-**Key Controls:**
-- Select appointment type
-- Set icon and icon color
-- Price label and position (top-left, top-right, etc.)
-- Button text, link, and icon
-- Custom class support (e.g., for Tailwind or hover transitions)
+**Optional hover helper**
+```css
+.button-hover-slide {
+  background: linear-gradient(to left, var(--e-global-color-primary) 50%, var(--e-global-color-secondary) 50%);
+  background-size: 200% 100%;
+  background-position: right;
+  transition: background-position 0.4s ease;
+  color: #fff;
+}
+.button-hover-slide:hover {
+  background-position: left;
+  color: #000;
+}
+```
 
-**Advanced:**
-- Use `button-hover-slide` class for a hover animation:
-  ```css
-  .button-hover-slide {
-    background: linear-gradient(to left, var(--e-global-color-primary) 50%, var(--e-global-color-secondary) 50%);
-    background-size: 200% 100%;
-    background-position: right;
-    transition: background-position 0.4s ease;
-    color: white;
-  }
-  .button-hover-slide:hover {
-    background-position: left;
-    color: black;
-  }
+### 2) Cliniko: Stripe Booking Form
+A multi-step flow that can include:
+1. Pre-form (optional)
+2. Patient Form (Cliniko template)
+3. Stripe payment
+4. (Optional) Cliniko Embed as the final step
+
+**Controls**
+- Appointment Type / Practitioner
+- Toggle multi-step
+- Map basic identity fields
+- Enable/disable patient fields
+- Enable **Cliniko Embed** (iframe)
+
+**What happens behind the scenes**
+- Loads **Patient Form Template** from Cliniko
+- Uses **Stripe Elements** to securely capture payment
+- Submits patient + booking + notes to Cliniko
+- In **Embed mode**, listens for `cliniko-bookings-page:*` and `cliniko-bookings-resize:*` events and requires a `patient_booked_time` to sync
+
+---
+
+## 🔌 Endpoints & Payloads (Frontend → WP)
+
+The booking submitter builds a JSON payload like:
+
+```json
+{
+  "content": { "sections": [/* Cliniko-like structured Q&A */] },
+  "patient": {
+    "first_name": "Paulo",
+    "last_name": "Monteiro",
+    "email": "monteiro.paulovinicius@gmail.com",
+    "mobile_number": "0405637928"
+  },
+  "moduleId": "1747505259153991532",
+  "patient_form_template_id": "1739522739649127472",
+  "stripeToken": null
+}
+```
+
+**Embed mode (Cliniko iframe)**: one extra requirement
+
+- You **must** include a `patient_booked_time` (ISO string) and it will be merged into `patient` by the controller:
+  ```js
+  submitBookingForm(null, null, /* isClinikoIframe */ true, {
+    patientBookedTime: new Date().toISOString()
+  });
   ```
 
----
-
-### 2. `Cliniko: Stripe Booking Form`
-
-Creates a full booking workflow:
-1. Pre-form (optional)
-2. Cliniko dynamic patient form (from template)
-3. Stripe payment form
-4. Auto-creation of appointment in Cliniko after payment
-
-**Key Controls:**
-- Select Appointment Type
-- Select Practitioner
-- Map input fields for name, email, phone (optional)
-- Toggle multi-step form
-- Enable or disable patient data fields
-
-**Behind the scenes:**
-- Patient form templates are fetched from Cliniko
-- Payment is securely handled with Stripe Elements
-- After payment, patient + appointment + notes are created in Cliniko via API
+The controller validates via `PatientFormValidator`, persists a job payload, and enqueues the async worker using **Action Scheduler** (group: `wp-cliniko`). If Action Scheduler is missing, it falls back to **WP‑Cron**.
 
 ---
 
-## 🔐 How to Connect Cliniko and Stripe
+## 🧱 Action Scheduler (Queue)
 
-### Cliniko:
-1. Log in to [Cliniko](https://www.cliniko.com/)
-2. Go to **My Info > API Keys**
-3. Generate a key and copy it.
-4. Paste it in **Settings > Cliniko Stripe Integration > Cliniko API Key**
+This plugin prefers **Action Scheduler**. If available, we enqueue with:
+```php
+as_schedule_single_action($when, 'cliniko_async_create_patient_form', [['payload_key' => $key]], 'wp-cliniko');
+```
+If not present, we fallback to:
+```php
+wp_schedule_single_event($when, 'cliniko_async_create_patient_form', [['payload_key' => $key]]);
+```
 
-> This key allows the plugin to fetch appointment types, practitioners, and patient forms, and create patients/appointments.
-
----
-
-### Stripe:
-1. Log in to [Stripe Dashboard](https://dashboard.stripe.com/apikeys)
-2. Copy your **Publishable** and **Secret** keys
-3. Paste them into the plugin settings
-
-> The plugin uses Stripe Elements to securely process credit cards before submitting booking data to Cliniko.
+**Troubleshooting**
+- Make sure Action Scheduler is bundled/loaded before enqueues (e.g., `includes/action-scheduler/action-scheduler.php`).
+- Check the **Scheduled Actions** admin page (if you use the separate plugin) or WP-Cron health.
+- Confirm your hooks are registered early enough.
 
 ---
 
-## 🛠 Developer Notes
+## 📨 PostMessage Events (Cliniko Embed)
+When **Cliniko Embed** is enabled, we listen for:
+- `cliniko-bookings-resize:<height>` → used to size the iframe wrapper
+- `cliniko-bookings-page:<name>` → e.g., `schedule`, `patient`, `confirmed`
 
-- Namespace: `App\`
-- Widget Classes:
+**Example**
+```js
+window.addEventListener('message', (e) => {
+  if (e.origin !== 'https://<app>.<shard>.cliniko.com') return;
+  if (typeof e.data !== 'string') return;
+
+  if (e.data.startsWith('cliniko-bookings-resize:')) {
+    const height = Number(e.data.split(':')[1]);
+    iframe.style.height = height + 'px';
+  }
+
+  if (e.data.startsWith('cliniko-bookings-page:')) {
+    // update internal step state, toggle local buttons, etc.
+  }
+
+  if (e.data === 'cliniko-bookings-page:confirmed') {
+    // hide iframe, call submitBookingForm(..., true, { patientBookedTime: ... })
+  }
+});
+```
+
+---
+
+## 🔐 Security Notes
+- Store API keys in WordPress options with proper capability checks.
+- Escape all attributes and HTML output from widget controls.
+- Validate all incoming REST payloads via `PatientFormValidator`.
+- Never expose Stripe **Secret** key to the browser — only Publishable key in frontend.
+
+---
+
+## 🧭 Roadmap
+- Webhook-based reconciliation (where possible)
+- More robust i18n and date/time handling
+- Per-appointment custom notes/metadata mapper
+- CLI commands for queue replays and health checks
+
+---
+
+## 📝 Changelog
+See **[CHANGELOG.md](./CHANGELOG.md)** for full release notes. Latest: **1.3.3**
+
+---
+
+## 📜 License
+MIT
+
+---
+
+## 🤝 Contributing
+PRs are welcome! Please:
+- Open an issue first for major changes
+- Keep code formatted and typed (where applicable)
+- Add context to commits and test changes in WP/Elementor
+
+---
+
+## 🧪 Dev Quick Ref
+
+**Namespace**
+```
+App\
+```
+
+**Key Classes**
+- Widgets
   - `App\Widgets\AppointmentTypeCard\Widget`
   - `App\Widgets\ClinikoStripeWidget`
-- Controls are defined in PHP and rendered using `.phtml` templates
-- API access via `src/Client/Cliniko/Client.php` and `Stripe\Client`
-- Payment endpoint: `wp-easyscripts-payment-api.php`
+- Clients
+  - `App\Client\Cliniko\Client`
+  - `Stripe\Client`
+- Infra
+  - `App\Infra\JobDispatcher` (Action Scheduler → WP-Cron fallback)
 
----
-
-## 📃 License
-
-This plugin is open-source and licensed under the MIT License.
-
----
-
-## 🙋‍♂️ Contributing
-
-Fork the repo and send PRs, or open issues with feature requests or bug reports.
+**Build/Debug**
+- Enable `WP_DEBUG` and `WP_DEBUG_LOG`
+- Xdebug (VSCode) recommended for step debugging

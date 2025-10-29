@@ -1,4 +1,7 @@
 (function() {
+
+  if(!saveOnExitData.save_on_exit) return
+
   // ===== Config =====
   const FORM_ROOT_SEL = "#cliniko-form-steps";
   const PREV_BTN_SEL  = "#step-prev";
@@ -64,7 +67,7 @@
         prev.setAttribute("aria-hidden", idx === 0 ? "true" : "false");
       }
 
-      if (next) {
+      if (next && !isClinikoForm) {
         if (idx === total - 1) {
           next.textContent = "Submit";
         } else {

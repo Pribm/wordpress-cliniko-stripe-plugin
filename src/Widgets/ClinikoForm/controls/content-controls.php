@@ -10,10 +10,14 @@ use Elementor\Repeater;
 
 function register_content_controls($widget)
 {
+
+     // ===============================
+    // FORM CUSTOM
+    // ===============================
     $widget->start_controls_section('section_content', [
-        'label' => 'Payment Form',
+        'label' => 'Custom Appointment Form',
         'tab' => Controls_Manager::TAB_CONTENT,
-        'condition' => ['enable_payment' => 'yes']
+        'condition' => ['appointment_source' => 'custom_form'],
     ]);
 
     // Payment Settings
@@ -85,7 +89,6 @@ function register_content_controls($widget)
     // ===============================
     // Email notifications (new)
     // ===============================
-
     $widget->add_control('send_email_on_success', [
         'label' => 'Send Email on Success',
         'type' => Controls_Manager::SWITCHER,
@@ -99,21 +102,18 @@ function register_content_controls($widget)
 
     $widget->add_control('success_email_template', [
         'label' => 'Success Email Template',
-        'type' => Controls_Manager::TEXTAREA, // Changed from WYSIWYG
-        'rows' => 10, // Adjust height for usability
+        'type' => Controls_Manager::TEXTAREA,
+        'rows' => 10,
         'default' =>
             '<p>Hi {first_name},</p>' .
             '<p>Thanks for your payment of {amount} {currency}. Your appointment is being scheduled.</p>' .
             '<p>Reference: {payment_reference}</p>' .
             '<p>We will send you the appointment details shortly.</p>' .
             '<p>— Support</p>',
-        'description' => 'Enter raw HTML (no &lt;html&gt; or &lt;body&gt; tags). ' .
-            'Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, ' .
-            '{payment_reference}, {appointment_label}. ' .
-            'Inline styles and tables are allowed.',
+        'description' => 'Enter raw HTML. Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, {payment_reference}, {appointment_label}.',
         'condition' => [
-            'enable_payment' => 'yes',
-            'send_email_on_success' => 'yes'
+            'send_email_on_success' => 'yes',
+            'appointment_source' => 'custom_form',
         ],
     ]);
 
@@ -130,21 +130,18 @@ function register_content_controls($widget)
 
     $widget->add_control('failure_email_template', [
         'label' => 'Failure Email Template',
-        'type' => Controls_Manager::TEXTAREA, // Changed from WYSIWYG
-        'rows' => 10, // Adjust height for usability
+        'type' => Controls_Manager::TEXTAREA,
+        'rows' => 10,
         'default' =>
             '<p>Hi {first_name},</p>' .
             '<p>We were unable to schedule your appointment.</p>' .
             '<p>A refund of {amount} {currency} has been initiated.</p>' .
             '<p>Reference: {payment_reference}</p>' .
             '<p>— Support</p>',
-        'description' => 'Enter raw HTML (no &lt;html&gt; or &lt;body&gt; tags). ' .
-            'Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, ' .
-            '{payment_reference}, {appointment_label}. ' .
-            'Inline styles and tables are allowed.',
+        'description' => 'Enter raw HTML. Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, {payment_reference}, {appointment_label}.',
         'condition' => [
-            'enable_payment' => 'yes',
-            'send_email_on_failure' => 'yes'
+            'send_email_on_failure' => 'yes',
+            'appointment_source' => 'custom_form',
         ],
     ]);
 
@@ -170,8 +167,25 @@ function register_cliniko_form_controls($widget)
     $templates = get_cliniko_form_templates();
 
     $widget->start_controls_section('cliniko_form_section', [
-        'label' => 'Cliniko Form Integration',
+        'label' => 'Settings',
         'tab' => Controls_Manager::TAB_CONTENT,
+    ]);
+
+      $widget->add_control('appointment_source', [
+        'label' => 'Appointment Source',
+        'type' => Controls_Manager::CHOOSE,
+        'options' => [
+            'cliniko_embed' => [
+                'title' => 'Cliniko Embed',
+                'icon'  => 'eicon-globe',
+            ],
+            'custom_form' => [
+                'title' => 'Custom Form',
+                'icon'  => 'eicon-form-horizontal',
+            ],
+        ],
+        'default' => 'cliniko_embed',
+        'toggle'  => false,
     ]);
 
     $widget->add_control('cliniko_form_template_id', [
@@ -195,7 +209,7 @@ function register_cliniko_form_controls($widget)
         'type' => Controls_Manager::SELECT,
         'options' => $module_options,
         'default' => '2',
-        'description' => 'Select the appointment type for this payment form'
+        'description' => 'Select the appointment type for this booking iframe',
     ]);
 
     $widget->add_control('enable_payment', [
@@ -205,19 +219,17 @@ function register_cliniko_form_controls($widget)
         'label_off' => 'No',
         'return_value' => 'yes',
         'default' => 'yes',
+             'condition' => ['appointment_source' => 'custom_form'], // só aparece se for custom_form
     ]);
 
-   $widget->add_control(
-    'save_on_exit',
-    [
+    $widget->add_control('save_on_exit', [
         'label'        => __('Save on Exit', 'plugin-name'),
         'type'         => Controls_Manager::SWITCHER,
         'label_on'     => __('Yes', 'plugin-name'),
         'label_off'    => __('No', 'plugin-name'),
         'return_value' => 'yes',
         'default'      => 'no',
-    ]
-);
+    ]);
 
     $widget->end_controls_section();
 }
