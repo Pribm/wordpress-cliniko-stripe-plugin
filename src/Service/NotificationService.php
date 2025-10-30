@@ -1,6 +1,8 @@
 <?php
 namespace App\Service;
 
+use App\Admin\Modules\Credentials;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -155,11 +157,27 @@ class NotificationService
         return $sent;
     }
 
-    /**
-     * Build simple HTML email with two formats (success or error).
+ /**
+     * Build simple HTML email with two formats (success or error),
+     * including dynamic site logo and signature name.
      */
     private function buildGenericTemplate(string $message, string $type): string
     {
+        // Retrieve dynamic name from Cliniko credentials or fallback to site name
+        $site_name = get_bloginfo('name');
+        $app_name = Credentials::getAppName();
+        $brand_name = $site_name ? $site_name : ucfirst($app_name);
+
+        // Get logo from WordPress customizer
+        $logo_id = get_theme_mod('custom_logo');
+        $logo_url = $logo_id ? wp_get_attachment_image_url($logo_id, 'full') : '';
+
+        $logo_html = $logo_url
+            ? "<div style='text-align:center; margin-bottom:24px;'>
+                   <img src='{$logo_url}' alt='{$brand_name} logo' style='max-width:160px; height:auto;'>
+               </div>"
+            : '';
+
         $baseStyles = "
             font-family: Arial, Helvetica, sans-serif;
             font-size: 16px;
@@ -181,7 +199,7 @@ class NotificationService
 
         return "
             <html>
-                <body style='{$baseStyles} background-color: #f9fafb; padding: 40px 0;'>
+                <body style='{$baseStyles} background-color:#f9fafb; padding:40px 0;'>
                     <table width='100%' cellspacing='0' cellpadding='0' style='max-width:600px;margin:auto;background-color:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);'>
                         <tr>
                             <td style='background-color:{$headerColor};color:#fff;padding:20px 24px;font-size:20px;font-weight:bold;text-align:center;'>
@@ -190,8 +208,9 @@ class NotificationService
                         </tr>
                         <tr>
                             <td style='padding:24px;background-color:{$bgColor};'>
+                                {$logo_html}
                                 <p style='margin-top:0;margin-bottom:16px;'>{$message}</p>
-                                <p style='margin-top:24px;font-size:14px;color:#555;'>Thank you,<br><strong>The EasyScripts Team</strong></p>
+                                <p style='margin-top:24px;font-size:14px;color:#555;'>Thank you,<br><strong>{$brand_name} Team</strong></p>
                             </td>
                         </tr>
                     </table>
