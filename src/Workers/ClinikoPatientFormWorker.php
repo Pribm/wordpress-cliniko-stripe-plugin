@@ -9,7 +9,8 @@ use App\Model\PatientFormTemplate;
 use App\DTO\CreatePatientFormDTO;
 use App\Service\NotificationService;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH'))
+    exit;
 
 class ClinikoPatientFormWorker
 {
@@ -59,27 +60,33 @@ class ClinikoPatientFormWorker
             $client = Client::getInstance();
 
             $patientData = $stored['patient'] ?? [];
-            $content     = $stored['content'] ?? [];
-            $moduleId    = $stored['moduleId'] ?? '';
-            $templateId  = $stored['patient_form_template_id'] ?? '';
-            $bookedTime  = $stored['patient_booked_time'] ?? '';
+            $content = $stored['content'] ?? [];
+            $moduleId = $stored['moduleId'] ?? '';
+            $templateId = $stored['patient_form_template_id'] ?? '';
+            $bookedTime = $stored['patient_booked_time'] ?? '';
 
             $firstName = $patientData['first_name'] ?? '';
-            $lastName  = $patientData['last_name'] ?? '';
-            $email     = $patientData['email'] ?? '';
-            $dob       = $patientData['date_of_birth'] ?? '';
+            $lastName = $patientData['last_name'] ?? '';
+            $email = $patientData['email'] ?? '';
+            $dob = $patientData['date_of_birth'] ?? '';
 
             // 1️⃣ Find patient
             $filters = [];
-            if ($firstName) $filters[] = 'q[]=' . urlencode("first_name:={$firstName}");
-            if ($lastName)  $filters[] = 'q[]=' . urlencode("last_name:={$lastName}");
-            if ($email)     $filters[] = 'q[]=' . urlencode("email:={$email}");
-            if ($dob)       $filters[] = 'q[]=' . urlencode("date_of_birth:={$dob}");
+            if ($firstName)
+                $filters[] = 'q[]=' . urlencode("first_name:={$firstName}");
+            if ($lastName)
+                $filters[] = 'q[]=' . urlencode("last_name:={$lastName}");
+            if ($email)
+                $filters[] = 'q[]=' . urlencode("email:={$email}");
+            if ($dob)
+                $filters[] = 'q[]=' . urlencode("date_of_birth:={$dob}");
             $query = $filters ? implode('&', $filters) : '';
 
             $patient = Patient::queryOneByQueryString($query, $client);
             if (!$patient) {
-                throw new \RuntimeException('Patient not found in Cliniko.');
+                throw new \RuntimeException(
+                    'We could not locate your patient record. Please contact our support team so they can correct your details and finalise your form.'
+                );
             }
 
             // 2️⃣ Booking match verification
@@ -87,14 +94,24 @@ class ClinikoPatientFormWorker
                 "?order=desc&sort=created_at&q[]=created_at:<={$bookedTime}",
                 $client
             );
-            if (!$booking || $booking->getPatient()->getId() !== $patient->getId()) {
-                throw new \RuntimeException('Booking does not match patient record.');
+            if (!$booking) {
+                throw new \RuntimeException(
+                    'We could not find your appointment details. Please contact our support team to confirm your booking and have your form completed manually.'
+                );
+            }
+
+            if ($booking->getPatient()->getId() !== $patient->getId()) {
+                throw new \RuntimeException(
+                    'There was an issue linking your form to your appointment. Please contact support so we can manually complete your form or arrange a refund.'
+                );
             }
 
             // 3️⃣ Create PatientForm
             $tpl = PatientFormTemplate::find($templateId, $client);
             if (!$tpl) {
-                throw new \RuntimeException('Patient form template not found.');
+                throw new \RuntimeException(
+                    'The patient form template could not be loaded. Please contact support to have your form processed manually.'
+                );
             }
 
             $dto = new CreatePatientFormDTO();
@@ -109,7 +126,9 @@ class ClinikoPatientFormWorker
 
             $form = PatientForm::create($dto, $client);
             if (!$form) {
-                throw new \RuntimeException('Failed to create PatientForm.');
+                throw new \RuntimeException(
+                    'We experienced a technical issue while processing your form. Please contact support so our team can finalise it or issue a refund.'
+                );
             }
 
             // 4️⃣ Success notification
@@ -121,7 +140,7 @@ class ClinikoPatientFormWorker
                 ],
                 [
                     'first_name' => "{$firstName} {$lastName}",
-                    'email'      => $email,
+                    'email' => $email,
                 ],
                 $form->getId(),
                 null
@@ -139,6 +158,8 @@ class ClinikoPatientFormWorker
             $failKey = 'wp_cliniko_pf_fail_' . md5($payloadKey);
             if (!get_transient($failKey)) {
                 set_transient($failKey, 1, 3600); // 1 hora
+
+                // Original failure notification (admin)
                 $notifier->sendFailure(
                     [
                         'moduleId' => $stored['moduleId'] ?? '',
@@ -146,11 +167,32 @@ class ClinikoPatientFormWorker
                     ],
                     [
                         'first_name' => "{$stored['patient']['first_name']} {$stored['patient']['last_name']}" ?? 'Unknown',
-                        'email'      => $stored['patient']['email'] ?? '',
+                        'email' => $stored['patient']['email'] ?? '',
                     ],
                     'PF-' . ($stored['patient']['first_name'] ?? uniqid()),
                     null
                 );
+
+                // 📨 Patient feedback email — patient must contact support
+                $email = $stored['patient']['email'] ?? '';
+                if ($email) {
+                    $errorMessage = esc_html($e->getMessage());
+                    $humanizedMsg = "
+                        Unfortunately, your patient form could not be completed automatically due to the following reason:
+                        <br><br>
+                        <strong>{$errorMessage}</strong>
+                        <br><br>
+                        Please contact our support team and inform them that your form could not be completed.
+                        You can request manual completion or a refund — the sooner you contact us, the faster we can resolve your case and finalise your enquiry.
+                    ";
+
+                    $notifier->sendGenericEmail(
+                        $email,
+                        'We could not complete your patient form',
+                        $humanizedMsg,
+                        'error'
+                    );
+                }
             }
 
             error_log('[ClinikoPatientFormWorker] ❌ ' . $e->getMessage());
