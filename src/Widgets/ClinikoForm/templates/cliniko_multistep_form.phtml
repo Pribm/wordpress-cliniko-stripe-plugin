@@ -111,7 +111,7 @@ $css_ver   = file_exists($base_path . 'assets/css/multistep-form-style.css') ? f
 
 // ---------- Embed setup (only if configured) ----------
 $useClinikoEmbed = (($settings['appointment_source'] ?? '') === 'cliniko_embed');
-$embedHost       = Credentials::getEmbedHost();                   // e.g., easy-scripts.au4.cliniko.com
+$embedHost       = Credentials::getEmbedHost();                   
 $businessId      = get_option('wp_cliniko_business_id');
 
 // Require all pieces to render the embed step
