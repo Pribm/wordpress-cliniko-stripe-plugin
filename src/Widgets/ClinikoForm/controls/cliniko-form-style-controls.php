@@ -58,6 +58,16 @@ function register_cliniko_form_style_controls($widget)
     ],
   ]);
 
+  $widget->add_control('form_input_border_color', [
+    'label' => 'Input Border',
+    'type' => Controls_Manager::COLOR,
+      'default' => 'var(--e-global-color-primary)',
+    'selectors' => [
+      '{{WRAPPER}} #prepayment-form input,
+       {{WRAPPER}} #prepayment-form textarea' => 'border-color: {{VALUE}};',
+    ],
+  ]);
+
   // Inputs border (color, style, width) — excludes radios/checkboxes
   $widget->add_group_control(
     Group_Control_Border::get_type(),
@@ -81,21 +91,6 @@ function register_cliniko_form_style_controls($widget)
     ],
   ]);
 
-  // One "Accent" color for radios/checkboxes (checked) + buttons (primary)
-  $widget->add_control('accent_color', [
-    'label' => 'Primary Accent',
-    'type' => Controls_Manager::COLOR,
-    'default' => 'var(--e-global-color-primary)',
-    'selectors' => [
-      // Radios/checkboxes when checked
-      '{{WRAPPER}} #prepayment-form input[type="radio"]:checked,
-       {{WRAPPER}} #prepayment-form input[type="checkbox"]:checked' => 'background-color: {{VALUE}}; border-color: {{VALUE}};',
-      // Buttons (see button section for text color)
-      '{{WRAPPER}} #prepayment-form .multi-form-button.next-button' => 'background-color: {{VALUE}};',
-      '{{WRAPPER}} #prepayment-form .multi-form-button.prev-button' => 'border-color: {{VALUE}}; color: {{VALUE}};',
-    ],
-  ]);
-
   $widget->add_control('progress_type', [
   'label'   => 'Progress Bar Type',
   'type'    => Controls_Manager::SELECT,
@@ -109,6 +104,29 @@ function register_cliniko_form_style_controls($widget)
     'percentage' => 'Percentage (30%)',
   ],
 ]);
+
+$widget->add_control('progress_bar_color', [
+  'label' => 'Progress Color',
+  'type' => Controls_Manager::COLOR,
+  'default' => 'var(--e-global-color-primary)',
+  'selectors' => [
+    // ✅ Progress bar fill
+    '{{WRAPPER}} #prepayment-form .form-progress--bar .progress-fill' => 'background-color: {{VALUE}};',
+    // ✅ Dots (active)
+    '{{WRAPPER}} #prepayment-form .form-progress--dots .progress-dot.is-active' => 'background-color: {{VALUE}};',
+    // ✅ Steps (divider active color)
+    '{{WRAPPER}} #prepayment-form .form-progress--steps .form-progress__divider' => 'background-color: {{VALUE}};',
+    // ✅ Fraction + Percentage text
+    '{{WRAPPER}} #prepayment-form .form-progress--fraction .progress-text,
+     {{WRAPPER}} #prepayment-form .form-progress--percentage .progress-text' => 'color: {{VALUE}};',
+    // ✅ Divider accent when using var
+    '{{WRAPPER}} #prepayment-form .form-progress__divider' => '--progress-divider: {{VALUE}};',
+    // ✅ Inputs (radio/checkbox checked)
+    '{{WRAPPER}} #prepayment-form input[type="radio"]:checked,
+     {{WRAPPER}} #prepayment-form input[type="checkbox"]:checked' => 'background-color: {{VALUE}}; border-color: {{VALUE}};',
+  ],
+]);
+
 
   $widget->add_responsive_control('progress_margin', [
   'label' => 'Progress Margin',
@@ -235,9 +253,20 @@ function register_cliniko_form_style_controls($widget)
     'tab' => Controls_Manager::TAB_STYLE,
   ]);
 
+    $widget->add_control('accent_color', [
+    'label' => 'Buttons Background Color',
+    'type' => Controls_Manager::COLOR,
+    'default' => 'var(--e-global-color-primary)',
+    'selectors' => [
+      // Buttons (see button section for text color)
+      '{{WRAPPER}} #prepayment-form .multi-form-button.next-button' => 'background-color: {{VALUE}};',
+      '{{WRAPPER}} #prepayment-form .multi-form-button.prev-button' => 'border-color: {{VALUE}}; color: {{VALUE}};',
+    ],
+  ]);
+
   // Primary button text color (next); prev uses Accent for text/border
   $widget->add_control('form_button_text_color', [
-    'label' => 'Primary Button Text',
+    'label' => 'Buttons Text Color',
     'type' => Controls_Manager::COLOR,
     'default' => '#ffffff',
     'selectors' => [
