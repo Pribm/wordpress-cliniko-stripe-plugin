@@ -7,7 +7,7 @@ function register_details_style_controls($widget) {
   $widget->start_controls_section('details_style_section', [
     'label' => 'Payment Details Style',
     'tab' => Controls_Manager::TAB_STYLE,
-          'condition' => ['enable_payment' => 'yes']
+          'condition' => ['enable_payment' => 'yes', 'appointment_source' => 'custom_form']
   ]);
 
   $widget->add_control('details_background', [

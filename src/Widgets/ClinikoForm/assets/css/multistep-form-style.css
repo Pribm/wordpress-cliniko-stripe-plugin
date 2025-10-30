@@ -305,6 +305,17 @@
   color: var(--btn-bg);
 }
 
+/*-------- Change The colors Of the Progress ------------*/
+.form-progress--bar .progress-fill {
+  background: var(--btn-bg, #5EB192);
+}
+.form-progress--dots .progress-dot.is-active {
+  background: var(--btn-bg, #5EB192);
+}
+.form-progress--fraction .progress-text,
+.form-progress--percentage .progress-text {
+  color: var(--btn-bg, #5EB192);
+}
 
 
 
