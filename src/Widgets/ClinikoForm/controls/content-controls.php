@@ -27,13 +27,6 @@ function register_content_controls($widget)
         'default' => 'Pay Now',
     ]);
 
-    $widget->add_control('onpayment_success_redirect', [
-        'label' => 'Redirect on Success',
-        'type' => Controls_Manager::TEXT,
-        'placeholder' => '/thank-you',
-        'description' => 'Page URL to redirect after successful payment',
-    ]);
-
     $widget->add_control('show_back_button', [
         'label' => 'Show Go Back Button',
         'type' => Controls_Manager::SWITCHER,
@@ -210,6 +203,13 @@ function register_cliniko_form_controls($widget)
         'options' => $module_options,
         'default' => '2',
         'description' => 'Select the appointment type for this booking iframe',
+    ]);
+
+        $widget->add_control('onpayment_success_redirect', [
+        'label' => 'Redirect on Success',
+        'type' => Controls_Manager::TEXT,
+        'placeholder' => '/thank-you',
+        'description' => 'Page URL to redirect after successful payment',
     ]);
 
     $widget->add_control('enable_payment', [
