@@ -7,20 +7,20 @@ Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Description: Integração entre Stripe e Cliniko via WordPress.
 Author: Paulo Monteiro
 Author URI: https://github.com/Pribm
-Version: 1.3.9
+Version: 1.4.0
 GitHub Plugin URI: Pribm/wordpress-cliniko-stripe-plugin
 Primary Branch: main
 Release Asset: true
 */
 defined('ABSPATH') || exit;
-define('WP_CLINIKO_PLUGIN_VERSION', '1.3.9');
+define('WP_CLINIKO_PLUGIN_VERSION', '1.4.0');
 
 use Elementor\Plugin;
 
 
 
-require_once __DIR__ . '/vendor/autoload.php';
 require_once  plugin_dir_path( __FILE__ ) . '/includes/action-scheduler/action-scheduler.php';
+require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/src/Helpers/index.php';
 
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'pagamento_api_add_settings_link');

@@ -87,6 +87,8 @@ class ClinikoPatientFormWorker
                 throw new \RuntimeException(
                     'We could not locate your patient record. Please contact our support team so they can correct your details and finalise your form.'
                 );
+            }else{
+                Patient::update($patient->getId(), $patientData, cliniko_client());
             }
 
             // 2️⃣ Booking match verification
