@@ -146,78 +146,213 @@ function parseFormToStructuredBody(formEl) {
 
 let embedFormStep = 0;
 
+let clinikoEmbedListenerBound = false;
+let formActionsInitialDisplay = "";
+let hasShownClinikoEmailModalForThisPatientStep = false;
+
+
 function listenClinikoEmbed() {
-    if (!isClinikoForm) return;
+  if (!isClinikoForm) return;
+  if (clinikoEmbedListenerBound) return;
+  clinikoEmbedListenerBound = true;
 
-    const formActionsElement = document.querySelector(".form-actions");
-    const initialFormActionsDisplay = formActionsElement.style.display;
-    
-    function updateFormActionsVisibility() {
-        if (!formActionsElement) return;
+  const formActionsElement = document.querySelector(".form-actions");
 
-        if (embedFormStep === 0) {
-            formActionsElement.style.display = initialFormActionsDisplay;
-        } else {
-            formActionsElement.style.display = "none";
-        }
+  function updateFormActionsVisibility() {
+    if (!formActionsElement) return;
+
+    if (embedFormStep === 0) {
+      formActionsElement.style.display = formActionsInitialDisplay || "";
+    } else {
+      formActionsElement.style.display = "none";
+    }
+  }
+
+  updateFormActionsVisibility();
+
+  window.addEventListener("message", async function (e) {
+    if (e.origin !== formHandlerData.cliniko_embeded_host) return;
+
+    const prevStep = embedFormStep;
+
+    // --- 1. Resize Handler ---
+    if (typeof e.data === "string" && e.data.startsWith("cliniko-bookings-resize:")) {
+      const iframe = document.querySelector("#cliniko-payment_iframe");
+      const height = e.data.split(":")[1];
+
+      if (iframe && height != 0) {
+        iframe.style.height = height + "px";
+        iframe.parentElement.style.maxHeight = height + "px";
+      }
+
+      // heuristic: return to step 0
+      if (embedFormStep > 0 && parseInt(height, 10) < 600) {
+        embedFormStep = 0;
+      }
     }
 
-    updateFormActionsVisibility();
+    // --- 2. Page/Step Change Handler ---
+    else if (typeof e.data === "string" && e.data.startsWith("cliniko-bookings-page:")) {
+      const pageMessage = e.data;
 
-    window.addEventListener("message", async function (e) {
-        if (e.origin !== formHandlerData.cliniko_embeded_host) return;
-        
-        const prevStep = embedFormStep;
+      if (pageMessage === "cliniko-bookings-page:schedule") {
+        embedFormStep = 1;
+        hasShownClinikoEmailModalForThisPatientStep = false;
+      } else if (pageMessage === "cliniko-bookings-page:patient") {
+        embedFormStep = 2;
 
-        // --- 1. Resize Handler (Modified to detect return to step 0) ---
-        if (typeof e.data === "string" && e.data.startsWith("cliniko-bookings-resize:")) {
-            const iframe = document.querySelector("#cliniko-payment_iframe");
-            const height = e.data.split(":")[1];
-
-            if (iframe && height != 0) {
-                iframe.style.height = height + "px";
-                iframe.parentElement.style.maxHeight = height + "px";
-            }
-            
-            // CHECK FOR RETURN TO STEP 0 based on height change
-            // This is a heuristic: if the step is > 0 and the height drops significantly 
-            // after navigating back, we assume Step 0. This is risky but may solve the issue.
-            // Based on your log (961 -> 508), a drop below 600px might indicate Step 0.
-            if (embedFormStep > 0 && parseInt(height) < 600) { 
-                embedFormStep = 0; 
-            }
+        // ✅ Open modal ONLY when entering step 2 (not on repeated messages)
+        if (!hasShownClinikoEmailModalForThisPatientStep) {
+          hasShownClinikoEmailModalForThisPatientStep = true;
+          openClinikoEmailConfirmModal();
         }
-        // --- 2. Page/Step Change Handler ---
-        else if (typeof e.data === "string" && e.data.startsWith("cliniko-bookings-page:")) {
-            const pageMessage = e.data;
+      } else if (pageMessage === "cliniko-bookings-page:confirmed") {
+        embedFormStep = 3;
+      } else {
+        embedFormStep = 0;
+        hasShownClinikoEmailModalForThisPatientStep = false;
+      }
 
-            if (pageMessage === "cliniko-bookings-page:schedule") {
-                embedFormStep = 1; 
-            } else if (pageMessage === "cliniko-bookings-page:patient") {
-                embedFormStep = 2; 
-            } else if (pageMessage === "cliniko-bookings-page:confirmed") {
-                embedFormStep = 3; 
-            } else {
-                // This is the intended logic for the first step.
-                embedFormStep = 0; 
-            }
-            
-            // --- Confirmed Booking Action (Only runs if confirmed) ---
-            if (embedFormStep === 3) {
-              showPaymentLoader();
-              const iframe = document.querySelector("#cliniko-payment_iframe");
-              if (iframe) iframe.style.display = "none";
-                await submitBookingForm(null, null, true, { patientBookedTime: new Date().toISOString() });
-               
-            }
-        }
-        
-        // --- 3. Visibility Update Check ---
-        if (embedFormStep !== prevStep) {
-            updateFormActionsVisibility();
-        }
-    });
+      // --- Confirmed Booking Action (Only runs if confirmed) ---
+      if (embedFormStep === 3) {
+        showPaymentLoader();
+        const iframe = document.querySelector("#cliniko-payment_iframe");
+        if (iframe) iframe.style.display = "none";
+
+        await submitBookingForm(null, null, true, {
+          patientBookedTime: new Date().toISOString(),
+        });
+      }
+    }
+
+    // --- 3. Visibility Update Check ---
+    if (embedFormStep !== prevStep) {
+      updateFormActionsVisibility();
+    }
+  });
 }
+
+function getPatientEmailFromForm() {
+  const byId = document.getElementById("patient-email");
+  const byName = document.querySelector('input[name="patient[email]"]');
+  const el = byId || byName;
+  return (el?.value || "").trim();
+}
+
+function ensureClinikoEmailConfirmModal() {
+  const wrap = document.getElementById("es-email-confirm-modal");
+  if (!wrap) return;
+
+  // prevent double-binding
+  if (wrap.dataset.bound === "1") return;
+  wrap.dataset.bound = "1";
+
+  const dialog = wrap.querySelector(".es-email-modal__dialog");
+
+  // close on backdrop
+  wrap.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (t?.getAttribute && t.getAttribute("data-es-close") === "1") {
+      closeClinikoEmailConfirmModal();
+    }
+  });
+
+  // close on ESC
+  document.addEventListener("keydown", (ev) => {
+    const isOpen = !wrap.classList.contains("is-hidden");
+    if (!isOpen) return;
+    if (ev.key === "Escape") closeClinikoEmailConfirmModal();
+  });
+
+  // buttons
+  wrap.querySelector("#es-email-modal-ok")?.addEventListener("click", () => {
+    closeClinikoEmailConfirmModal();
+  });
+
+  wrap.querySelector("#es-email-modal-copy")?.addEventListener("click", async () => {
+    const email = getPatientEmailFromForm();
+    if (!email) {
+      showToast("No email found in the form. Please enter your email first.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(email);
+      showToast("Email copied.", "success");
+    } catch (_) {
+      const tmp = document.createElement("input");
+      tmp.value = email;
+      document.body.appendChild(tmp);
+      tmp.select();
+      document.execCommand("copy");
+      tmp.remove();
+      showToast("Email copied.", "success");
+    }
+  });
+
+  wrap.querySelector("#es-email-modal-edit")?.addEventListener("click", () => {
+    closeClinikoEmailConfirmModal();
+
+    const patientStepIndex = Math.max(0, steps.length - 2);
+    window.currentStep = patientStepIndex;
+    showStep(patientStepIndex);
+
+    const fa = document.querySelector(".form-actions");
+    if (fa) fa.style.display = formActionsInitialDisplay || "";
+
+    setTimeout(() => {
+      const emailInput =
+        document.getElementById("patient-email") ||
+        document.querySelector('input[name="patient[email]"]');
+      emailInput?.focus();
+    }, 50);
+  });
+
+  // optional: focus dialog when opened (if your open function calls this)
+  wrap._esFocusDialog = () => dialog?.focus();
+}
+
+
+function openClinikoEmailConfirmModal() {
+  ensureClinikoEmailConfirmModal();
+  const wrap = document.getElementById("es-email-confirm-modal");
+  if (!wrap) return;
+
+  wrap.classList.remove("is-hidden");
+  wrap.setAttribute("aria-hidden", "false");
+  wrap.removeAttribute("inert");
+
+  // set email text
+  const email = getPatientEmailFromForm() || "—";
+  const el = wrap.querySelector("#es-email-modal-email");
+  if (el) el.textContent = email;
+
+  wrap._esFocusDialog?.();
+}
+
+function closeClinikoEmailConfirmModal() {
+  const wrap = document.getElementById("es-email-confirm-modal");
+  if (!wrap) return;
+
+  wrap.classList.add("is-hidden");
+  wrap.setAttribute("aria-hidden", "true");
+  wrap.setAttribute("inert", "");
+}
+
+
+function closeClinikoEmailConfirmModal() {
+  const modal = document.getElementById("es-email-confirm-modal");
+  if (!modal) return;
+
+  modal.classList.add("is-hidden");
+  modal.setAttribute("aria-hidden", "true");
+
+  const root = document.getElementById("prepayment-form");
+  if (root) root.removeAttribute("inert");
+
+  document.documentElement.style.overflow = "";
+}
+
 
 function updateIndicators(index) {
   const type = formHandlerData.appearance.progress_type;

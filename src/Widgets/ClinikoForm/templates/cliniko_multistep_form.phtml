@@ -89,9 +89,7 @@ $icon_position = $settings['form_button_icon_position'] ?? 'before';
 $icon_spacing  = isset($settings['form_button_icon_spacing']['size']) ? $settings['form_button_icon_spacing']['size'] . 'px' : '8px';
 
 $container_flex_direction = $layout === 'row' ? 'row' : 'column';
-// echo "<pre>";
-// print_r($settings);
-// echo "</pre>";
+
 $justify_content = match ($alignment) {
   'start' => 'flex-start',
   'center' => 'center',
@@ -111,7 +109,7 @@ $css_ver   = file_exists($base_path . 'assets/css/multistep-form-style.css') ? f
 
 // ---------- Embed setup (only if configured) ----------
 $useClinikoEmbed = (($settings['appointment_source'] ?? '') === 'cliniko_embed');
-$embedHost       = Credentials::getEmbedHost();                   
+$embedHost       = Credentials::getEmbedHost();
 $businessId      = get_option('wp_cliniko_business_id');
 
 // Require all pieces to render the embed step
@@ -195,6 +193,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
   </div>
 
   <div id="cliniko-form-steps">
+
     <!-- Template Sections -->
     <?php foreach ($sections as $index => $section): ?>
       <div class="form-step <?= $index > 0 ? 'is-hidden' : '' ?>" data-step="<?= (int)$index ?>">
@@ -221,13 +220,36 @@ $currentStep       = 1; // your JS can update this as the user navigates
                 <?php break;
 
               case 'radiobuttons':
-                 foreach ($question->answers as $i => $opt):
+                foreach ($question->answers as $i => $opt):
                   $checked = $i === 0 ? 'checked' : ''; ?>
                   <label>
                     <input type="radio" name="<?= $input_name ?>" value="<?= esc_attr($opt['value']) ?>" <?= $required ?> <?= $checked ?>>
                     <span><?= esc_html($opt['value']) ?></span>
                   </label>
-                <?php endforeach;
+                  <?php endforeach;
+                  if (!empty($question->other) && !empty($question->other->enabled)): 
+                    $otherCheckboxId = 'other-toggle-' . $qid;
+                    $otherInputWrapId = 'other-input-wrap-' . $qid;
+                    $otherInputName   = $input_name . '_other';
+                    ?>
+                    <label for="<?= esc_attr($otherCheckboxId) ?>">
+                      <input id="<?= esc_attr($otherCheckboxId) ?>" class="other-toggle" type="radio"
+                        name="<?= $input_name ?>"
+                        value="__other__"
+                        <?= $is_required ? 'data-required="true"' : '' ?>
+                        aria-controls="<?= esc_attr($otherInputWrapId) ?>" aria-expanded="false"
+                        data-other-target="<?= esc_attr($otherInputWrapId) ?>"
+                        data-other-input-name="<?= esc_attr($otherInputName) ?>"
+                        data-question-name="<?= esc_attr($input_name) ?>">
+                      <span>Other</span>
+                    </label>
+
+                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap">
+                      <input type="text" name="<?= esc_attr($otherInputName) ?>" placeholder="Please specify"
+                        aria-label="Other for <?= esc_attr($input_name) ?>">
+                    </div>
+                    <?php
+                  endif;
                 break;
 
               case 'checkboxes': ?>
@@ -236,7 +258,9 @@ $currentStep       = 1; // your JS can update this as the user navigates
                     <label>
                       <input type="checkbox" name="<?= $input_name ?>[]" value="<?= esc_attr($opt['value']) ?>" <?= $is_required ? 'data-required="true"' : '' ?>>
                       <span><?= esc_html($opt['value']) ?></span>
+              
                     </label>
+
                   <?php endforeach; ?>
 
                   <?php if (!empty($question->other) && !empty($question->other->enabled)): ?>
@@ -287,24 +311,41 @@ $currentStep       = 1; // your JS can update this as the user navigates
     <div class="form-step is-hidden"
          data-step="<?= (int)$patientStepIndex ?>"
          <?= $hasEmbedStep ? '' : 'data-is-final="true"' ?>>
-      <h3>Patient Details</h3>
+
+      <?php if ($useClinikoEmbed): ?>
+        <h3>Confirm Your Details</h3>
+        <p class="multi-form-title-color" style="margin-top:-6px;">
+          We’ll use your email to match your booking. Please enter your Medicare number to confirm.
+        </p>
+      <?php else: ?>
+        <h3>Patient Details</h3>
+      <?php endif; ?>
+
       <div class="patient-grid">
         <?php
-        $fields = [
-          ['first_name', 'First Name', 'text', 6, true],
-          ['last_name', 'Last Name', 'text', 6, true],
-          ['email', 'Email', 'email', 8, true],
-          ['phone', 'Phone Number', 'text', 4, true],
-          ['medicare', 'Medicare Number', 'text', 8, true],
-          ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
-          ['address_1', 'Address Line 1', 'text', 12, true],
-          ['address_2', 'Address Line 2', 'text', 12, false],
-          ['city', 'City', 'text', 6, true],
-          ['state', 'State', 'text', 2, true],
-          ['post_code', 'Post Code', 'text', 4, true],
-          ['country', 'Country', 'text', 6, true],
-          ['date_of_birth', 'Date of Birth', 'date', 6, true],
-        ];
+        // ✅ If it's Cliniko Embed: only Email + Medicare Number
+        // ✅ Otherwise: keep the full patient details
+        $fields = $useClinikoEmbed
+          ? [
+              ['email', 'Email', 'email', 12, true],
+              ['medicare', 'Medicare Number', 'text', 8, true],
+              ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
+            ]
+          : [
+              ['first_name', 'First Name', 'text', 6, true],
+              ['last_name', 'Last Name', 'text', 6, true],
+              ['email', 'Email', 'email', 8, true],
+              ['phone', 'Phone Number', 'text', 4, true],
+              ['medicare', 'Medicare Number', 'text', 8, true],
+              ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
+              ['address_1', 'Address Line 1', 'text', 12, true],
+              ['address_2', 'Address Line 2', 'text', 12, false],
+              ['city', 'City', 'text', 6, true],
+              ['state', 'State', 'text', 2, true],
+              ['post_code', 'Post Code', 'text', 4, true],
+              ['country', 'Country', 'text', 6, true],
+              ['date_of_birth', 'Date of Birth', 'date', 6, true],
+            ];
 
         foreach ($fields as [$name, $label_text, $type, $colSpan, $required]): ?>
           <div class="col-span-<?= (int)$colSpan ?> field-col">
@@ -313,28 +354,28 @@ $currentStep       = 1; // your JS can update this as the user navigates
             </label>
             <?php
             $attrs = [
-              'id'             => "patient-$name",
-              'type'           => $type,
-              'name'           => "patient[$name]",
-              'data-required'  => $required ? 'true' : 'false',
+              'id'            => "patient-$name",
+              'type'          => $type,
+              'name'          => "patient[$name]",
+              'data-required' => $required ? 'true' : 'false',
             ];
             if ($required) $attrs['required'] = true;
 
             if ($name === 'medicare') {
               $attrs += [
-                'inputmode' => 'numeric',
-                'maxlength' => '13',
-                'pattern'   => '\d{4}\s?\d{5}\s?\d',
-                'title'     => 'Enter 10 digits (e.g. 1234 56789 1)',
-                'placeholder'=> '1234 56789 1',
+                'inputmode'   => 'numeric',
+                'maxlength'   => '13',
+                'pattern'     => '\d{4}\s?\d{5}\s?\d',
+                'title'       => 'Enter 10 digits (e.g. 1234 56789 1)',
+                'placeholder' => '1234 56789 1',
               ];
             } elseif ($name === 'medicare_reference_number') {
               $attrs += [
-                'inputmode'  => 'numeric',
-                'maxlength'  => '1',
-                'pattern'    => '\d',
-                'title'      => 'Enter the 1-digit reference next to your name',
-                'placeholder'=> '1',
+                'inputmode'   => 'numeric',
+                'maxlength'   => '1',
+                'pattern'     => '\d',
+                'title'       => 'Enter the 1-digit reference next to your name',
+                'placeholder' => '1',
               ];
             }
 
@@ -364,7 +405,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
     <?php endif; ?>
   </div>
 
- <div class="form-actions">
+  <div class="form-actions">
     <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden">
       <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
       <span>Back</span>
@@ -379,3 +420,152 @@ $currentStep       = 1; // your JS can update this as the user navigates
   </div>
 </form>
 
+
+<?php
+// Use the same “theme” sources you already have in this template.
+// Prefer the actual Elementor button control you’re using (accent_color) if present.
+$modal_brand  = esc_attr($settings['accent_color'] ?? $btn_bg);
+$modal_font   = esc_attr($settings['font_family'] ?? $font);
+$modal_text   = esc_attr($settings['form_text_color'] ?? $text);
+$modal_title  = esc_attr($settings['titles_color'] ?? $titles_color);
+$modal_border = esc_attr($settings['form_input_border_color'] ?? '#e2e8f0');
+
+// modal radius: follow button radius (or fallback)
+$modal_radius = esc_attr(($settings['form_button_border_radius']['size'] ?? 16) . ($settings['form_button_border_radius']['unit'] ?? 'px'));
+?>
+
+<style id="es-email-confirm-modal-style">
+  /* hidden */
+  #es-email-confirm-modal.is-hidden{ display:none !important; }
+
+  /* theme tokens */
+  #es-email-confirm-modal{
+    --es-modal-font: <?= $modal_font ?>;
+    --es-modal-brand: <?= $modal_brand ?>;
+    --es-modal-text: <?= $modal_text ?>;
+    --es-modal-title: <?= $modal_title ?>;
+    --es-modal-border: <?= $modal_border ?>;
+    --es-modal-radius: <?= $modal_radius ?>;
+  }
+
+  #es-email-confirm-modal{
+    position:fixed; inset:0; z-index:999999;
+    display:flex; align-items:center; justify-content:center;
+    padding:16px;
+    font-family: var(--es-modal-font);
+  }
+  #es-email-confirm-modal .es-email-modal__backdrop{
+    position:absolute; inset:0;
+    background:rgba(2,6,23,.62);
+    backdrop-filter: blur(2px);
+  }
+  #es-email-confirm-modal .es-email-modal__dialog{
+    position:relative;
+    width:min(520px, 100%);
+    background:#fff;
+    border-radius: var(--es-modal-radius);
+    box-shadow:0 18px 60px rgba(0,0,0,.25);
+    padding:18px 18px 16px;
+  }
+  #es-email-confirm-modal .es-email-modal__title{
+    margin:0 0 6px;
+    font-size:18px;
+    font-weight:700;
+    color: var(--es-modal-title);
+  }
+  #es-email-confirm-modal .es-email-modal__text{
+    margin:0 0 12px;
+    font-size:14px;
+    line-height:1.45;
+    color: var(--es-modal-text);
+  }
+  #es-email-confirm-modal .es-email-modal__pill{
+    display:flex; align-items:center; justify-content:space-center;
+    gap:10px;
+    border:1px solid var(--e-global-color-primary);
+    background:#f8fafc;
+    border-radius:12px;
+    padding:10px 12px;
+    margin:10px 0 14px;
+  }
+  #es-email-confirm-modal .es-email-modal__email{
+    font-size:14px;
+    color:#0f172a;
+    font-weight:600;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  #es-email-confirm-modal .es-email-modal__actions{
+    display:flex;
+    gap:10px;
+    justify-content:flex-end;
+    flex-wrap:wrap;
+  }
+  #es-email-confirm-modal .es-email-modal__btn{
+    border:1px solid var(--e-global-color-primary);
+    background:#fff;
+    border-radius:10px;
+    padding:10px 12px;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+  }
+  #es-email-confirm-modal .es-email-modal__btn:hover{
+    box-shadow: 2px 4px 12px 2px rgba(0,0,0,0.23);
+-webkit-box-shadow: 2px 4px 12px 2px rgba(0,0,0,0.23);
+-moz-box-shadow: 2px 4px 12px 2px rgba(0,0,0,0.23);
+   }
+  #es-email-confirm-modal .es-email-modal__btn--primary{
+    border-color: transparent;
+    background: var(--e-global-color-primary);
+    color:#fff;
+  }
+  #es-email-confirm-modal .es-email-modal__btn--primary:hover{ filter:brightness(.97); }
+  #es-email-confirm-modal .es-email-modal__btn--danger{
+    border-color:#fecaca;
+    background:#fff;
+    color:#b91c1c;
+  }
+</style>
+
+
+<div id="es-email-confirm-modal"
+     class="es-email-modal is-hidden"
+     aria-hidden="true"
+     inert>
+  <div class="es-email-modal__backdrop" data-es-close="1"></div>
+
+  <div class="es-email-modal__dialog"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="es-email-modal-title"
+       tabindex="-1">
+
+    <div class="es-email-modal__header">
+      <div>
+        <h3 class="es-email-modal__title" id="es-email-modal-title">Important: use the same email</h3>
+        <p class="es-email-modal__text">
+          We match your booking detais to this form using your email address.
+          Please make sure the email below is <strong>exactly the same</strong> in the next form.
+        </p>
+      </div>
+    </div>
+
+    <div class="es-email-modal__warn" role="note">
+      <strong>If the email doesn’t match,</strong> we may not be able to find your questionnaire automatically, which can delay your request.
+    </div>
+
+    <div class="es-email-modal__pill" aria-live="polite">
+      <div class="es-email-modal__email" id="es-email-modal-email">—</div>
+    </div>
+
+    <div class="es-email-modal__actions">
+      <button type="button" class="es-email-modal__btn es-email-modal__btn--danger" id="es-email-modal-edit">
+        Change email
+      </button>
+      <button type="button" class="es-email-modal__btn es-email-modal__btn--primary" id="es-email-modal-ok">
+        I’ll use this email
+      </button>
+    </div>
+
+  </div>
+</div>

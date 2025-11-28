@@ -3,7 +3,8 @@ namespace App\Validator;
 
 use Respect\Validation\Validator;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH'))
+    exit;
 
 class PatientFormValidator
 {
@@ -15,9 +16,9 @@ class PatientFormValidator
         array $expected = []
     ): array {
         $error = [
-            'field'  => $field,
-            'label'  => $label,
-            'code'   => $code,
+            'field' => $field,
+            'label' => $label,
+            'code' => $code,
             'detail' => $detail,
         ];
 
@@ -40,25 +41,10 @@ class PatientFormValidator
                 'description' => 'Cliniko patient form template ID.',
                 'example' => '1547537768740012345'
             ],
-            'patient.first_name' => [
-                'type' => 'string',
-                'example' => 'John',
-                'description' => 'Patient’s first name.'
-            ],
-            'patient.last_name' => [
-                'type' => 'string',
-                'example' => 'Doe',
-                'description' => 'Patient’s last name.'
-            ],
             'patient.email' => [
                 'type' => 'string',
                 'example' => 'john.doe@example.com',
                 'description' => 'Patient email address.'
-            ],
-            'patient.date_of_birth' => [
-                'type' => 'string',
-                'examples' => ['19900521', '1990-05-21'],
-                'description' => 'Date in format YYYYMMDD or YYYY-MM-DD.'
             ],
             'patient.patient_booked_time' => [
                 'type' => 'string',
@@ -79,7 +65,7 @@ class PatientFormValidator
                 'type' => 'boolean',
                 'example' => true
             ],
-            'content.sections[].questions[].answers[].label' => [
+            'content.sections[].questions[].answers[].value' => [
                 'type' => 'string',
                 'example' => 'Penicillin'
             ],
@@ -132,21 +118,12 @@ class PatientFormValidator
                 'Patient object is required.',
                 [
                     'type' => 'object',
-                    'required' => ['first_name', 'last_name', 'email', 'date_of_birth', 'patient_booked_time'],
+                    'required' => ['email', 'patient_booked_time'],
                 ]
             );
         } else {
             $rules = [
-                'first_name' => ['rule' => Validator::notEmpty()->alpha(' ')->length(2, 100), 'label' => 'First Name'],
-                'last_name'  => ['rule' => Validator::notEmpty()->alpha(' ')->length(2, 100), 'label' => 'Last Name'],
-                'email'      => ['rule' => Validator::notEmpty()->email(), 'label' => 'Email'],
-                'date_of_birth' => [
-                    'rule' => Validator::oneOf(
-                        Validator::regex('/^\d{8}$/'),
-                        Validator::date('Y-m-d')
-                    ),
-                    'label' => 'Date of Birth'
-                ],
+                'email' => ['rule' => Validator::notEmpty()->email(), 'label' => 'Email'],
                 'patient_booked_time' => [
                     'rule' => Validator::regex('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/'),
                     'label' => 'Booked Time'
@@ -154,7 +131,7 @@ class PatientFormValidator
             ];
 
             foreach ($rules as $field => $cfg) {
-                $rule  = $cfg['rule'];
+                $rule = $cfg['rule'];
                 $label = $cfg['label'];
                 if (!isset($patient[$field]) || !$rule->validate($patient[$field])) {
                     $errors[] = self::makeError(
@@ -221,17 +198,52 @@ class PatientFormValidator
                         );
                     }
                     if (in_array($type, ['checkboxes', 'radiobuttons'], true)) {
-                        $selected = array_filter($question['answers'] ?? [], fn($a) => $a['selected'] ?? false);
-                        if (count($selected) === 0) {
+                        $answers = is_array($question['answers'] ?? null) ? $question['answers'] : [];
+                        $selectedAnswers = array_filter($answers, fn($a) => !empty($a['selected']));
+
+                        // ✅ Handle "other" option
+                        $other = $question['other'] ?? null;
+                        $otherEnabled = is_array($other) && !empty($other['enabled']);
+                        $otherSelected = $otherEnabled && !empty($other['selected']);
+                        $otherValue = $otherSelected ? trim((string) ($other['value'] ?? '')) : '';
+
+                        $totalSelected = count($selectedAnswers) + ($otherSelected ? 1 : 0);
+
+                        // Required: at least one selected (answers OR other)
+                        if ($required && $totalSelected === 0) {
                             $errors[] = self::makeError(
                                 "$path.answers",
                                 'Answers',
                                 'required',
                                 'At least one option must be selected.',
-                                $expected['content.sections[].questions[].answers[].label'] ?? []
+                                $expected['content.sections[].questions[].answers[].value'] ?? ($expected['content.sections[].questions[].answers[].value'] ?? [])
+                            );
+                            continue;
+                        }
+
+                        // If other is selected, value must be provided
+                        if ($otherSelected && $otherValue === '') {
+                            $errors[] = self::makeError(
+                                "$path.other.value",
+                                'Other',
+                                'required',
+                                'Please specify the "Other" answer.',
+                                ['type' => 'string', 'example' => 'Your custom answer']
+                            );
+                        }
+
+                        // Radiobuttons: only one selection total (answers + other)
+                        if ($type === 'radiobuttons' && $totalSelected > 1) {
+                            $errors[] = self::makeError(
+                                "$path.answers",
+                                'Answers',
+                                'invalid',
+                                'For radiobuttons, only one option can be selected.',
+                                ['type' => 'string', 'example' => 'Yes']
                             );
                         }
                     }
+
                 }
             }
         }

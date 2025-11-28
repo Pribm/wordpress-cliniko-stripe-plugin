@@ -94,35 +94,7 @@ function register_style_controls($widget) {
     'default' => '',
   ]);
 
-  $widget->add_control('form_button_icon_prev', [
-    'label' => 'Previous Button Icon',
-    'type' => Controls_Manager::ICONS,
-    'fa4compatibility' => 'icon',
-    'default' => [
-      'value' => 'fas fa-arrow-left',
-      'library' => 'fa-solid',
-    ],
-  ]);
 
-  $widget->add_control('form_button_icon_next', [
-    'label' => 'Next Button Icon',
-    'type' => Controls_Manager::ICONS,
-    'fa4compatibility' => 'icon',
-    'default' => [
-      'value' => 'fas fa-arrow-right',
-      'library' => 'fa-solid',
-    ],
-  ]);
-
-   $widget->add_control('form_button_icon_position', [
-    'label' => 'Icon Position',
-    'type' => Controls_Manager::SELECT,
-    'default' => 'before',
-    'options' => [
-      'before' => 'Before Text',
-      'after'  => 'After Text',
-    ],
-  ]);
 
   $widget->end_controls_section();
 }

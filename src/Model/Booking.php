@@ -5,6 +5,7 @@ namespace App\Model;
 use App\Contracts\ApiClientInterface;
 use App\Core\Framework\AbstractModel;
 use App\DTO\AppointmentTypeDTO;
+use App\DTO\AttendeeDTO;
 use App\DTO\PractitionerDTO;
 use App\DTO\PatientDTO;
 
@@ -124,6 +125,63 @@ class Booking extends AbstractModel
         );
 
         return $this->patient;
+    }
+
+    // ✅ add this cache:
+    /** @var Attendee[]|null */
+    protected ?array $attendees = null;
+
+    // ... your existing methods
+
+    /**
+     * Returns the list of attendees linked to this booking.
+     *
+     * @return Attendee[]
+     */
+    public function getAttendees(): array
+    {
+        if ($this->attendees !== null) {
+            return $this->attendees;
+        }
+
+        if (!$this->dto->attendees) {
+            $this->attendees = [];
+            return $this->attendees;
+        }
+
+        $data = $this->safeGetLinkedEntity($this->dto->attendees->url);
+
+        if (empty($data)) {
+            $this->attendees = [];
+            return $this->attendees;
+        }
+
+        // Cliniko list endpoints typically wrap results like: { "attendees": [ ... ], "links": {...}, ... }
+        if (isset($data['attendees']) && is_array($data['attendees'])) {
+            $items = $data['attendees'];
+        }
+        // Fallback if your client returns a raw list
+        elseif (is_array($data) && array_is_list($data)) {
+            $items = $data;
+        } else {
+            $items = [];
+        }
+
+        $this->attendees = array_values(array_filter(array_map(
+            function ($item) {
+                if (!is_array($item) || empty($item)) {
+                    return null;
+                }
+
+                return new Attendee(
+                    AttendeeDTO::fromArray($item),
+                    $this->client
+                );
+            },
+            $items
+        )));
+
+        return $this->attendees;
     }
 
     public function isTelehealth(): bool

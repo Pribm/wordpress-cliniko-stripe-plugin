@@ -4,7 +4,7 @@ namespace App\DTO;
 class AppointmentTypeDTO
 {
     public function __construct(
-        public string $id,
+        public ?string $id = null,
         public string $name,
         public string $description,
         public string $category,
@@ -14,8 +14,8 @@ class AppointmentTypeDTO
         public bool $showInOnlineBookings,
         public bool $onlinePaymentsEnabled,
         public string $onlinePaymentsMode,
-        public string $createdAt,
-        public string $updatedAt,
+        public ?string $createdAt = null,
+        public ?string $updatedAt = null,
         public ?string $archivedAt = null,
         public ?string $depositPrice = null,
         public ?int $maxAttendees = null,
@@ -27,7 +27,7 @@ class AppointmentTypeDTO
     public static function fromArray(array $data): self
     {
         return new self(
-            $data['id'],
+            $data['id'] ?? null,
             $data['name'] ?? '',
             $data['description'] ?? '',
             $data['category'] ?? '',
@@ -37,8 +37,8 @@ class AppointmentTypeDTO
             $data['show_in_online_bookings'] ?? false,
             $data['online_payments_enabled'] ?? false,
             $data['online_payments_mode'] ?? '',
-            $data['created_at'],
-            $data['updated_at'],
+            $data['created_at'] ?? null,
+            $data['updated_at'] ?? null,
             $data['archived_at'] ?? null,
             $data['deposit_price'] ?? null,
             $data['max_attendees'] ?? null,

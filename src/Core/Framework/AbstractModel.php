@@ -76,7 +76,7 @@ abstract class AbstractModel
     // Instance getters
     // -----------------------------
 
-    public function getId(): string
+    public function getId(): ?string
     {
         if (!$this->dto || !property_exists($this->dto, 'id')) {
             throw new \RuntimeException("DTO is null or missing 'id' property in " . static::class);

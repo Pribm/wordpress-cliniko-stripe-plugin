@@ -65,21 +65,12 @@ class ClinikoPatientFormWorker
             $templateId = $stored['patient_form_template_id'] ?? '';
             $bookedTime = $stored['patient_booked_time'] ?? '';
 
-            $firstName = $patientData['first_name'] ?? '';
-            $lastName = $patientData['last_name'] ?? '';
             $email = $patientData['email'] ?? '';
-            $dob = $patientData['date_of_birth'] ?? '';
 
             // 1️⃣ Find patient
             $filters = [];
-            if ($firstName)
-                $filters[] = 'q[]=' . urlencode("first_name:={$firstName}");
-            if ($lastName)
-                $filters[] = 'q[]=' . urlencode("last_name:={$lastName}");
             if ($email)
                 $filters[] = 'q[]=' . urlencode("email:={$email}");
-            if ($dob)
-                $filters[] = 'q[]=' . urlencode("date_of_birth:={$dob}");
             $query = $filters ? implode('&', $filters) : '';
 
             $patient = Patient::queryOneByQueryString($query, $client);
@@ -121,10 +112,12 @@ class ClinikoPatientFormWorker
             $dto->content_sections = $content;
             $dto->business_id = get_option('wp_cliniko_business_id');
             $dto->patient_id = $patient->getId();
-            $dto->attendee_id = $patient->getId();
+           // $dto->attendee_id = $patient->getId();
+           $attendeeId = $booking->getAttendees()[0]->getId();
+           $dto->attendee_id = $booking->getAttendees()[0]->getId();
             $dto->patient_form_template_id = $templateId;
             $dto->email_to_patient_on_completion = true;
-            $dto->name = sprintf('%s - %s (%s)', $tpl->getName(), "{$firstName} {$lastName}", gmdate('Y-m-d H:i'));
+            $dto->name = sprintf('%s - %s (%s)', $tpl->getName(), "{$patient->getFullName()}", gmdate('Y-m-d H:i'));
 
             $form = PatientForm::create($dto, $client);
             if (!$form) {
@@ -141,7 +134,7 @@ class ClinikoPatientFormWorker
                     'currency' => 'AUD',
                 ],
                 [
-                    'first_name' => "{$firstName} {$lastName}",
+                    'first_name' => "{$patient->getFullName()} ",
                     'email' => $email,
                 ],
                 $form->getId(),
