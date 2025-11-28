@@ -13,7 +13,7 @@ function register_cliniko_form_style_controls($widget)
    * SECTION: Container & Inputs (layout + base styles)
    */
   $widget->start_controls_section('form_style_section', [
-    'label' => 'Form Container & Inputs',
+    'label' => 'Form & Inputs',
     'tab' => Controls_Manager::TAB_STYLE,
   ]);
 
@@ -61,10 +61,22 @@ function register_cliniko_form_style_controls($widget)
   $widget->add_control('form_input_border_color', [
     'label' => 'Input Border',
     'type' => Controls_Manager::COLOR,
-      'default' => 'var(--e-global-color-primary)',
+    'default' => 'var(--e-global-color-primary)',
     'selectors' => [
       '{{WRAPPER}} #prepayment-form input,
        {{WRAPPER}} #prepayment-form textarea' => 'border-color: {{VALUE}};',
+
+    ],
+  ]);
+  $widget->add_control('form_input_radio_checkbox_color', [
+    'label' => 'Checkboxes and Radio Colors',
+    'type' => Controls_Manager::COLOR,
+    'default' => 'var(--e-global-color-primary)',
+    'selectors' => [
+                   // ✅ Inputs (radio/checkbox checked)
+      '{{WRAPPER}} #prepayment-form input[type="radio"]:checked,
+     {{WRAPPER}} #prepayment-form input[type="checkbox"]:checked' => 'background-color: {{VALUE}}; border-color: {{VALUE}};',
+
     ],
   ]);
 
@@ -92,51 +104,80 @@ function register_cliniko_form_style_controls($widget)
   ]);
 
   $widget->add_control('progress_type', [
-  'label'   => 'Progress Bar Type',
-  'type'    => Controls_Manager::SELECT,
-  'default' => 'bar',
-  'options' => [
-    'none'       => 'None',
-    'bar'        => 'Linear Bar',
-    'dots'       => 'Dots',
-    'steps'      => 'Steps (labels)',
-    'fraction'   => 'Fraction (3/10)',
-    'percentage' => 'Percentage (30%)',
-  ],
-]);
+    'label' => 'Progress Bar Type',
+    'type' => Controls_Manager::SELECT,
+    'default' => 'bar',
+    'options' => [
+      'none' => 'None',
+      'bar' => 'Linear Bar',
+      'dots' => 'Dots',
+      'steps' => 'Steps (labels)',
+      'fraction' => 'Fraction (3/10)',
+      'percentage' => 'Percentage (30%)',
+    ],
+  ]);
 
-$widget->add_control('progress_bar_color', [
-  'label' => 'Progress Color',
-  'type' => Controls_Manager::COLOR,
-  'default' => 'var(--e-global-color-primary)',
-  'selectors' => [
-    // ✅ Progress bar fill
-    '{{WRAPPER}} #prepayment-form .form-progress--bar .progress-fill' => 'background-color: {{VALUE}};',
-    // ✅ Dots (active)
-    '{{WRAPPER}} #prepayment-form .form-progress--dots .progress-dot.is-active' => 'background-color: {{VALUE}};',
-    // ✅ Steps (divider active color)
-    '{{WRAPPER}} #prepayment-form .form-progress--steps .form-progress__divider' => 'background-color: {{VALUE}};',
-    // ✅ Fraction + Percentage text
-    '{{WRAPPER}} #prepayment-form .form-progress--fraction .progress-text,
+  $widget->add_control('progress_bar_color', [
+    'label' => 'Progress Color',
+    'type' => Controls_Manager::COLOR,
+    'default' => 'var(--e-global-color-primary)',
+    'selectors' => [
+      // ✅ Progress bar fill
+      '{{WRAPPER}} #prepayment-form .form-progress--bar .progress-fill' => 'background-color: {{VALUE}};',
+      // ✅ Dots (active)
+      '{{WRAPPER}} #prepayment-form .form-progress--dots .progress-dot.is-active' => 'background-color: {{VALUE}};',
+      // ✅ Steps (divider active color)
+      '{{WRAPPER}} #prepayment-form .form-progress--steps .form-progress__divider' => 'background-color: {{VALUE}};',
+      // ✅ Fraction + Percentage text
+      '{{WRAPPER}} #prepayment-form .form-progress--fraction .progress-text,
      {{WRAPPER}} #prepayment-form .form-progress--percentage .progress-text' => 'color: {{VALUE}};',
-    // ✅ Divider accent when using var
-    '{{WRAPPER}} #prepayment-form .form-progress__divider' => '--progress-divider: {{VALUE}};',
-    // ✅ Inputs (radio/checkbox checked)
-    '{{WRAPPER}} #prepayment-form input[type="radio"]:checked,
-     {{WRAPPER}} #prepayment-form input[type="checkbox"]:checked' => 'background-color: {{VALUE}}; border-color: {{VALUE}};',
-  ],
-]);
+      // ✅ Divider accent when using var
+      '{{WRAPPER}} #prepayment-form .form-progress__divider' => '--progress-divider: {{VALUE}};',
+    ],
+  ]);
 
 
   $widget->add_responsive_control('progress_margin', [
-  'label' => 'Progress Margin',
-  'type'  => Controls_Manager::DIMENSIONS,
-  'size_units' => ['px', 'em', '%'],
-  'selectors' => [
-    '{{WRAPPER}} .form-progress' =>
-      'margin: {{TOP}}{{UNIT}} {{RIGHT}}{{UNIT}} {{BOTTOM}}{{UNIT}} {{LEFT}}{{UNIT}} !important;',
-  ],
-]);
+    'label' => 'Progress Margin',
+    'type' => Controls_Manager::DIMENSIONS,
+    'size_units' => ['px', 'em', '%'],
+    'selectors' => [
+      '{{WRAPPER}} .form-progress' =>
+        'margin: {{TOP}}{{UNIT}} {{RIGHT}}{{UNIT}} {{BOTTOM}}{{UNIT}} {{LEFT}}{{UNIT}} !important;',
+    ],
+  ]);
+
+  $widget->add_control('form_button_icon_prev', [
+    'label' => 'Previous Button Icon',
+    'type' => Controls_Manager::ICONS,
+    'fa4compatibility' => 'icon',
+    'default' => [
+      'value' => 'fas fa-arrow-left',
+      'library' => 'fa-solid',
+    ],
+  ]);
+
+  $widget->add_control('form_button_icon_next', [
+    'label' => 'Next Button Icon',
+    'type' => Controls_Manager::ICONS,
+    'fa4compatibility' => 'icon',
+    'default' => [
+      'value' => 'fas fa-arrow-right',
+      'library' => 'fa-solid',
+    ],
+  ]);
+
+   $widget->add_control('form_button_icon_position', [
+    'label' => 'Icon Position',
+    'type' => Controls_Manager::SELECT,
+    'default' => 'before',
+    'options' => [
+      'before' => 'Before Text',
+      'after'  => 'After Text',
+    ],
+  ]);
+
+  
 
   $widget->end_controls_section();
 
@@ -245,6 +286,8 @@ $widget->add_control('progress_bar_color', [
     ],
   ]);
 
+
+
   $widget->end_controls_section();
 
   // SECTION: Buttons (style + layout incl. size & row/stack)
@@ -253,7 +296,7 @@ $widget->add_control('progress_bar_color', [
     'tab' => Controls_Manager::TAB_STYLE,
   ]);
 
-    $widget->add_control('accent_color', [
+  $widget->add_control('accent_color', [
     'label' => 'Buttons Background Color',
     'type' => Controls_Manager::COLOR,
     'default' => 'var(--e-global-color-primary)',
