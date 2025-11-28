@@ -1,3 +1,25 @@
+## [1.4.1] - 2025-11-29
+### Added
+- **Attendee Model + DTO:** introduced `Attendee` model and `AttendeeDTO` to represent Cliniko attendees with linked resources (booking, patient, patient case, invoices, patient forms) and standard getters/lazy-loading patterns.
+- **Booking → Attendees Relation:** added `Booking::getAttendees()` to fetch and cache the booking’s linked attendees collection from Cliniko (`booking.attendees.links.self`), returning an array of `Attendee` models.
+
+### Changed
+- **Required answer validation now supports “Other”:** `checkboxes` and `radiobuttons` questions now treat `question.other.selected=true` as a valid selection (in addition to `answers[].selected`).
+
+### Fixed
+- **False “At least one option must be selected” errors:** required questions no longer fail validation when the only selected choice is the “Other” option.
+- **“Other” value enforcement:** when “Other” is selected, the validator now requires a non-empty `other.value` and returns a clear field path error (`content.sections.X.questions.Y.other.value`).
+- **Radiobutton consistency:** `radiobuttons` now enforce a single selection across both standard answers and “Other”.
+
+### Upgrade Notes
+1. If your frontend sends “Other” selections, ensure it includes:
+   - `other.enabled = true`
+   - `other.selected = true`
+   - `other.value = "..."` (non-empty)
+2. (Optional) Align schema docs: your payload uses `answers[].value` (not `answers[].label`). Consider adding `content.sections[].questions[].answers[].value` to `expectedSchema()` for clearer error metadata.
+3. When linking Patient Forms to an attendee, ensure `attendee_id` is the **Attendee ID** (not the Patient ID). This may require creating/fetching the attendee after the booking exists before creating the patient form.
+
+
 ## [1.3.4] - 2025-10-30
 ### Added
 - **Smart Form Restore:** pressing “Continue” in the restore banner now **restores all saved inputs, signature data, and jumps directly to the last step** where the user left off.  
