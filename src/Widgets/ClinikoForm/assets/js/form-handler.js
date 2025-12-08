@@ -19,6 +19,18 @@ document.addEventListener("DOMContentLoaded", () => {
   mountForm();
 });
 
+function getSelectedGateway() {
+  return String(formHandlerData?.custom_form_payment || "stripe").toLowerCase();
+}
+
+function isStripeSelected() {
+  return getSelectedGateway() === "stripe";
+}
+
+function isTyroSelected() {
+  return getSelectedGateway() === "tyrohealth";
+}
+
 function extractNestedFields(form, parentKey) {
   const formData = new FormData(form);
   const result = {};
@@ -616,13 +628,13 @@ async function handleNextStep() {
     return;
   }
 
-  // if there is more steps, go ahead
   if (window.currentStep < steps.length - 1) {
     updateStepIndicator(window.currentStep + 1);
 
-    // If the step is the last one before the payment, init stripe
+    // ✅ Pre-init Stripe ONLY if Stripe is selected
     if (
       isPaymentEnabled &&
+      isStripeSelected() &&
       window.currentStep === steps.length - 2 &&
       !stripeInitStarted &&
       !isClinikoForm
@@ -636,9 +648,22 @@ async function handleNextStep() {
     return;
   }
 
-  // 3️⃣ Último passo → delega para handleFinalStep()
   await handleFinalStep();
 }
+
+async function safeInitStripe() {
+  if (!isStripeSelected()) return;     // ✅ hard stop
+  if (typeof Stripe === "undefined") return;
+  if (typeof initStripe !== "function") return;
+
+  try {
+    await initStripe();
+  } catch (e) {
+    console.error("safeInitStripe error:", e);
+  }
+}
+
+
 
 async function handleFinalStep() {
   // Se o passo atual não é válido, aborta
@@ -671,10 +696,17 @@ async function showStripePaymentForm() {
   preForm.style.display = "none";
   paymentForm.style.display = "flex";
 
-  await safeInitStripe();
+  // ✅ Only init Stripe if Stripe gateway is selected
+  if (isStripeSelected()) {
+    await safeInitStripe();
+  }
+
+  // (Optional) if you ever need to force Tyro handler attach, you can do it here,
+  // but your tyrohealth.js already attaches on DOMContentLoaded + MutationObserver.
 
   const backBtn = document.getElementById("go-back-button");
-  if (backBtn) {
+  if (backBtn && !backBtn.dataset.bound) {
+    backBtn.dataset.bound = "1";
     backBtn.addEventListener("click", () => {
       preForm.style.display = "block";
       paymentForm.style.display = "none";
@@ -682,6 +714,7 @@ async function showStripePaymentForm() {
     });
   }
 }
+
 
 function showToast(message, type = "error") {
   const isSuccess = type === "success";
@@ -860,21 +893,154 @@ function mountForm() {
   attachValidationListeners();
 }
 
-// UPDATED: add `isClinikoIframe` arg (default false)
+// // UPDATED: add `isClinikoIframe` arg (default false)
+// /**
+//  * @param {string|null} stripeToken
+//  * @param {HTMLElement|null} errorEl
+//  * @param {boolean} isClinikoIframe
+//  * @param {{ patientBookedTime?: string|Date }} opts   // <-- extra opts
+//  */
+// async function submitBookingForm(
+//   stripeToken = null,
+//   errorEl = null,
+//   isClinikoIframe = false,
+//   opts = {}
+// ) {
+//   const formElement = document.getElementById("prepayment-form");
+//   const { content, patient } = parseFormToStructuredBody(formElement);
+
+//   // --- require patient_booked_time when iframe ---
+//   let patientBookedTimeIso = null;
+//   if (isClinikoIframe) {
+//     const v = opts.patientBookedTime;
+//     if (!v) {
+//       const msg = "Missing patient_booked_time for Cliniko iframe flow.";
+//       if (errorEl) errorEl.textContent = msg;
+//       else showToast(msg, "error");
+//       return; // hard stop
+//     }
+//     // accept Date or string; normalize to ISO8601
+//     patientBookedTimeIso =
+//       v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+//     if (Number.isNaN(Date.parse(patientBookedTimeIso))) {
+//       const msg =
+//         "Invalid patient_booked_time. Provide a Date or ISO8601 string.";
+//       if (errorEl) errorEl.textContent = msg;
+//       else showToast(msg, "error");
+//       return;
+//     }
+//   }
+
+//   // --- payload ---
+//   const payload = isClinikoIframe
+//     ? {
+//         content,
+//         // spread patient and append patient_booked_time
+//         patient: { ...patient, patient_booked_time: patientBookedTimeIso },
+//         moduleId: formHandlerData.module_id,
+//         patient_form_template_id: formHandlerData.patient_form_template_id,
+//         stripeToken,
+//       }
+//     : {
+//         content,
+//         patient,
+//         moduleId: formHandlerData.module_id,
+//         patient_form_template_id: formHandlerData.patient_form_template_id,
+//         stripeToken,
+//       };
+
+//   try {
+//     const submitURL = isClinikoIframe
+//       ? formHandlerData.cliniko_embeded_form_sync_patient_form_url
+//       : formHandlerData.payment_url;
+
+//     const response = await fetch(submitURL, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify(payload),
+//     });
+
+//     const result = await response.json();
+
+//     const okForCliniko =
+//       isClinikoIframe && response.status === 202 && result?.success;
+//     const okForPayment = !isClinikoIframe && result?.status === "success";
+
+//     if (okForCliniko || okForPayment) {
+//       const amount = result?.payment?.amount ?? 0;
+
+//       if (amount > 0 && result?.payment?.id) {
+//         showToast(
+//           "Payment received! We’re scheduling your appointment now…",
+//           "success"
+//         );
+//       } else {
+//         showToast("We’re scheduling your appointment now…", "success");
+//       }
+
+//       window.formIsSubmitting = true;
+
+//       const redirectBase = formHandlerData.redirect_url;
+//       const queryParams = new URLSearchParams({
+//         patient_name:
+//           patient?.first_name && patient?.last_name
+//             ? `${patient.first_name} ${patient.last_name}`
+//             : "",
+//         email: patient?.email ?? "",
+//         ref: result?.payment?.id ?? "free",
+//         status: "scheduling_queued",
+//         receipt: result?.payment?.receipt_url ?? "",
+//       });
+
+//       window.location.href = `${redirectBase}?${queryParams.toString()}`;
+//     } else {
+//       handleChargeErrors(result, errorEl);
+//     }
+//   } catch (err) {
+//     console.error("Request failed", err);
+//     const message = "Unexpected error. Please try again.";
+//     if (errorEl) errorEl.textContent = message;
+//     else showToast(message);
+//   } finally {
+//     jQuery.LoadingOverlay("hide");
+//   }
+// }
+
 /**
- * @param {string|null} stripeToken
+ * Backwards compatible:
+ * - Stripe calls: submitBookingForm("tok_123", errorEl)
+ * - Tyro calls:   submitBookingForm({ gateway:"tyrohealth", transactionId:"..." , invoiceReference?: "..." }, errorEl)
+ *
+ * @param {string|{gateway:'stripe', token:string}|{gateway:'tyrohealth', transactionId:string, invoiceReference?:string}|null} paymentArg
  * @param {HTMLElement|null} errorEl
  * @param {boolean} isClinikoIframe
- * @param {{ patientBookedTime?: string|Date }} opts   // <-- extra opts
+ * @param {{ patientBookedTime?: string|Date }} opts
  */
 async function submitBookingForm(
-  stripeToken = null,
+  paymentArg = null,
   errorEl = null,
   isClinikoIframe = false,
   opts = {}
 ) {
   const formElement = document.getElementById("prepayment-form");
   const { content, patient } = parseFormToStructuredBody(formElement);
+
+  // ---- normalize payment input (string token OR object) ----
+  const payment = (() => {
+    if (!paymentArg) return { gateway: null };
+
+    if (typeof paymentArg === "string") {
+      // Stripe legacy call
+      return { gateway: "stripe", token: paymentArg };
+    }
+
+    if (typeof paymentArg === "object") {
+      // Expected: {gateway:'tyrohealth', transactionId} OR {gateway:'stripe', token}
+      return paymentArg;
+    }
+
+    return { gateway: null };
+  })();
 
   // --- require patient_booked_time when iframe ---
   let patientBookedTimeIso = null;
@@ -884,11 +1050,12 @@ async function submitBookingForm(
       const msg = "Missing patient_booked_time for Cliniko iframe flow.";
       if (errorEl) errorEl.textContent = msg;
       else showToast(msg, "error");
-      return; // hard stop
+      return;
     }
-    // accept Date or string; normalize to ISO8601
+
     patientBookedTimeIso =
       v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+
     if (Number.isNaN(Date.parse(patientBookedTimeIso))) {
       const msg =
         "Invalid patient_booked_time. Provide a Date or ISO8601 string.";
@@ -898,40 +1065,56 @@ async function submitBookingForm(
     }
   }
 
-  // --- payload ---
-  const payload = isClinikoIframe
-    ? {
-        content,
-        // spread patient and append patient_booked_time
-        patient: { ...patient, patient_booked_time: patientBookedTimeIso },
-        moduleId: formHandlerData.module_id,
-        patient_form_template_id: formHandlerData.patient_form_template_id,
-        stripeToken,
-      }
-    : {
-        content,
-        patient,
-        moduleId: formHandlerData.module_id,
-        patient_form_template_id: formHandlerData.patient_form_template_id,
-        stripeToken,
-      };
+  // --- base payload ---
+  const payload = {
+    content,
+    patient: isClinikoIframe
+      ? { ...patient, patient_booked_time: patientBookedTimeIso }
+      : patient,
+    moduleId: formHandlerData.module_id,
+    patient_form_template_id: formHandlerData.patient_form_template_id,
+
+    // keep old field for Stripe backend compatibility
+    stripeToken: payment.gateway === "stripe" ? (payment.token || null) : null,
+
+    // Tyro additions (backend can ignore if not used)
+    paymentGateway: payment.gateway === "tyrohealth" ? "tyrohealth" : null,
+    tyroTransactionId:
+      payment.gateway === "tyrohealth" ? (payment.transactionId || null) : null,
+    invoiceReference:
+      payment.gateway === "tyrohealth"
+        ? (payment.invoiceReference || null)
+        : null,
+  };
+
+  // --- choose endpoint ---
+  const submitURL = (() => {
+    if (isClinikoIframe) return formHandlerData.cliniko_embeded_form_sync_patient_form_url;
+
+    // If Tyrohealth is used, prefer the Tyro confirm endpoint (localized by tyrohealth.js)
+    if (payment.gateway === "tyrohealth" && window.TyroHealthData?.confirm_booking_url) {
+      return window.TyroHealthData.confirm_booking_url;
+    }
+
+    // Default: Stripe charge endpoint
+    return formHandlerData.payment_url;
+  })();
 
   try {
-    const submitURL = isClinikoIframe
-      ? formHandlerData.cliniko_embeded_form_sync_patient_form_url
-      : formHandlerData.payment_url;
-
     const response = await fetch(submitURL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
     const okForCliniko =
       isClinikoIframe && response.status === 202 && result?.success;
-    const okForPayment = !isClinikoIframe && result?.status === "success";
+
+    // Accept Stripe shape (status:"success") OR Tyro shape (success:true)
+    const okForPayment =
+      !isClinikoIframe && (result?.status === "success" || result?.success === true);
 
     if (okForCliniko || okForPayment) {
       const amount = result?.payment?.amount ?? 0;
@@ -948,13 +1131,18 @@ async function submitBookingForm(
       window.formIsSubmitting = true;
 
       const redirectBase = formHandlerData.redirect_url;
+
+      const ref =
+        result?.payment?.id ||
+        (payment.gateway === "tyrohealth" ? (payment.transactionId || "tyro") : "free");
+
       const queryParams = new URLSearchParams({
         patient_name:
           patient?.first_name && patient?.last_name
             ? `${patient.first_name} ${patient.last_name}`
             : "",
         email: patient?.email ?? "",
-        ref: result?.payment?.id ?? "free",
+        ref: ref ?? "free",
         status: "scheduling_queued",
         receipt: result?.payment?.receipt_url ?? "",
       });
@@ -969,9 +1157,11 @@ async function submitBookingForm(
     if (errorEl) errorEl.textContent = message;
     else showToast(message);
   } finally {
-    jQuery.LoadingOverlay("hide");
+    try { jQuery.LoadingOverlay("hide"); } catch (_) {}
   }
 }
+
+
 
 // Helper to render payment errors (mirrors your existing UI pattern)
 function handleChargeErrors(result, errorEl) {

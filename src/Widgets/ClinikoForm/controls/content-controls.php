@@ -11,7 +11,7 @@ use Elementor\Repeater;
 function register_content_controls($widget)
 {
 
-     // ===============================
+    // ===============================
     // FORM CUSTOM
     // ===============================
     $widget->start_controls_section('section_content', [
@@ -164,22 +164,40 @@ function register_cliniko_form_controls($widget)
         'tab' => Controls_Manager::TAB_CONTENT,
     ]);
 
-      $widget->add_control('appointment_source', [
+    $widget->add_control('appointment_source', [
         'label' => 'Appointment Source',
         'type' => Controls_Manager::CHOOSE,
         'options' => [
             'cliniko_embed' => [
                 'title' => 'Cliniko Embed',
-                'icon'  => 'eicon-globe',
+                'icon' => 'eicon-globe',
             ],
             'custom_form' => [
                 'title' => 'Custom Form',
-                'icon'  => 'eicon-form-horizontal',
+                'icon' => 'eicon-form-horizontal',
             ],
         ],
         'default' => 'custom_form',
-        'toggle'  => false,
+        'toggle' => false,
     ]);
+
+    $widget->add_control('custom_form_payment', [
+        'label' => 'Payment Gateway',
+        'type' => Controls_Manager::SELECT,
+        'options' => [
+            "Stripe" => "stripe",
+            "Tyrohealth" => "tyrohealth"
+        ],
+        'default' => 'stripe',
+        'condition' => ['appointment_source' => 'custom_form'],
+    ]);
+
+    $widget->add_control(
+        'hr',
+        [
+            'type' => Controls_Manager::DIVIDER,
+        ]
+    );
 
     $widget->add_control('cliniko_form_template_id', [
         'label' => 'Select Form Template',
@@ -205,7 +223,7 @@ function register_cliniko_form_controls($widget)
         'description' => 'Select the appointment type for this booking iframe',
     ]);
 
-        $widget->add_control('onpayment_success_redirect', [
+    $widget->add_control('onpayment_success_redirect', [
         'label' => 'Redirect on Success',
         'type' => Controls_Manager::TEXT,
         'placeholder' => '/thank-you',
@@ -219,16 +237,16 @@ function register_cliniko_form_controls($widget)
         'label_off' => 'No',
         'return_value' => 'yes',
         'default' => 'yes',
-             'condition' => ['appointment_source' => 'custom_form'], // só aparece se for custom_form
+        'condition' => ['appointment_source' => 'custom_form'],
     ]);
 
     $widget->add_control('save_on_exit', [
-        'label'        => __('Save on Exit', 'plugin-name'),
-        'type'         => Controls_Manager::SWITCHER,
-        'label_on'     => __('Yes', 'plugin-name'),
-        'label_off'    => __('No', 'plugin-name'),
+        'label' => __('Save on Exit', 'plugin-name'),
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => __('Yes', 'plugin-name'),
+        'label_off' => __('No', 'plugin-name'),
         'return_value' => 'yes',
-        'default'      => 'no',
+        'default' => 'no',
     ]);
 
     $widget->end_controls_section();

@@ -1,0 +1,81 @@
+<?php
+if (!defined('ABSPATH')) exit;
+
+use App\Model\AppointmentType;
+
+include_once __DIR__ . "/control-variables.php";
+
+$payment_details = AppointmentType::find($settings['module_id'], cliniko_client(true));
+?>
+
+<div id="payment_form" style="
+  display:none;
+  gap: <?php echo $gap_between_columns; ?>px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 32px;
+  font-family: <?php echo $font_family; ?>;
+  background: <?php echo $color_background; ?>;
+  color: <?php echo $color_text; ?>;
+">
+  <div id="loader-target"></div>
+
+  <div style="flex:1 1 300px; min-width:280px; padding-right:20px;">
+    <h2 style="margin-top:0; font-size:22px; color: <?php echo $summary_heading_color; ?>;">
+      Continue to Payment
+    </h2>
+
+    <p style="margin-bottom:16px; color: <?php echo $summary_text_color; ?>;">
+      You’ll be redirected to our secure Tyro Health payment window to complete your booking.
+    </p>
+
+    <div id="payment-error-message" style="margin: 1rem 0; color:#c62828; font-weight:500;"></div>
+
+    <button id="tyro-payment-button"
+      style="<?php echo $style_button; ?>; width:100%; font-size:16px; padding:12px 0; cursor:pointer; border-radius:5px;">
+      <?php echo esc_html($button_label ?: 'Continue to Payment'); ?>
+    </button>
+  </div>
+
+  <div style="
+    flex: 1 1 300px;
+    min-width: 280px;
+    background: <?php echo $details_background; ?>;
+    border: 1px solid <?php echo $details_border_color; ?>;
+    border-radius: <?php echo $details_border_radius; ?>px;
+    padding: 24px;
+  " id="order-summary">
+    <h3 style="margin-top:0; font-size:20px; color: <?php echo $summary_heading_color; ?>;">Order Summary</h3>
+
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;">
+      <strong>Service:</strong> <span id="summary-name"><?= esc_html($payment_details->getName()) ?></span>
+    </p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;">
+      <strong>Description:</strong> <span id="summary-description"><?= esc_html($payment_details->getDescription()) ?></span>
+    </p>
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;">
+      <strong>Duration:</strong> <?= (int)$payment_details->getDurationInMinutes() ?> Minutes
+    </p>
+
+    <p style="margin-top:20px; font-size:18px; font-weight:bold; color: <?php echo $summary_price_color; ?>;">
+      Total: $<span id="summary-price"><?= number_format($payment_details->getBillableItemsFinalPrice() / 100, 2) ?></span> AUD
+    </p>
+
+    <?php if (!empty($settings['show_back_button']) && $settings['show_back_button'] === 'yes'): ?>
+      <div style="text-align: <?php echo esc_attr($settings['back_button_align'] ?? 'center'); ?>; margin-top: <?php echo esc_attr($settings['back_button_margin_top']['size'] ?? 30); ?>px;">
+        <button id="go-back-button" style="
+          background-color: transparent;
+          color: <?php echo esc_attr($settings['back_button_color']); ?>;
+          border: 1px solid <?php echo esc_attr($settings['back_button_color']); ?>;
+          border-radius: 4px;
+          padding: 10px 20px;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        ">
+          ← Go Back
+        </button>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
