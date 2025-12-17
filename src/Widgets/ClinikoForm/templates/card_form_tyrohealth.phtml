@@ -15,51 +15,95 @@ $payment_details = AppointmentType::find($settings['module_id'], cliniko_client(
   flex-wrap: wrap;
   padding: 32px;
   font-family: <?php echo $font_family; ?>;
-  background: <?php echo $color_background; ?>;
+  background: radial-gradient(120% 140% at 10% 10%, rgba(19,160,255,0.08) 0%, rgba(11,111,184,0.03) 45%, transparent 70%) <?php echo $color_background; ?>;
   color: <?php echo $color_text; ?>;
+  border-radius: 20px;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 16px 44px rgba(0,0,0,0.08);
 ">
   <div id="loader-target"></div>
 
-  <div style="flex:1 1 300px; min-width:280px; padding-right:20px;">
-    <h2 style="margin-top:0; font-size:22px; color: <?php echo $summary_heading_color; ?>;">
-      Continue to Payment
-    </h2>
+  <div style="flex:1 1 340px; min-width:300px; padding-right:24px;">
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding: 8px 0 18px;
+      color: #0b6fb8;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    ">
+      <img src="<?php echo plugins_url('assets/img/Tyro_Payments_Logo.png', dirname(__FILE__)); ?>" alt="Tyro Health" style="height:32px; width:auto; object-fit:contain;">
+      <span>Secure checkout with Tyro Health</span>
+    </div>
 
-    <p style="margin-bottom:16px; color: <?php echo $summary_text_color; ?>;">
-      You’ll be redirected to our secure Tyro Health payment window to complete your booking.
+    <p style="margin:0 0 16px; color: <?php echo $summary_text_color; ?>; line-height:1.5;">
+      We’ll open Tyro Health’s secure checkout to complete payment and finalize your booking.
     </p>
 
-    <div id="payment-error-message" style="margin: 1rem 0; color:#c62828; font-weight:500;"></div>
+    <div id="payment-error-message" style="margin: 1rem 0; color:#c62828; font-weight:600;"></div>
 
-    <button id="tyro-payment-button"
-      style="<?php echo $style_button; ?>; width:100%; font-size:16px; padding:12px 0; cursor:pointer; border-radius:5px;">
-      <?php echo esc_html($button_label ?: 'Continue to Payment'); ?>
+    <button id="payment-button"
+      style="<?php echo $style_button; ?>;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:12px;
+        width:100%;
+        font-size:16px;
+        padding:15px 0;
+        cursor:pointer;
+        border-radius:12px;
+        border:none;
+        box-shadow: 0 14px 30px rgba(11,111,184,0.22);
+      ">
+      <span style="display:inline-flex; align-items:center; gap:10px; font-weight:700;">
+        <i class="fas fa-credit-card" aria-hidden="true" style="font-size:16px;"></i>
+        <?php echo esc_html($button_label ?: 'Continue with Tyro Health'); ?>
+      </span>
     </button>
+
+    <p style="margin-top:12px; font-size:12px; color:#6b7280;">
+      Secure processing via Tyro Health. You’ll return here once payment is complete.
+    </p>
   </div>
 
   <div style="
-    flex: 1 1 300px;
-    min-width: 280px;
+    flex: 1 1 320px;
+    min-width: 300px;
     background: <?php echo $details_background; ?>;
     border: 1px solid <?php echo $details_border_color; ?>;
     border-radius: <?php echo $details_border_radius; ?>px;
     padding: 24px;
   " id="order-summary">
-    <h3 style="margin-top:0; font-size:20px; color: <?php echo $summary_heading_color; ?>;">Order Summary</h3>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <h3 style="margin:0; font-size:20px; color: <?php echo $summary_heading_color; ?>;">Order Summary</h3>
+      <span style="
+        font-size:12px;
+        padding:6px 10px;
+        background:rgba(11,111,184,0.08);
+        color:#0b6fb8;
+        border-radius:999px;
+        font-weight:600;
+      ">Booking</span>
+    </div>
 
-    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;">
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 8px 0;">
       <strong>Service:</strong> <span id="summary-name"><?= esc_html($payment_details->getName()) ?></span>
     </p>
-    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;">
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 8px 0;">
       <strong>Description:</strong> <span id="summary-description"><?= esc_html($payment_details->getDescription()) ?></span>
     </p>
-    <p style="color: <?php echo $summary_text_color; ?>; margin: 10px 0;">
+    <p style="color: <?php echo $summary_text_color; ?>; margin: 8px 0;">
       <strong>Duration:</strong> <?= (int)$payment_details->getDurationInMinutes() ?> Minutes
     </p>
 
-    <p style="margin-top:20px; font-size:18px; font-weight:bold; color: <?php echo $summary_price_color; ?>;">
-      Total: $<span id="summary-price"><?= number_format($payment_details->getBillableItemsFinalPrice() / 100, 2) ?></span> AUD
-    </p>
+    <div style="margin-top:20px; padding:14px 12px; border-radius:12px; background:rgba(0,0,0,0.02); border:1px dashed rgba(0,0,0,0.06);">
+      <p style="margin:0; font-size:14px; color:#4b5563;">Total</p>
+      <p style="margin:4px 0 0; font-size:22px; font-weight:700; color: <?php echo $summary_price_color; ?>;">
+        $<span id="summary-price"><?= number_format($payment_details->getBillableItemsFinalPrice() / 100, 2) ?></span> AUD
+      </p>
+    </div>
 
     <?php if (!empty($settings['show_back_button']) && $settings['show_back_button'] === 'yes'): ?>
       <div style="text-align: <?php echo esc_attr($settings['back_button_align'] ?? 'center'); ?>; margin-top: <?php echo esc_attr($settings['back_button_margin_top']['size'] ?? 30); ?>px;">
@@ -67,11 +111,11 @@ $payment_details = AppointmentType::find($settings['module_id'], cliniko_client(
           background-color: transparent;
           color: <?php echo esc_attr($settings['back_button_color']); ?>;
           border: 1px solid <?php echo esc_attr($settings['back_button_color']); ?>;
-          border-radius: 4px;
-          padding: 10px 20px;
+          border-radius: 8px;
+          padding: 10px 18px;
           font-size: 14px;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: all 0.25s ease;
         ">
           ← Go Back
         </button>
