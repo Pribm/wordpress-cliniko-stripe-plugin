@@ -1,3 +1,7 @@
+## [1.4.3] - 2026-02-02
+### Added
+- Cliniko embed flow now collects patient address details (Address Line 1/2, City, State, Post Code) on the patient step.
+
 ## [1.4.1] - 2025-11-29
 ### Added
 - **Attendee Model + DTO:** introduced `Attendee` model and `AttendeeDTO` to represent Cliniko attendees with linked resources (booking, patient, patient case, invoices, patient forms) and standard getters/lazy-loading patterns.
