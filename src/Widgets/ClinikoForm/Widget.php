@@ -229,6 +229,7 @@ class Widget extends Widget_Base
         'appearance' => $appearance,
         'logo_url' => $logo_url,
         'cliniko_embed' => $settings['appointment_source'],
+        'form_type' => $settings['form_type'] ?? 'multi',
         // expose gateway selection for frontend handlers (keeps original casing if present)
         'custom_form_payment' => $settings['custom_form_payment'] ?? 'stripe',
       ]

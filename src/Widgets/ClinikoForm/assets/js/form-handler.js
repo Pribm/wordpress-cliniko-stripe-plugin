@@ -7,6 +7,8 @@ let errorElementInstance = null;
 let nextBtn;
 let prevBtn;
 let isClinikoForm;
+let formType = "multi";
+let progressEl;
 
 document.addEventListener("DOMContentLoaded", () => {
   isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
@@ -15,6 +17,8 @@ document.addEventListener("DOMContentLoaded", () => {
   nextBtn = document.getElementById("step-next");
   prevBtn = document.getElementById("step-prev");
   isClinikoForm = formHandlerData.cliniko_embed === "cliniko_embed";
+  formType = String(formHandlerData?.form_type || "multi").toLowerCase();
+  progressEl = document.getElementById("form-progress-indicator");
 
   mountForm();
 });
@@ -29,6 +33,10 @@ function isStripeSelected() {
 
 function isTyroSelected() {
   return getSelectedGateway() === "tyrohealth";
+}
+
+function isSingleStep() {
+  return formType === "single" || formType === "unstyled";
 }
 
 function extractNestedFields(form, parentKey) {
@@ -401,7 +409,12 @@ function updateIndicators(index) {
 }
 
 function isCurrentStepValid() {
-  const currentFields = steps[window.currentStep].querySelectorAll(
+  const scope = isSingleStep()
+    ? document.getElementById("prepayment-form")
+    : steps[window.currentStep];
+  if (!scope) return true;
+
+  const currentFields = scope.querySelectorAll(
     "[required], [data-required-group]"
   );
   let isValid = true;
@@ -550,12 +563,29 @@ function isCurrentStepValid() {
 
 function setHidden(el, hidden) {
   if (!el) return;
-  el.classList.toggle('is-hidden', !!hidden);
-  el.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+  el.classList.toggle("is-hidden", !!hidden);
+  el.setAttribute("aria-hidden", hidden ? "true" : "false");
+  el.style.display = hidden ? "none" : "";
 }
 
 function showStep(i) {
   window.scrollTo({ top: 0, behavior: "smooth" });
+
+  if (isSingleStep()) {
+    steps.forEach((step) => {
+      setHidden(step, false);
+    });
+
+    setHidden(prevBtn, true);
+    if (progressEl) setHidden(progressEl, true);
+
+    if (isClinikoForm) {
+      setHidden(nextBtn, true);
+    } else {
+      setHidden(nextBtn, false);
+    }
+    return;
+  }
 
   // show only the current step
   steps.forEach((step, index) => {
@@ -569,6 +599,7 @@ function showStep(i) {
   const hideNext = i === steps.length - 1 && isClinikoForm;
   setHidden(nextBtn, hideNext ? true : false);
 
+  if (progressEl) setHidden(progressEl, false);
   updateIndicators(i);
 }
 
@@ -625,6 +656,11 @@ async function safeInitStripe() {
 async function handleNextStep() {
   if (!isCurrentStepValid()) {
     showToast("Please review the highlighted fields before continuing.");
+    return;
+  }
+
+  if (isSingleStep()) {
+    await handleFinalStep();
     return;
   }
 
@@ -810,21 +846,35 @@ function mountForm() {
     window.nextBtnLabel = nextBtn.innerHTML;
   }
 
-  const nextBtnLabel = nextBtn.innerHTML;
-
-  nextBtn.addEventListener("click", async () => {
-    await handleNextStep(steps);
-  });
-
-  prevBtn.addEventListener("click", () => {
-    if (window.currentStep > 0) {
-      window.currentStep--;
-      showStep(window.currentStep);
+  if (isSingleStep() && nextBtn) {
+    const labelSpan = nextBtn.querySelector("span");
+    if (labelSpan) {
+      labelSpan.textContent = "Submit";
+    } else {
+      nextBtn.textContent = "Submit";
     }
-    if (window.currentStep + 1 < steps.length) {
-      nextBtn.innerHTML = nextBtnLabel;
-    }
-  });
+    window.nextBtnLabel = nextBtn.innerHTML;
+  }
+
+  const nextBtnLabel = nextBtn ? nextBtn.innerHTML : "";
+
+  if (nextBtn) {
+    nextBtn.addEventListener("click", async () => {
+      await handleNextStep(steps);
+    });
+  }
+
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      if (window.currentStep > 0) {
+        window.currentStep--;
+        showStep(window.currentStep);
+      }
+      if (window.currentStep + 1 < steps.length && nextBtn) {
+        nextBtn.innerHTML = nextBtnLabel;
+      }
+    });
+  }
 
  
 

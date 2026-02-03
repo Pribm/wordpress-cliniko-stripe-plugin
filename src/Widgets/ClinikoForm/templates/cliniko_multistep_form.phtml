@@ -62,6 +62,11 @@ if (empty($sections)) {
 }
 
 // ---------- UI Settings ----------
+$form_type = $settings['form_type'] ?? 'multi';
+$form_type = in_array($form_type, ['multi', 'single', 'unstyled'], true) ? $form_type : 'multi';
+$is_single_form = ($form_type === 'single' || $form_type === 'unstyled');
+$is_unstyled_form = ($form_type === 'unstyled');
+
 $bg           = esc_attr($settings['form_background_color'] ?? '#ffffff');
 $text         = esc_attr($settings['form_text_color'] ?? '#000000');
 $font         = esc_attr($settings['form_font_family'] ?? 'Arial, sans-serif');
@@ -136,6 +141,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
 
 ?>
 <!-- 🧠 Inject CSS Variables -->
+<?php if (!$is_unstyled_form): ?>
 <style>
   #prepayment-form {
     --form-bg: <?= $bg ?>;
@@ -157,6 +163,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
 
   .other-input-wrap { margin: 6px 0 0 28px; }
 </style>
+<?php endif; ?>
 
 <!-- External Libraries -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
@@ -165,12 +172,15 @@ $currentStep       = 1; // your JS can update this as the user navigates
 
 <!-- Versioned assets -->
 <script src="<?= esc_url($assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '')) ?>"></script>
+<?php if (!$is_unstyled_form): ?>
 <link rel="stylesheet" href="<?= esc_url($assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '')) ?>">
+<?php endif; ?>
 
 <!-- Multistep Form -->
-<form id="prepayment-form">
+<form id="prepayment-form" data-form-type="<?= esc_attr($form_type) ?>" class="cliniko-form cliniko-form--<?= esc_attr($form_type) ?>">
   <!-- Progress -->
   <?php $progressType = $settings['progress_type'] ?? 'bar'; ?>
+  <?php if (!$is_single_form): ?>
   <div id="form-progress-indicator" class="form-progress form-progress--<?= esc_attr($progressType) ?>">
     <?php if ($progressType === 'bar'): ?>
       <div class="progress-track">
@@ -191,12 +201,18 @@ $currentStep       = 1; // your JS can update this as the user navigates
       <span class="progress-text"><?= $totalSteps > 0 ? round(($currentStep / $totalSteps) * 100) : 0 ?>%</span>
     <?php endif; ?>
   </div>
+  <?php endif; ?>
 
   <div id="cliniko-form-steps">
 
     <!-- Template Sections -->
     <?php foreach ($sections as $index => $section): ?>
-      <div class="form-step <?= $index > 0 ? 'is-hidden' : '' ?>" data-step="<?= (int)$index ?>">
+      <?php
+      $step_hidden = (!$is_single_form && $index > 0);
+      $step_class = 'form-step' . ($step_hidden ? ' is-hidden' : '');
+      $step_style = ($is_unstyled_form && $step_hidden) ? ' style="display:none;"' : '';
+      ?>
+      <div class="<?= $step_class ?>" data-step="<?= (int)$index ?>"<?= $step_style ?>>
         <h3 class="multi-form-title-color"><?= esc_html($section->name) ?></h3>
         <?php if (!empty($section->description)): ?>
           <p class="multi-form-title-color"><?= wp_kses_post($section->description) ?></p>
@@ -244,7 +260,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
                       <span>Other</span>
                     </label>
 
-                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap">
+                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap" style="display:none;">
                       <input type="text" name="<?= esc_attr($otherInputName) ?>" placeholder="Please specify"
                         aria-label="Other for <?= esc_attr($input_name) ?>">
                     </div>
@@ -279,7 +295,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
                       <span>Other</span>
                     </label>
 
-                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap">
+                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap" style="display:none;">
                       <input type="text" name="<?= esc_attr($otherInputName) ?>" placeholder="Please specify"
                         aria-label="Other for <?= esc_attr($input_name) ?>">
                     </div>
@@ -308,9 +324,14 @@ $currentStep       = 1; // your JS can update this as the user navigates
     <?php endforeach; ?>
 
     <!-- Patient Step (always after sections) -->
-    <div class="form-step is-hidden"
+    <?php
+    $patient_hidden = !$is_single_form;
+    $patient_class = 'form-step' . ($patient_hidden ? ' is-hidden' : '');
+    $patient_style = ($is_unstyled_form && $patient_hidden) ? ' style="display:none;"' : '';
+    ?>
+    <div class="<?= $patient_class ?>"
          data-step="<?= (int)$patientStepIndex ?>"
-         <?= $hasEmbedStep ? '' : 'data-is-final="true"' ?>>
+         <?= $hasEmbedStep ? '' : 'data-is-final="true"' ?><?= $patient_style ?>>
 
       <?php if ($useClinikoEmbed): ?>
         <h3>Confirm Your Details</h3>
@@ -397,7 +418,12 @@ $currentStep       = 1; // your JS can update this as the user navigates
 
     <!-- Cliniko Embed Step (ONLY if configured) – always LAST -->
     <?php if ($hasEmbedStep && $embedSrc): ?>
-      <div class="form-step is-hidden" data-step="<?= (int)$embedStepIndex ?>" data-is-final="true">
+      <?php
+      $embed_hidden = !$is_single_form;
+      $embed_class = 'form-step' . ($embed_hidden ? ' is-hidden' : '');
+      $embed_style = ($is_unstyled_form && $embed_hidden) ? ' style="display:none;"' : '';
+      ?>
+      <div class="<?= $embed_class ?>" data-step="<?= (int)$embedStepIndex ?>" data-is-final="true"<?= $embed_style ?>>
         <iframe
           id="cliniko-payment_iframe"
           src="<?= esc_url($embedSrc) ?>"
@@ -411,7 +437,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
   </div>
 
   <div class="form-actions">
-    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden">
+    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden"<?= $is_unstyled_form ? ' style="display:none;"' : '' ?>>
       <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
       <span>Back</span>
       <?php if ($icon_prev && $icon_position === 'before'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>

@@ -6,10 +6,13 @@
   const PREV_BTN_SEL = "#step-prev";
   const NEXT_BTN_SEL = "#step-next";
 
+  const formType = String(window.formHandlerData?.form_type || "multi").toLowerCase();
+  const isSingleStep = formType === "single" || formType === "unstyled";
+
   // ✅ Unique storage key per form/page
   const STORAGE_KEY = `clinikoFormProgress:v9:${window.location.pathname}`;
 
-  const OVERRIDE_NAV_BUTTONS = true;
+  const OVERRIDE_NAV_BUTTONS = !isSingleStep;
 
   // Theme colors (for modal, bar)
   const COLOR = {
@@ -45,6 +48,7 @@
     return $$(".form-step", root);
   }
   function getActiveStepIndex(root) {
+    if (isSingleStep) return 0;
     const steps = getSteps(root);
     if (!steps.length) return 0;
     let idx = steps.findIndex(
@@ -58,18 +62,23 @@
   }
 
   function progressTo(index, total) {
+    if (isSingleStep) return;
     const bar = $("#form-progress-indicator .progress-fill");
     if (!bar || !total) return;
     bar.style.width = ((index + 1) / total) * 100 + "%";
   }
 
   function computeNavState(root) {
+    if (isSingleStep) {
+      return { idx: 0, total: 1, showPrev: false, showNext: true };
+    }
     const idx = getActiveStepIndex(root);
     const total = getSteps(root).length;
     return { idx, total, showPrev: idx > 0, showNext: idx < total - 1 };
   }
 
   function syncNavButtons(root) {
+    if (isSingleStep) return;
     const prev = $(PREV_BTN_SEL, document);
     const next = $(NEXT_BTN_SEL, document);
     const { idx, total } = computeNavState(root);
@@ -103,7 +112,9 @@
   // ===== Save / Load =====
   function serializeForm(root) {
     const stepIndex =
-      typeof window.currentStep === "number"
+      isSingleStep
+        ? 0
+        : typeof window.currentStep === "number"
         ? window.currentStep
         : getActiveStepIndex(root);
 
@@ -331,7 +342,7 @@
   // ===== Observe step changes =====
   function observeStepChanges(root) {
     const steps = getSteps(root);
-    const total = steps.length;
+    const total = isSingleStep ? 1 : steps.length;
     const update = debounce(() => {
       let raw = loadSaved();
       if (!raw || typeof raw !== "object")
