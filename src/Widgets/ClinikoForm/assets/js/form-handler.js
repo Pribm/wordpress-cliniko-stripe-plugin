@@ -39,6 +39,10 @@ function isSingleStep() {
   return formType === "single" || formType === "unstyled";
 }
 
+function isUnstyledForm() {
+  return formType === "unstyled";
+}
+
 function extractNestedFields(form, parentKey) {
   const formData = new FormData(form);
   const result = {};
@@ -197,17 +201,19 @@ function listenClinikoEmbed() {
 
     // --- 1. Resize Handler ---
     if (typeof e.data === "string" && e.data.startsWith("cliniko-bookings-resize:")) {
-      const iframe = document.querySelector("#cliniko-payment_iframe");
-      const height = e.data.split(":")[1];
+      if (!isUnstyledForm()) {
+        const iframe = document.querySelector("#cliniko-payment_iframe");
+        const height = e.data.split(":")[1];
 
-      if (iframe && height != 0) {
-        iframe.style.height = height + "px";
-        iframe.parentElement.style.maxHeight = height + "px";
-      }
+        if (iframe && height != 0) {
+          iframe.style.height = height + "px";
+          iframe.parentElement.style.maxHeight = height + "px";
+        }
 
-      // heuristic: return to step 0
-      if (embedFormStep > 0 && parseInt(height, 10) < 600) {
-        embedFormStep = 0;
+        // heuristic: return to step 0
+        if (embedFormStep > 0 && parseInt(height, 10) < 600) {
+          embedFormStep = 0;
+        }
       }
     }
 

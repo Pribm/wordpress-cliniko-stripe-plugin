@@ -79,9 +79,16 @@ function register_content_controls($widget)
         'condition' => ['show_back_button' => 'yes'],
     ]);
 
+    $widget->end_controls_section();
+
     // ===============================
-    // Email notifications (new)
+    // Email notifications
     // ===============================
+    $widget->start_controls_section('section_email_notifications', [
+        'label' => 'Email Notifications',
+        'tab' => Controls_Manager::TAB_CONTENT,
+    ]);
+
     $widget->add_control('send_email_on_success', [
         'label' => 'Send Email on Success',
         'type' => Controls_Manager::SWITCHER,
@@ -89,7 +96,6 @@ function register_content_controls($widget)
         'label_off' => 'No',
         'return_value' => 'yes',
         'default' => 'no',
-        'separator' => 'before',
         'description' => 'If enabled, an email is sent after successful payment/creation.',
     ]);
 
@@ -106,7 +112,6 @@ function register_content_controls($widget)
         'description' => 'Enter raw HTML. Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, {payment_reference}, {appointment_label}.',
         'condition' => [
             'send_email_on_success' => 'yes',
-            'appointment_source' => 'custom_form',
         ],
     ]);
 
@@ -134,7 +139,6 @@ function register_content_controls($widget)
         'description' => 'Enter raw HTML. Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, {payment_reference}, {appointment_label}.',
         'condition' => [
             'send_email_on_failure' => 'yes',
-            'appointment_source' => 'custom_form',
         ],
     ]);
 
