@@ -11,7 +11,7 @@ use Elementor\Repeater;
 function register_content_controls($widget)
 {
 
-     // ===============================
+    // ===============================
     // FORM CUSTOM
     // ===============================
     $widget->start_controls_section('section_content', [
@@ -79,9 +79,16 @@ function register_content_controls($widget)
         'condition' => ['show_back_button' => 'yes'],
     ]);
 
+    $widget->end_controls_section();
+
     // ===============================
-    // Email notifications (new)
+    // Email notifications
     // ===============================
+    $widget->start_controls_section('section_email_notifications', [
+        'label' => 'Email Notifications',
+        'tab' => Controls_Manager::TAB_CONTENT,
+    ]);
+
     $widget->add_control('send_email_on_success', [
         'label' => 'Send Email on Success',
         'type' => Controls_Manager::SWITCHER,
@@ -89,7 +96,6 @@ function register_content_controls($widget)
         'label_off' => 'No',
         'return_value' => 'yes',
         'default' => 'no',
-        'separator' => 'before',
         'description' => 'If enabled, an email is sent after successful payment/creation.',
     ]);
 
@@ -106,7 +112,6 @@ function register_content_controls($widget)
         'description' => 'Enter raw HTML. Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, {payment_reference}, {appointment_label}.',
         'condition' => [
             'send_email_on_success' => 'yes',
-            'appointment_source' => 'custom_form',
         ],
     ]);
 
@@ -134,7 +139,6 @@ function register_content_controls($widget)
         'description' => 'Enter raw HTML. Supported placeholders: {first_name}, {last_name}, {email}, {amount}, {currency}, {payment_reference}, {appointment_label}.',
         'condition' => [
             'send_email_on_failure' => 'yes',
-            'appointment_source' => 'custom_form',
         ],
     ]);
 
@@ -164,22 +168,82 @@ function register_cliniko_form_controls($widget)
         'tab' => Controls_Manager::TAB_CONTENT,
     ]);
 
-      $widget->add_control('appointment_source', [
+    $widget->add_control('appointment_source', [
         'label' => 'Appointment Source',
         'type' => Controls_Manager::CHOOSE,
         'options' => [
             'cliniko_embed' => [
                 'title' => 'Cliniko Embed',
-                'icon'  => 'eicon-globe',
+                'icon' => 'eicon-globe',
             ],
             'custom_form' => [
                 'title' => 'Custom Form',
-                'icon'  => 'eicon-form-horizontal',
+                'icon' => 'eicon-form-horizontal',
             ],
         ],
         'default' => 'custom_form',
-        'toggle'  => false,
+        'toggle' => false,
     ]);
+
+    $widget->add_control('custom_form_payment', [
+        'label' => 'Payment Gateway',
+        'type' => Controls_Manager::SELECT,
+        'options' => [
+            "Stripe" => "stripe",
+            "Tyrohealth" => "tyrohealth"
+        ],
+        'default' => 'stripe',
+        'condition' => ['appointment_source' => 'custom_form'],
+    ]);
+
+    $widget->add_control('appointment_time_selection', [
+        'label' => 'Appointment Scheduling',
+        'type' => Controls_Manager::SELECT,
+        'options' => [
+            'next_available' => 'Next Available Time',
+            'calendar' => 'Choose From Calendar',
+        ],
+        'default' => 'calendar',
+        'condition' => ['appointment_source' => 'custom_form'],
+    ]);
+
+    $widget->add_control('form_type', [
+        'label' => 'Form Type',
+        'type' => Controls_Manager::SELECT,
+        'default' => 'multi',
+        'options' => [
+            'multi' => 'Multi-step (current)',
+            'single' => 'Single-step (all fields)',
+            'unstyled' => 'Unstyled (no theme CSS)',
+        ],
+    ]);
+
+    $widget->add_control('unstyled_css_help', [
+        'type' => Controls_Manager::RAW_HTML,
+        'raw' =>
+            '<strong>Unstyled CSS hooks</strong><br>' .
+            'Unstyled disables the default theme CSS and shows the form as a single step (all fields visible).<br><br>' .
+            '<strong>Primary wrappers</strong><br>' .
+            '<code>.cliniko-form--unstyled</code> (form root), <code>#prepayment-form</code> (main container)<br><br>' .
+            '<strong>Sections & questions</strong><br>' .
+            '<code>.form-step</code> (each section/patient/embed block), <code>.inputGroup</code> (question block), ' .
+            '<code>.question-title</code>, <code>.req</code>, <code>.options-group</code>, <code>.other-input-wrap</code><br><br>' .
+            '<strong>Patient grid</strong><br>' .
+            '<code>.patient-grid</code>, <code>.field-col</code>, <code>.field-label</code>, <code>.col-span-*</code><br><br>' .
+            '<strong>Actions & errors</strong><br>' .
+            '<code>.form-actions</code>, <code>.multi-form-button</code>, <code>.prev-button</code>, <code>.next-button</code>, ' .
+            '<code>.field-error</code><br><br>' .
+            '<em>Tip:</em> You can scope all custom styles to <code>.cliniko-form--unstyled</code> to avoid affecting other forms.',
+        'content_classes' => 'elementor-panel-alert elementor-panel-alert-info',
+        'condition' => ['form_type' => 'unstyled'],
+    ]);
+
+    $widget->add_control(
+        'hr',
+        [
+            'type' => Controls_Manager::DIVIDER,
+        ]
+    );
 
     $widget->add_control('cliniko_form_template_id', [
         'label' => 'Select Form Template',
@@ -205,7 +269,7 @@ function register_cliniko_form_controls($widget)
         'description' => 'Select the appointment type for this booking iframe',
     ]);
 
-        $widget->add_control('onpayment_success_redirect', [
+    $widget->add_control('onpayment_success_redirect', [
         'label' => 'Redirect on Success',
         'type' => Controls_Manager::TEXT,
         'placeholder' => '/thank-you',
@@ -219,16 +283,16 @@ function register_cliniko_form_controls($widget)
         'label_off' => 'No',
         'return_value' => 'yes',
         'default' => 'yes',
-             'condition' => ['appointment_source' => 'custom_form'], // só aparece se for custom_form
+        'condition' => ['appointment_source' => 'custom_form'],
     ]);
 
     $widget->add_control('save_on_exit', [
-        'label'        => __('Save on Exit', 'plugin-name'),
-        'type'         => Controls_Manager::SWITCHER,
-        'label_on'     => __('Yes', 'plugin-name'),
-        'label_off'    => __('No', 'plugin-name'),
+        'label' => __('Save on Exit', 'plugin-name'),
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => __('Yes', 'plugin-name'),
+        'label_off' => __('No', 'plugin-name'),
         'return_value' => 'yes',
-        'default'      => 'no',
+        'default' => 'no',
     ]);
 
     $widget->end_controls_section();

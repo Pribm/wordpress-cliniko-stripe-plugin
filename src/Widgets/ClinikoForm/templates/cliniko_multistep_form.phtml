@@ -62,6 +62,11 @@ if (empty($sections)) {
 }
 
 // ---------- UI Settings ----------
+$form_type = $settings['form_type'] ?? 'multi';
+$form_type = in_array($form_type, ['multi', 'single', 'unstyled'], true) ? $form_type : 'multi';
+$is_single_form = ($form_type === 'single' || $form_type === 'unstyled');
+$is_unstyled_form = ($form_type === 'unstyled');
+
 $bg           = esc_attr($settings['form_background_color'] ?? '#ffffff');
 $text         = esc_attr($settings['form_text_color'] ?? '#000000');
 $font         = esc_attr($settings['form_font_family'] ?? 'Arial, sans-serif');
@@ -106,6 +111,7 @@ $assets_url = $base_url . 'assets/';
 $base_path = trailingslashit(plugin_dir_path(dirname(__FILE__)));
 $js_ver    = file_exists($base_path . 'assets/js/input-masks.js') ? filemtime($base_path . 'assets/js/input-masks.js') : null;
 $css_ver   = file_exists($base_path . 'assets/css/multistep-form-style.css') ? filemtime($base_path . 'assets/css/multistep-form-style.css') : null;
+$unstyled_css_ver = file_exists($base_path . 'assets/css/unstyled-calendar.css') ? filemtime($base_path . 'assets/css/unstyled-calendar.css') : null;
 
 // ---------- Embed setup (only if configured) ----------
 $useClinikoEmbed = (($settings['appointment_source'] ?? '') === 'cliniko_embed');
@@ -126,16 +132,30 @@ if ($hasEmbedStep) {
   $embedSrc = sprintf('https://%s/bookings?%s', $embedHost, $embedParams);
 }
 
+// ---------- Available Times Step (custom form only) ----------
+$customFormPayment = strtolower($settings['custom_form_payment'] ?? '');
+$paymentEnabled = ($settings['enable_payment'] ?? '') === 'yes';
+$appointmentTimeSelection = strtolower($settings['appointment_time_selection'] ?? 'calendar');
+$showTimeStep = (($settings['appointment_source'] ?? '') === 'custom_form')
+  && $paymentEnabled
+  && in_array($customFormPayment, ['stripe', 'tyrohealth'], true)
+  && $appointmentTimeSelection === 'calendar';
+$showPractitionerSelect = (($settings['appointment_source'] ?? '') === 'custom_form')
+  && $paymentEnabled
+  && in_array($customFormPayment, ['stripe', 'tyrohealth'], true);
+
 // ---------- Step Indexing ----------
-// Order: [all template sections] -> [Patient step] -> [optional Cliniko embed step]
+// Order: [all template sections] -> [optional Available Times step] -> [Patient step] -> [optional Cliniko embed step]
 $numSectionSteps   = count($sections);
-$patientStepIndex  = $numSectionSteps;
+$timeStepIndex     = $numSectionSteps;
+$patientStepIndex  = $numSectionSteps + ($showTimeStep ? 1 : 0);
 $embedStepIndex    = $patientStepIndex + 1;
-$totalSteps        = $numSectionSteps + 1 + ($hasEmbedStep ? 1 : 0);
+$totalSteps        = $numSectionSteps + 1 + ($showTimeStep ? 1 : 0) + ($hasEmbedStep ? 1 : 0);
 $currentStep       = 1; // your JS can update this as the user navigates
 
 ?>
 <!-- 🧠 Inject CSS Variables -->
+<?php if (!$is_unstyled_form): ?>
 <style>
   #prepayment-form {
     --form-bg: <?= $bg ?>;
@@ -153,10 +173,24 @@ $currentStep       = 1; // your JS can update this as the user navigates
     --btn-radius: <?= $radius ?>;
     --btn-flex: <?= $button_flex ?>;
     --btn-icon-gap: <?= $icon_spacing ?>;
+
+    /* Appointment slots theming (Elementor globals with button-color fallback) */
+    --slot-accent: var(--e-global-color-primary, var(--btn-bg));
+    --slot-accent-soft: rgba(var(--btn-bg-rgb), 0.08);
+
+    /* Calendar nav theming (Elementor globals with button-color fallback) */
+    --calendar-nav-bg: var(--e-global-color-primary, var(--btn-bg));
+    --calendar-nav-text: var(--e-global-color-primary-contrast, var(--btn-text));
+    --calendar-nav-shadow: rgba(var(--btn-bg-rgb), 0.2);
+
+    /* Calendar accents */
+    --calendar-accent: var(--e-global-color-primary, var(--btn-bg));
+    --calendar-accent-soft: rgba(var(--btn-bg-rgb), 0.16);
   }
 
   .other-input-wrap { margin: 6px 0 0 28px; }
 </style>
+<?php endif; ?>
 
 <!-- External Libraries -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
@@ -165,12 +199,23 @@ $currentStep       = 1; // your JS can update this as the user navigates
 
 <!-- Versioned assets -->
 <script src="<?= esc_url($assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '')) ?>"></script>
+<?php if (!$is_unstyled_form): ?>
 <link rel="stylesheet" href="<?= esc_url($assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '')) ?>">
+<?php endif; ?>
+<?php if ($is_unstyled_form): ?>
+<link rel="stylesheet" href="<?= esc_url($assets_url . 'css/unstyled-calendar.css' . ($unstyled_css_ver ? '?ver=' . $unstyled_css_ver : '')) ?>">
+<?php endif; ?>
 
 <!-- Multistep Form -->
-<form id="prepayment-form">
+<form id="prepayment-form"
+      data-form-type="<?= esc_attr($form_type) ?>"
+      data-appointment-type-id="<?= esc_attr($appointmentTypeID ?? '') ?>"
+      data-practitioner-id="<?= esc_attr($practitionerID ?? '') ?>"
+      data-business-id="<?= esc_attr($businessId ?? '') ?>"
+      class="cliniko-form cliniko-form--<?= esc_attr($form_type) ?>">
   <!-- Progress -->
   <?php $progressType = $settings['progress_type'] ?? 'bar'; ?>
+  <?php if (!$is_single_form): ?>
   <div id="form-progress-indicator" class="form-progress form-progress--<?= esc_attr($progressType) ?>">
     <?php if ($progressType === 'bar'): ?>
       <div class="progress-track">
@@ -191,12 +236,18 @@ $currentStep       = 1; // your JS can update this as the user navigates
       <span class="progress-text"><?= $totalSteps > 0 ? round(($currentStep / $totalSteps) * 100) : 0 ?>%</span>
     <?php endif; ?>
   </div>
+  <?php endif; ?>
 
   <div id="cliniko-form-steps">
 
     <!-- Template Sections -->
     <?php foreach ($sections as $index => $section): ?>
-      <div class="form-step <?= $index > 0 ? 'is-hidden' : '' ?>" data-step="<?= (int)$index ?>">
+      <?php
+      $step_hidden = (!$is_single_form && $index > 0);
+      $step_class = 'form-step' . ($step_hidden ? ' is-hidden' : '');
+      $step_style = ($is_unstyled_form && $step_hidden) ? ' style="display:none;"' : '';
+      ?>
+      <div class="<?= $step_class ?>" data-step="<?= (int)$index ?>"<?= $step_style ?>>
         <h3 class="multi-form-title-color"><?= esc_html($section->name) ?></h3>
         <?php if (!empty($section->description)): ?>
           <p class="multi-form-title-color"><?= wp_kses_post($section->description) ?></p>
@@ -244,7 +295,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
                       <span>Other</span>
                     </label>
 
-                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap">
+                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap" style="display:none;">
                       <input type="text" name="<?= esc_attr($otherInputName) ?>" placeholder="Please specify"
                         aria-label="Other for <?= esc_attr($input_name) ?>">
                     </div>
@@ -279,7 +330,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
                       <span>Other</span>
                     </label>
 
-                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap">
+                    <div id="<?= esc_attr($otherInputWrapId) ?>" class="other-input-wrap" style="display:none;">
                       <input type="text" name="<?= esc_attr($otherInputName) ?>" placeholder="Please specify"
                         aria-label="Other for <?= esc_attr($input_name) ?>">
                     </div>
@@ -307,10 +358,122 @@ $currentStep       = 1; // your JS can update this as the user navigates
       </div>
     <?php endforeach; ?>
 
+    <!-- Available Times Step (custom form only) -->
+    <?php if ($showTimeStep): ?>
+      <?php
+      $time_hidden = (!$is_single_form && $timeStepIndex > 0);
+      $time_class = 'form-step' . ($time_hidden ? ' is-hidden' : '');
+      $time_style = ($is_unstyled_form && $time_hidden) ? ' style="display:none;"' : '';
+
+      require_once dirname(__DIR__) . '/helpers/appointment_calendar.php';
+      $calendarContext = cliniko_build_appointment_calendar_context([
+        'business_id' => $businessId ?? '',
+        'practitioner_id' => $practitionerID ?? '',
+        'appointment_type_id' => $appointmentTypeID ?? '',
+        'per_page' => 100,
+        'cache_ttl' => 600,
+      ]);
+      $calendarMonthLabel = $calendarContext['month_label'] ?? '';
+      $calendarMonthKey = $calendarContext['month_key'] ?? '';
+      ?>
+      <div class="<?= $time_class ?>" data-step="<?= (int)$timeStepIndex ?>"<?= $time_style ?>>
+        <h3>Choose an Appointment Time</h3>
+        <p class="multi-form-title-color">Select a day and time to continue.</p>
+
+        <div class="appointment-selection" data-appointment-selection>
+          <input type="hidden"
+                 id="appointment-time"
+                 name="patient[appointment_start]"
+                 required
+                 data-validate-hidden="true">
+
+          <div class="appointment-calendar">
+            <div class="appointment-calendar__header">
+              <div class="appointment-calendar__nav">
+                <button type="button" class="calendar-nav calendar-nav--prev" data-calendar-nav="prev" aria-label="Previous month">&larr;</button>
+                <div class="appointment-calendar__month" id="appointment-calendar-month">
+                  <?= esc_html($calendarMonthLabel) ?>
+                </div>
+                <button type="button" class="calendar-nav calendar-nav--next" data-calendar-nav="next" aria-label="Next month">&rarr;</button>
+              </div>
+              <div class="appointment-calendar__legend">
+                <span class="calendar-legend-item">
+                  <span class="calendar-legend-dot calendar-legend-dot--morning"></span>
+                  Morning
+                </span>
+                <span class="calendar-legend-item">
+                  <span class="calendar-legend-dot calendar-legend-dot--afternoon"></span>
+                  Afternoon
+                </span>
+                <span class="calendar-legend-item">
+                  <span class="calendar-legend-dot calendar-legend-dot--evening"></span>
+                  Evening
+                </span>
+              </div>
+            </div>
+            <div class="appointment-calendar__filters" data-practitioner-select>
+              <label class="appointment-calendar__label" for="appointment-practitioner">Practitioner</label>
+              <select id="appointment-practitioner"
+                      name="patient[practitioner_id]"
+                      class="appointment-calendar__select"
+                      required>
+                <option value="">Loading practitioners…</option>
+              </select>
+            </div>
+            <div class="appointment-calendar__weekdays">
+              <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+            </div>
+            <div id="appointment-calendar-grid"
+                 class="appointment-calendar__grid"
+                 aria-live="polite"
+                 data-calendar-month="<?= esc_attr($calendarMonthKey) ?>">
+              <?= cliniko_render_appointment_calendar_grid($calendarContext) ?>
+            </div>
+          </div>
+
+          <div class="appointment-day-times">
+            <div class="appointment-day-times__title" id="appointment-day-title">Select a day</div>
+            <div class="appointment-day-times__hint" id="appointment-day-hint">Choose a date to see available times.</div>
+            <div class="appointment-day-times__placeholder" id="appointment-day-placeholder">
+              <i class="fas fa-calendar-day" aria-hidden="true"></i>
+              <div class="appointment-day-times__placeholder-title">Select a date and time</div>
+              <div class="appointment-day-times__placeholder-text">Pick a day on the calendar to view available times.</div>
+            </div>
+            <div class="appointment-day-times__loading is-hidden" id="appointment-day-loading" aria-live="polite">
+              <span class="appointment-day-times__spinner" aria-hidden="true"></span>
+              <div class="appointment-day-times__loading-text">Loading available times…</div>
+            </div>
+            <div class="appointment-day-times__groups">
+              <div class="appointment-day-times__group" data-period="morning">
+                <div class="appointment-day-times__group-title">Morning</div>
+                <div class="appointment-day-times__group-slots" id="appointment-day-slots-morning"></div>
+              </div>
+              <div class="appointment-day-times__group" data-period="afternoon">
+                <div class="appointment-day-times__group-title">Afternoon</div>
+                <div class="appointment-day-times__group-slots" id="appointment-day-slots-afternoon"></div>
+              </div>
+              <div class="appointment-day-times__group" data-period="evening">
+                <div class="appointment-day-times__group-title">Evening</div>
+                <div class="appointment-day-times__group-slots" id="appointment-day-slots-evening"></div>
+              </div>
+            </div>
+            <div class="appointment-day-times__empty is-hidden" id="appointment-day-empty">No times available.</div>
+          </div>
+
+          <div id="appointment-time-status" class="field-hint is-hidden" aria-live="polite"></div>
+        </div>
+      </div>
+    <?php endif; ?>
+
     <!-- Patient Step (always after sections) -->
-    <div class="form-step is-hidden"
+    <?php
+    $patient_hidden = !$is_single_form;
+    $patient_class = 'form-step' . ($patient_hidden ? ' is-hidden' : '');
+    $patient_style = ($is_unstyled_form && $patient_hidden) ? ' style="display:none;"' : '';
+    ?>
+    <div class="<?= $patient_class ?>"
          data-step="<?= (int)$patientStepIndex ?>"
-         <?= $hasEmbedStep ? '' : 'data-is-final="true"' ?>>
+         <?= $hasEmbedStep ? '' : 'data-is-final="true"' ?><?= $patient_style ?>>
 
       <?php if ($useClinikoEmbed): ?>
         <h3>Confirm Your Details</h3>
@@ -319,6 +482,18 @@ $currentStep       = 1; // your JS can update this as the user navigates
         </p>
       <?php else: ?>
         <h3>Patient Details</h3>
+      <?php endif; ?>
+
+      <?php if ($showPractitionerSelect && !$showTimeStep): ?>
+        <div class="appointment-practitioner-block appointment-calendar__filters" data-practitioner-select>
+          <label class="appointment-calendar__label" for="appointment-practitioner">Practitioner</label>
+          <select id="appointment-practitioner"
+                  name="patient[practitioner_id]"
+                  class="appointment-calendar__select"
+                  required>
+            <option value="">Loading practitioners…</option>
+          </select>
+        </div>
       <?php endif; ?>
 
       <div class="patient-grid">
@@ -330,6 +505,11 @@ $currentStep       = 1; // your JS can update this as the user navigates
               ['email', 'Email', 'email', 12, true],
               ['medicare', 'Medicare Number', 'text', 8, true],
               ['medicare_reference_number', 'Medicare Reference', 'text', 4, true],
+              ['address_1', 'Address Line 1', 'text', 12, true],
+              ['address_2', 'Address Line 2', 'text', 12, false],
+              ['city', 'City', 'text', 6, true],
+              ['state', 'State', 'text', 2, true],
+              ['post_code', 'Post Code', 'text', 4, true],
             ]
           : [
               ['first_name', 'First Name', 'text', 6, true],
@@ -392,7 +572,12 @@ $currentStep       = 1; // your JS can update this as the user navigates
 
     <!-- Cliniko Embed Step (ONLY if configured) – always LAST -->
     <?php if ($hasEmbedStep && $embedSrc): ?>
-      <div class="form-step is-hidden" data-step="<?= (int)$embedStepIndex ?>" data-is-final="true">
+      <?php
+      $embed_hidden = !$is_single_form;
+      $embed_class = 'form-step' . ($embed_hidden ? ' is-hidden' : '');
+      $embed_style = ($is_unstyled_form && $embed_hidden) ? ' style="display:none;"' : '';
+      ?>
+      <div class="<?= $embed_class ?>" data-step="<?= (int)$embedStepIndex ?>" data-is-final="true"<?= $embed_style ?>>
         <iframe
           id="cliniko-payment_iframe"
           src="<?= esc_url($embedSrc) ?>"
@@ -406,7 +591,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
   </div>
 
   <div class="form-actions">
-    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden">
+    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden"<?= $is_unstyled_form ? ' style="display:none;"' : '' ?>>
       <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
       <span>Back</span>
       <?php if ($icon_prev && $icon_position === 'before'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>

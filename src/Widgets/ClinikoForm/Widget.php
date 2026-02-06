@@ -8,6 +8,7 @@ if (!defined('ABSPATH'))
 
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
+use App\Model\AppointmentType;
 use Elementor\Widget_Base;
 
 class Widget extends Widget_Base
@@ -105,24 +106,67 @@ class Widget extends Widget_Base
       []
     );
 
-    if ($settings['enable_payment'] === 'yes') {
-      wp_enqueue_script(
-        'stripe-js',
-        'https://js.stripe.com/v3/',
-        [],
-        null,
-        ['strategy' => 'async']
-      );
+    $appointment_source = $settings['appointment_source'] ?? '';
+    if ($appointment_source === 'custom_form' && $settings['enable_payment'] === 'yes') {
 
-      wp_enqueue_script(
-        'cliniko-stripe-js',
-        plugin_dir_url(__FILE__) . 'assets/js/stripe.js',
-        ["jquery"],
-        null,
-        []
-      );
+      // elementor control stores lowercase values; normalize for comparisons
+      $gateway = isset($settings['custom_form_payment']) ? strtolower(trim($settings['custom_form_payment'])) : '';
 
-   
+      if ($gateway === 'stripe') {
+        wp_enqueue_script(
+          'stripe-js',
+          'https://js.stripe.com/v3/',
+          [],
+          null,
+          ['strategy' => 'async']
+        );
+
+        wp_enqueue_script(
+          'cliniko-stripe-js',
+          plugin_dir_url(__FILE__) . 'assets/js/stripe.js',
+          ["jquery"],
+          null,
+          []
+        );
+      } elseif ($gateway === 'tyrohealth') {
+        wp_enqueue_script(
+          'medipass-transaction-sdk',
+          'https://unpkg.com/@medipass/partner-sdk@1.10.1/umd/@medipass/partner-sdk.min.js',
+          [],
+          null,
+          ['strategy' => 'defer']
+        );
+
+        wp_enqueue_script(
+          'cliniko-tyrohealth-js',
+          plugin_dir_url(__FILE__) . 'assets/js/tyrohealth.js',
+          ['jquery', 'medipass-transaction-sdk'],
+          null,
+          ['strategy' => 'defer']
+        );
+
+        // Pull from your Credentials module (NO hardcoded api keys in JS)
+        $tyroEnv = Credentials::getTyroEnv();                // stg|prod
+        $tyroAppId = Credentials::getTyroAppId();            // required
+        $tyroAppVersion = Credentials::getTyroAppVersion();  // required
+        $tyroProviderNo = Credentials::getTyroProviderNumber(); // optional
+
+        wp_localize_script('cliniko-tyrohealth-js', 'TyroHealthData', [
+          'env' => $tyroEnv,
+          'appId' => $tyroAppId,
+          'appVersion' => $tyroAppVersion,
+          'providerNumber' => Credentials::getTyroProviderNumber(),
+          // short-lived token endpoint (your server uses Business Admin key)
+          'sdk_token_url' => get_site_url() . '/wp-json/v1/tyrohealth/sdk-token',
+          'create_invoice_url' => get_site_url() . '/wp-json/v1/tyrohealth/invoice',
+          // Tyro-specific charge endpoint (processes booking + scheduling)
+          'confirm_booking_url' => get_site_url() . '/wp-json/v1/tyrohealth/charge',
+          'moduleId' => esc_attr($settings['module_id'] ?? ''),
+          'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect'] ?? ''),
+          // optional: choose default THOP method in JS ("new-payment-card" or "mobile")
+          'paymentMethod' => 'new-payment-card',
+        ]);
+      }
     }
 
 
@@ -176,29 +220,47 @@ class Widget extends Widget_Base
         'patient_form_template_id' => $form_template_id,
         // 'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
         'payment_url' => get_site_url() . '/wp-json/v1/payments/charge',
+        'available_times_url' => get_site_url() . '/wp-json/v1/available-times',
+        'practitioners_url' => get_site_url() . '/wp-json/v1/practitioners',
+        'appointment_calendar_url' => get_site_url() . '/wp-json/v1/appointment-calendar',
+        'available_times_per_page' => 100,
         'cliniko_embeded_form_sync_patient_form_url' => get_site_url() . '/wp-json/v1/send-patient-form',
-        'cliniko_embeded_host' => "https://".Credentials::getEmbedHost(),
+        'cliniko_embeded_host' => "https://" . Credentials::getEmbedHost(),
         'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect']),
         'appearance' => $appearance,
         'logo_url' => $logo_url,
-        'cliniko_embed' => $settings['appointment_source']
+        'cliniko_embed' => $settings['appointment_source'],
+        'form_type' => $settings['form_type'] ?? 'multi',
+        // expose gateway selection for frontend handlers (keeps original casing if present)
+        'custom_form_payment' => $settings['custom_form_payment'] ?? 'stripe',
+        'appointment_time_selection' => $settings['appointment_time_selection'] ?? 'calendar',
       ]
     );
 
-    wp_localize_script("save-on-exit","saveOnExitData",[
-        'save_on_exit' => $settings['save_on_exit'] === 'yes',
-    ] );
+    wp_localize_script("save-on-exit", "saveOnExitData", [
+      'save_on_exit' => $settings['save_on_exit'] === 'yes',
+    ]);
 
+    // ------------------------------------------------------------
+    // Render multistep template always (this is your main form)
+    // ------------------------------------------------------------
     require_once __DIR__ . '/templates/cliniko_multistep_form.phtml';
 
+
     //FINAL STEP
-    if($settings['appointment_source'] === "cliniko_embed") return;
+    if ($settings['appointment_source'] === "cliniko_embed")
+      return;
 
     if ($is_editor) {
       require __DIR__ . '/templates/card_form_mock.phtml';
       return;
-    }else{
+    } 
+    
+    $selectedGateway = isset($settings['custom_form_payment']) ? strtolower($settings['custom_form_payment']) : 'stripe';
+    if ($settings['enable_payment'] === 'yes' && $selectedGateway === 'stripe') {
       require __DIR__ . '/templates/card_form_real.phtml';
+    } else {
+      require __DIR__ . '/templates/card_form_tyrohealth.phtml';
     }
 
 

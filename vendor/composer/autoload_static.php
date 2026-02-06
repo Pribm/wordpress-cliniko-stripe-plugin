@@ -23,6 +23,8 @@ class ComposerStaticInit60be2d7759b7e12e095bb59c1520cb1a
         'R' =>
         array (
             'Respect\\Validation\\' => 19,
+            'Respect\\Stringifier\\Test\\Unit\\' => 30,
+            'Respect\\Stringifier\\Test\\' => 25,
             'Respect\\Stringifier\\' => 20,
         ),
         'P' =>
@@ -55,6 +57,14 @@ class ComposerStaticInit60be2d7759b7e12e095bb59c1520cb1a
         'Respect\\Validation\\' =>
         array (
             0 => __DIR__ . '/..' . '/respect/validation/library',
+        ),
+        'Respect\\Stringifier\\Test\\Unit\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/respect/stringifier/tests/unit',
+        ),
+        'Respect\\Stringifier\\Test\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/respect/stringifier/tests/src',
         ),
         'Respect\\Stringifier\\' =>
         array (
