@@ -4,7 +4,7 @@ namespace App\DTO;
 
 class CreatePatientFormDTO
 {
-    public string $attendee_id = "";
+    public ?string $attendee_id = null;
     public string $business_id = "";
     public bool $completed = false;
 
@@ -20,8 +20,7 @@ class CreatePatientFormDTO
 
     public function toArray(): array
     {
-        return [
-            'attendee_id' => $this->attendee_id,
+        $payload = [
             'business_id' => $this->business_id,
             'completed' => $this->completed,
             'email_to_patient_on_completion' => $this->email_to_patient_on_completion,
@@ -29,7 +28,16 @@ class CreatePatientFormDTO
             'patient_form_template_id' => $this->patient_form_template_id,
             'content' => $this->content_sections,
             'name' => $this->name,
-            'appointment_id' => $this->appointment_id
         ];
+
+        if (!empty($this->attendee_id)) {
+            $payload['attendee_id'] = $this->attendee_id;
+        }
+
+        if (!empty($this->appointment_id)) {
+            $payload['appointment_id'] = $this->appointment_id;
+        }
+
+        return $payload;
     }
 }

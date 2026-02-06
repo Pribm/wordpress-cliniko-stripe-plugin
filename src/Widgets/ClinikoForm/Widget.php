@@ -106,13 +106,13 @@ class Widget extends Widget_Base
       []
     );
 
-    if ($settings['enable_payment'] === 'yes') {
+    $appointment_source = $settings['appointment_source'] ?? '';
+    if ($appointment_source === 'custom_form' && $settings['enable_payment'] === 'yes') {
 
       // elementor control stores lowercase values; normalize for comparisons
-      $gateway = isset($settings['custom_form_payment']) ? strtolower($settings['custom_form_payment']) : '';
+      $gateway = isset($settings['custom_form_payment']) ? strtolower(trim($settings['custom_form_payment'])) : '';
 
-      if ($gateway === 'stripe' || $settings['custom_form_payment'] === 'Stripe') {
-      
+      if ($gateway === 'stripe') {
         wp_enqueue_script(
           'stripe-js',
           'https://js.stripe.com/v3/',
@@ -128,10 +128,7 @@ class Widget extends Widget_Base
           null,
           []
         );
-      }
-
-      if ($gateway === 'tyrohealth' || $settings['custom_form_payment'] === 'Tyrohealth') {
-     
+      } elseif ($gateway === 'tyrohealth') {
         wp_enqueue_script(
           'medipass-transaction-sdk',
           'https://unpkg.com/@medipass/partner-sdk@1.10.1/umd/@medipass/partner-sdk.min.js',
@@ -223,6 +220,10 @@ class Widget extends Widget_Base
         'patient_form_template_id' => $form_template_id,
         // 'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
         'payment_url' => get_site_url() . '/wp-json/v1/payments/charge',
+        'available_times_url' => get_site_url() . '/wp-json/v1/available-times',
+        'practitioners_url' => get_site_url() . '/wp-json/v1/practitioners',
+        'appointment_calendar_url' => get_site_url() . '/wp-json/v1/appointment-calendar',
+        'available_times_per_page' => 100,
         'cliniko_embeded_form_sync_patient_form_url' => get_site_url() . '/wp-json/v1/send-patient-form',
         'cliniko_embeded_host' => "https://" . Credentials::getEmbedHost(),
         'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect']),
@@ -232,6 +233,7 @@ class Widget extends Widget_Base
         'form_type' => $settings['form_type'] ?? 'multi',
         // expose gateway selection for frontend handlers (keeps original casing if present)
         'custom_form_payment' => $settings['custom_form_payment'] ?? 'stripe',
+        'appointment_time_selection' => $settings['appointment_time_selection'] ?? 'calendar',
       ]
     );
 

@@ -17,37 +17,6 @@ function register_cliniko_form_style_controls($widget)
     'tab' => Controls_Manager::TAB_STYLE,
   ]);
 
-  $widget->add_control('form_type', [
-    'label' => 'Form Type',
-    'type' => Controls_Manager::SELECT,
-    'default' => 'multi',
-    'options' => [
-      'multi' => 'Multi-step (current)',
-      'single' => 'Single-step (all fields)',
-      'unstyled' => 'Unstyled (no theme CSS)',
-    ],
-  ]);
-
-  $widget->add_control('unstyled_css_help', [
-    'type' => Controls_Manager::RAW_HTML,
-    'raw' =>
-      '<strong>Unstyled CSS hooks</strong><br>' .
-      'Unstyled disables the default theme CSS and shows the form as a single step (all fields visible).<br><br>' .
-      '<strong>Primary wrappers</strong><br>' .
-      '<code>.cliniko-form--unstyled</code> (form root), <code>#prepayment-form</code> (main container)<br><br>' .
-      '<strong>Sections & questions</strong><br>' .
-      '<code>.form-step</code> (each section/patient/embed block), <code>.inputGroup</code> (question block), ' .
-      '<code>.question-title</code>, <code>.req</code>, <code>.options-group</code>, <code>.other-input-wrap</code><br><br>' .
-      '<strong>Patient grid</strong><br>' .
-      '<code>.patient-grid</code>, <code>.field-col</code>, <code>.field-label</code>, <code>.col-span-*</code><br><br>' .
-      '<strong>Actions & errors</strong><br>' .
-      '<code>.form-actions</code>, <code>.multi-form-button</code>, <code>.prev-button</code>, <code>.next-button</code>, ' .
-      '<code>.field-error</code><br><br>' .
-      '<em>Tip:</em> You can scope all custom styles to <code>.cliniko-form--unstyled</code> to avoid affecting other forms.',
-    'content_classes' => 'elementor-panel-alert elementor-panel-alert-info',
-    'condition' => ['form_type' => 'unstyled'],
-  ]);
-
   // Background
   $widget->add_control('form_background_color', [
     'label' => 'Background',

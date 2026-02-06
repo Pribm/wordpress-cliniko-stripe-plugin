@@ -39,6 +39,24 @@ class ApiRoutes
             'permission_callback' => '__return_true',
         ]);
 
+        register_rest_route('v1', '/available-times', [
+            'methods' => 'GET',
+            'callback' => [$clinikoController, 'getAvailableTimes'],
+            'permission_callback' => '__return_true',
+        ]);
+
+        register_rest_route('v1', '/practitioners', [
+            'methods' => 'GET',
+            'callback' => [$clinikoController, 'getPractitioners'],
+            'permission_callback' => '__return_true',
+        ]);
+
+        register_rest_route('v1', '/appointment-calendar', [
+            'methods' => 'GET',
+            'callback' => [$clinikoController, 'getAppointmentCalendar'],
+            'permission_callback' => '__return_true',
+        ]);
+
 
         register_rest_route('v1', '/payments/charge', [
             'methods' => 'POST',

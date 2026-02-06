@@ -35,6 +35,647 @@ function isTyroSelected() {
   return getSelectedGateway() === "tyrohealth";
 }
 
+function shouldUseCalendarTimes() {
+  const selection = String(
+    formHandlerData?.appointment_time_selection || "calendar"
+  )
+    .trim()
+    .toLowerCase();
+  return !isClinikoForm && (isStripeSelected() || isTyroSelected()) && selection === "calendar";
+}
+
+function shouldUsePractitionerSelection() {
+  return !isClinikoForm && isPaymentEnabled && (isStripeSelected() || isTyroSelected());
+}
+
+function toDateInputValue(date) {
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - tzOffset).toISOString().slice(0, 10);
+}
+
+async function initAvailableTimesPicker() {
+  const useCalendar = shouldUseCalendarTimes();
+  const usePractitionerSelect = shouldUsePractitionerSelection();
+  if (!useCalendar && !usePractitionerSelect) return;
+
+  const formEl = document.getElementById("prepayment-form");
+  const calendarGrid = useCalendar ? document.getElementById("appointment-calendar-grid") : null;
+  const dayTitle = useCalendar ? document.getElementById("appointment-day-title") : null;
+  const morningSlots = useCalendar ? document.getElementById("appointment-day-slots-morning") : null;
+  const afternoonSlots = useCalendar ? document.getElementById("appointment-day-slots-afternoon") : null;
+  const eveningSlots = useCalendar ? document.getElementById("appointment-day-slots-evening") : null;
+  const emptySlots = useCalendar ? document.getElementById("appointment-day-empty") : null;
+  const hiddenInput = useCalendar ? document.getElementById("appointment-time") : null;
+  const statusEl = useCalendar ? document.getElementById("appointment-time-status") : null;
+  const selectionWrap = document.querySelector("[data-appointment-selection]");
+  const practitionerSelect = document.getElementById("appointment-practitioner");
+  const practitionerSelectWrap = document.querySelector("[data-practitioner-select]");
+  const dayHint = useCalendar ? document.getElementById("appointment-day-hint") : null;
+  const dayPlaceholder = useCalendar ? document.getElementById("appointment-day-placeholder") : null;
+  const dayTimesWrap = useCalendar ? document.querySelector(".appointment-day-times") : null;
+  const dayLoading = useCalendar ? document.getElementById("appointment-day-loading") : null;
+
+  if (!formEl) return;
+
+  const calendarPrevBtn = formEl.querySelector("[data-calendar-nav='prev']");
+  const calendarNextBtn = formEl.querySelector("[data-calendar-nav='next']");
+
+  const calendarReady =
+    useCalendar &&
+    calendarGrid &&
+    hiddenInput &&
+    dayTitle &&
+    morningSlots &&
+    afternoonSlots &&
+    eveningSlots;
+
+  const endpoint = formHandlerData?.available_times_url;
+  const practitionersEndpoint = formHandlerData?.practitioners_url;
+  const calendarEndpoint = formHandlerData?.appointment_calendar_url;
+  const appointmentTypeId =
+    formEl.dataset.appointmentTypeId || formHandlerData?.module_id || "";
+  let practitionerId = formEl.dataset.practitionerId || "";
+
+  if (!appointmentTypeId) {
+    if (statusEl) {
+      statusEl.textContent = "Appointment type not configured.";
+      statusEl.classList.remove("is-hidden");
+      statusEl.classList.add("is-error");
+    }
+    return;
+  }
+
+  if (useCalendar && !endpoint) {
+    if (statusEl) {
+      statusEl.textContent = "Available times endpoint not configured.";
+      statusEl.classList.remove("is-hidden");
+      statusEl.classList.add("is-error");
+    }
+    return;
+  }
+
+  const perPage = Math.min(
+    100,
+    Math.max(1, Number(formHandlerData?.available_times_per_page || 100))
+  );
+
+  function setStatus(message, isError = false) {
+    if (!statusEl) return;
+    statusEl.textContent = message || "";
+    statusEl.classList.toggle("is-hidden", !message);
+    statusEl.classList.toggle("is-error", !!isError);
+  }
+
+  function setDayHint(message) {
+    if (!dayHint) return;
+    dayHint.textContent = message || "";
+  }
+
+  function setPlaceholderVisible(show) {
+    if (dayPlaceholder) {
+      dayPlaceholder.classList.toggle("is-hidden", !show);
+    }
+    if (dayTimesWrap) {
+      dayTimesWrap.classList.toggle("is-placeholder", !!show);
+    }
+  }
+
+  function setDayLoading(show, message = "") {
+    if (dayLoading) {
+      dayLoading.classList.toggle("is-hidden", !show);
+      const text = dayLoading.querySelector(".appointment-day-times__loading-text");
+      if (text) text.textContent = message || "Loading available times…";
+    }
+    if (dayTimesWrap) {
+      dayTimesWrap.classList.toggle("is-loading", !!show);
+    }
+  }
+
+  function clearDayTimes() {
+    if (!calendarReady) return;
+    [morningSlots, afternoonSlots, eveningSlots].forEach((slot) => {
+      if (!slot) return;
+      slot.innerHTML = "";
+    });
+    if (emptySlots) emptySlots.classList.add("is-hidden");
+    if (dayTitle) dayTitle.textContent = "Select a day";
+    setDayHint("Choose a date to see available times.");
+    setPlaceholderVisible(true);
+    setDayLoading(false);
+  }
+
+  function resetSelectedTime() {
+    if (!calendarReady || !hiddenInput) return;
+    hiddenInput.value = "";
+    clearSelectedTime();
+  }
+
+  function getMonthKeyFromDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  }
+
+  function shiftMonthKey(monthKey, delta) {
+    if (!monthKey) return "";
+    const [yearStr, monthStr] = monthKey.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!year || !month) return "";
+    const dt = new Date(year, month - 1 + delta, 1);
+    return getMonthKeyFromDate(dt);
+  }
+
+  let currentMonthKey = calendarGrid?.dataset?.calendarMonth || "";
+  if (!currentMonthKey) {
+    currentMonthKey = getMonthKeyFromDate(new Date());
+    if (calendarGrid) calendarGrid.dataset.calendarMonth = currentMonthKey;
+  }
+
+  function updateNavState() {
+    if (!calendarPrevBtn) return;
+    const thisMonthKey = getMonthKeyFromDate(new Date());
+    if (!currentMonthKey) {
+      calendarPrevBtn.disabled = true;
+      return;
+    }
+    calendarPrevBtn.disabled = currentMonthKey <= thisMonthKey;
+  }
+
+  async function fetchPractitioners() {
+    if (!practitionersEndpoint || !appointmentTypeId) return [];
+    const url = new URL(practitionersEndpoint, window.location.origin);
+    url.searchParams.set("appointment_type_id", appointmentTypeId);
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.message || "Failed to load practitioners.");
+    }
+
+    const payload = data?.data ?? data ?? {};
+    return Array.isArray(payload.practitioners) ? payload.practitioners : [];
+  }
+
+  function populatePractitionerSelect(list) {
+    if (!practitionerSelect || !practitionerSelectWrap) return;
+    if (!Array.isArray(list) || list.length === 0) {
+      practitionerSelect.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No practitioners available";
+      practitionerSelect.appendChild(option);
+      practitionerSelect.disabled = true;
+      practitionerSelectWrap.classList.remove("is-hidden");
+      return;
+    }
+
+    practitionerSelect.innerHTML = "";
+    list.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.name || item.id;
+      practitionerSelect.appendChild(option);
+    });
+
+    const defaultId = practitionerId || list[0]?.id || "";
+    if (defaultId) {
+      practitionerSelect.value = defaultId;
+      practitionerId = defaultId;
+      formEl.dataset.practitionerId = defaultId;
+    }
+
+    practitionerSelect.disabled = false;
+    practitionerSelectWrap.classList.remove("is-hidden");
+  }
+
+  async function refreshCalendar(practitioner, monthKey = null) {
+    if (!calendarEndpoint || !appointmentTypeId || !calendarGrid) return;
+
+    calendarGrid.classList.add("is-loading");
+    calendarGrid.setAttribute("aria-busy", "true");
+
+    const url = new URL(calendarEndpoint, window.location.origin);
+    url.searchParams.set("appointment_type_id", appointmentTypeId);
+    if (practitioner) url.searchParams.set("practitioner_id", practitioner);
+    if (monthKey) url.searchParams.set("month", monthKey);
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      calendarGrid.classList.remove("is-loading");
+      calendarGrid.removeAttribute("aria-busy");
+      calendarGrid.innerHTML = "";
+      throw new Error(data?.message || "Failed to load calendar.");
+    }
+
+    const payload = data?.data ?? data ?? {};
+    calendarGrid.innerHTML = payload.grid_html || "";
+    calendarGrid.classList.remove("is-loading");
+    calendarGrid.removeAttribute("aria-busy");
+
+    const monthLabel = document.getElementById("appointment-calendar-month");
+    if (monthLabel && payload.month_label) {
+      monthLabel.textContent = payload.month_label;
+    }
+
+    if (payload.month_key) {
+      currentMonthKey = payload.month_key;
+      calendarGrid.dataset.calendarMonth = payload.month_key;
+    }
+    updateNavState();
+
+    const enabledDays = calendarGrid.querySelectorAll(
+      ".calendar-day:not(.is-blank):not(.is-disabled)"
+    );
+    if (enabledDays.length === 0) {
+      setStatus("No available times for the rest of this month.");
+    } else {
+      setStatus("Select a day to view times.");
+    }
+  }
+
+  async function fetchPage(from, to, page) {
+    const url = new URL(endpoint, window.location.origin);
+    url.searchParams.set("appointment_type_id", appointmentTypeId);
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+    url.searchParams.set("per_page", String(perPage));
+    url.searchParams.set("page", String(page));
+    if (practitionerId) {
+      url.searchParams.set("practitioner_id", practitionerId);
+    }
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.message || "Failed to load available times.");
+    }
+
+    const payload = data?.data ?? data ?? {};
+    const rawTimes = payload.available_times || [];
+    const items = Array.isArray(rawTimes)
+      ? rawTimes
+          .map((t) => t?.appointment_start || t?.appointmentStart || t)
+          .filter(Boolean)
+      : [];
+
+    const total = Number(payload.total_entries || items.length);
+    return { items, total };
+  }
+
+  async function fetchAllTimesForDate(dateKey) {
+    let page = 1;
+    let collected = [];
+    let total = 0;
+    let safety = 0;
+
+    while (safety < 20) {
+      const res = await fetchPage(dateKey, dateKey, page);
+      collected = collected.concat(res.items);
+      total = res.total || collected.length;
+      if (collected.length >= total || res.items.length === 0) break;
+      page += 1;
+      safety += 1;
+    }
+
+    return collected;
+  }
+
+  function addTimeButton(container, iso, onSelect) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "appointment-time-slot";
+    btn.dataset.iso = iso;
+
+    const dt = new Date(iso);
+    btn.textContent = Number.isNaN(dt.getTime())
+      ? iso
+      : dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+    btn.addEventListener("click", () => onSelect(btn));
+    container.appendChild(btn);
+  }
+
+  function clearSelectedTime() {
+    if (!calendarReady) return;
+    [morningSlots, afternoonSlots, eveningSlots].forEach((slot) => {
+      if (!slot) return;
+      slot
+        .querySelectorAll(".appointment-time-slot.is-selected")
+        .forEach((el) => el.classList.remove("is-selected"));
+    });
+  }
+
+  function handleSelectTime(btn) {
+    if (!calendarReady || !hiddenInput) return;
+    const iso = btn.dataset.iso;
+    if (!iso) return;
+
+    clearSelectedTime();
+    btn.classList.add("is-selected");
+    hiddenInput.value = iso;
+
+    const dt = new Date(iso);
+    const label = Number.isNaN(dt.getTime())
+      ? iso
+      : `${dt.toLocaleDateString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        })} at ${dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+
+    setStatus(`Selected: ${label}`);
+
+    if (selectionWrap) {
+      const existingError = selectionWrap.querySelector(".field-error");
+      if (existingError) existingError.remove();
+    }
+  }
+
+  function escapeSelector(value) {
+    if (window.CSS && typeof window.CSS.escape === "function") {
+      return window.CSS.escape(value);
+    }
+    return String(value).replace(/"/g, '\\"');
+  }
+
+  function getDateKeyFromIso(iso) {
+    if (!iso) return null;
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return null;
+    return toDateInputValue(dt);
+  }
+
+  const timesCache = new Map();
+
+  function updatePeriodIndicators(cell, times) {
+    if (!calendarReady) return;
+    const buckets = { morning: 0, afternoon: 0, evening: 0 };
+    times.forEach((iso) => {
+      const dt = new Date(iso);
+      if (Number.isNaN(dt.getTime())) return;
+      const hour = dt.getHours();
+      if (hour < 12) buckets.morning += 1;
+      else if (hour < 17) buckets.afternoon += 1;
+      else buckets.evening += 1;
+    });
+
+    cell
+      .querySelectorAll(".calendar-period")
+      .forEach((el) => {
+        const key = el.dataset.period;
+        el.classList.toggle("is-active", (buckets[key] || 0) > 0);
+      });
+
+    cell.classList.toggle("is-empty", times.length === 0);
+  }
+
+  function renderTimes(dateKey, times, preselectIso = null) {
+    if (!calendarReady) return;
+    [morningSlots, afternoonSlots, eveningSlots].forEach((slot) => {
+      slot.innerHTML = "";
+    });
+    if (emptySlots) emptySlots.classList.add("is-hidden");
+    setPlaceholderVisible(false);
+    setDayLoading(false);
+
+    if (!times.length) {
+      if (emptySlots) emptySlots.classList.remove("is-hidden");
+      setStatus("No available times for this day.");
+      setDayHint("No available times for this day.");
+      return;
+    }
+
+    const buckets = { morning: [], afternoon: [], evening: [] };
+    times.forEach((iso) => {
+      const dt = new Date(iso);
+      if (Number.isNaN(dt.getTime())) return;
+      const hour = dt.getHours();
+      if (hour < 12) buckets.morning.push(iso);
+      else if (hour < 17) buckets.afternoon.push(iso);
+      else buckets.evening.push(iso);
+    });
+
+    const renderBucket = (container, list) => {
+      if (!list.length) {
+        const empty = document.createElement("span");
+        empty.className = "appointment-day-times__empty";
+        empty.textContent = "No times";
+        container.appendChild(empty);
+        return;
+      }
+      list
+        .slice()
+        .sort((a, b) => new Date(a) - new Date(b))
+        .forEach((iso) => addTimeButton(container, iso, handleSelectTime));
+    };
+
+    renderBucket(morningSlots, buckets.morning);
+    renderBucket(afternoonSlots, buckets.afternoon);
+    renderBucket(eveningSlots, buckets.evening);
+
+    if (preselectIso) {
+      const preBtn = selectionWrap?.querySelector(
+        `.appointment-time-slot[data-iso="${escapeSelector(preselectIso)}"]`
+      );
+      if (preBtn) handleSelectTime(preBtn);
+    } else {
+      setStatus("Select a time to continue.");
+      setDayHint("Select a time below to continue.");
+    }
+  }
+
+  async function selectDay(cell, dateKey, preselectIso = null) {
+    if (!calendarReady) return;
+    calendarGrid
+      .querySelectorAll(".calendar-day.is-selected")
+      .forEach((el) => el.classList.remove("is-selected"));
+    cell.classList.add("is-selected");
+
+    const dt = new Date(dateKey);
+    dayTitle.textContent = Number.isNaN(dt.getTime())
+      ? "Selected day"
+      : dt.toLocaleDateString([], {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        });
+
+    setStatus("Loading available times…");
+    setDayHint("Loading available times…");
+    setPlaceholderVisible(false);
+    setDayLoading(true, "Fetching times for the selected day…");
+    [morningSlots, afternoonSlots, eveningSlots].forEach((slot) => {
+      slot.innerHTML = "";
+    });
+    if (emptySlots) emptySlots.classList.add("is-hidden");
+
+    if (timesCache.has(dateKey)) {
+      const cached = timesCache.get(dateKey);
+      updatePeriodIndicators(cell, cached);
+      renderTimes(dateKey, cached, preselectIso);
+      return;
+    }
+
+    let times = [];
+    try {
+      times = await fetchAllTimesForDate(dateKey);
+    } catch (e) {
+      setStatus(e?.message || "Failed to load available times.", true);
+      return;
+    }
+
+    timesCache.set(dateKey, times);
+    updatePeriodIndicators(cell, times);
+    renderTimes(dateKey, times, preselectIso);
+  }
+
+  if (calendarReady && calendarGrid) {
+    calendarGrid.addEventListener("click", (event) => {
+      const cell = event.target.closest(".calendar-day");
+      if (!cell || cell.classList.contains("is-blank") || cell.classList.contains("is-disabled")) return;
+      const dateKey = cell.dataset.date;
+      if (!dateKey) return;
+      selectDay(cell, dateKey);
+    });
+  }
+
+  async function initializePractitionerSelect() {
+    if (!practitionerSelect || !practitionersEndpoint) return;
+    try {
+      const list = await fetchPractitioners();
+      populatePractitionerSelect(list);
+    } catch (e) {
+      populatePractitionerSelect([]);
+      setStatus(e?.message || "Failed to load practitioners.", true);
+    }
+
+    if (!practitionerSelect.dataset.bound) {
+      practitionerSelect.dataset.bound = "1";
+      practitionerSelect.addEventListener("change", async () => {
+        const selected = practitionerSelect.value || "";
+        if (!selected || selected === practitionerId) return;
+        practitionerId = selected;
+        formEl.dataset.practitionerId = selected;
+        timesCache.clear();
+        resetSelectedTime();
+        clearDayTimes();
+
+        if (calendarReady) {
+          try {
+            await refreshCalendar(selected, currentMonthKey);
+          } catch (e) {
+            setStatus(e?.message || "Failed to load calendar.", true);
+          }
+        }
+      });
+    }
+  }
+
+  async function initializeCalendarState() {
+    if (calendarReady && calendarEndpoint && practitionerSelect) {
+      try {
+        await refreshCalendar(practitionerId, currentMonthKey);
+      } catch (e) {
+        setStatus(e?.message || "Failed to load calendar.", true);
+      }
+    } else if (calendarReady) {
+      const enabledDays = calendarGrid.querySelectorAll(
+        ".calendar-day:not(.is-blank):not(.is-disabled)"
+      );
+      if (enabledDays.length === 0) {
+        setStatus("No available times for the rest of this month.");
+      } else {
+        setStatus("Select a day to view times.");
+      }
+    }
+
+    if (calendarReady && hiddenInput && hiddenInput.value) {
+      const preDateKey = getDateKeyFromIso(hiddenInput.value);
+      if (preDateKey) {
+        const preCell = calendarGrid.querySelector(
+          `.calendar-day[data-date="${escapeSelector(preDateKey)}"]`
+        );
+        if (preCell) {
+          selectDay(preCell, preDateKey, hiddenInput.value);
+        }
+      }
+    }
+  }
+
+  clearDayTimes();
+
+  initializePractitionerSelect()
+    .then(initializeCalendarState)
+    .catch(() => initializeCalendarState());
+
+  if (calendarReady) {
+    updateNavState();
+
+    if (calendarPrevBtn && !calendarPrevBtn.dataset.bound) {
+      calendarPrevBtn.dataset.bound = "1";
+      calendarPrevBtn.addEventListener("click", async (event) => {
+        event.preventDefault();
+        if (calendarPrevBtn.disabled) return;
+        const targetKey = shiftMonthKey(currentMonthKey, -1);
+        if (!targetKey) return;
+        timesCache.clear();
+        resetSelectedTime();
+        clearDayTimes();
+        try {
+          await refreshCalendar(practitionerId, targetKey);
+        } catch (e) {
+          setStatus(e?.message || "Failed to load calendar.", true);
+        }
+      });
+    }
+
+    if (calendarNextBtn && !calendarNextBtn.dataset.bound) {
+      calendarNextBtn.dataset.bound = "1";
+      calendarNextBtn.addEventListener("click", async (event) => {
+        event.preventDefault();
+        const targetKey = shiftMonthKey(currentMonthKey, 1);
+        if (!targetKey) return;
+        timesCache.clear();
+        resetSelectedTime();
+        clearDayTimes();
+        try {
+          await refreshCalendar(practitionerId, targetKey);
+        } catch (e) {
+          setStatus(e?.message || "Failed to load calendar.", true);
+        }
+      });
+    }
+  }
+
+  if (calendarReady && hiddenInput && calendarGrid) {
+    document.addEventListener("restoreform", () => {
+      if (!hiddenInput.value) return;
+      const restoredKey = getDateKeyFromIso(hiddenInput.value);
+      if (!restoredKey) return;
+      const restoredCell = calendarGrid.querySelector(
+        `.calendar-day[data-date="${escapeSelector(restoredKey)}"]`
+      );
+      if (restoredCell) {
+        selectDay(restoredCell, restoredKey, hiddenInput.value);
+      }
+    });
+  }
+}
+
 function isSingleStep() {
   return formType === "single" || formType === "unstyled";
 }
@@ -426,6 +1067,9 @@ function isCurrentStepValid() {
   let isValid = true;
 
   for (let field of currentFields) {
+    if (field.disabled) continue;
+    if (field.type === "hidden" && !field.hasAttribute("data-validate-hidden"))
+      continue;
     const parent =
       field.closest(".col-span-4, .col-span-6, .col-span-8, .col-span-12") ||
       field.parentElement;
@@ -471,6 +1115,19 @@ function isCurrentStepValid() {
     }
 
     const value = field.value.trim();
+
+    if (field.type === "hidden" && field.id === "appointment-time") {
+      if (!value) {
+        isValid = false;
+        if (!existingError) {
+          const msg = document.createElement("div");
+          msg.className = "field-error";
+          msg.textContent = "Please select an appointment time.";
+          parent.appendChild(msg);
+        }
+      }
+      continue;
+    }
 
     // Email
     if (field.type === "email") {
@@ -846,6 +1503,7 @@ function mountForm() {
   const form = document.getElementById("prepayment-form");
   bindOtherToggle(form);
   setupSignatureCanvas();
+  initAvailableTimesPicker();
 
 
   if (nextBtn) {
@@ -887,7 +1545,7 @@ function mountForm() {
   function attachValidationListeners() {
     document
       .querySelectorAll(
-        "#prepayment-form input[required], #prepayment-form textarea[required]"
+        "#prepayment-form input[required], #prepayment-form textarea[required], #prepayment-form select[required]"
       )
       .forEach((input) => {
         input.addEventListener("input", () => {

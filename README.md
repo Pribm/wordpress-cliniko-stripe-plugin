@@ -1,233 +1,139 @@
-# 📦 WordPress Cliniko ⇆ Stripe Integration
+# WordPress Cliniko Payment Integration
 
-A production-ready WordPress plugin that connects **Cliniko** (appointments, patient forms) with **Stripe** (payments), with **Elementor** widgets for a clean multi-step booking flow. Ideal for telehealth/clinics: collect patient info, take payment, then create/sync bookings.
+Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
----
+## Version
+- Current plugin version: `1.5.0`
 
-## ✨ Highlights
+## Overview
+This plugin supports two booking approaches:
+- `Cliniko Embed`: Cliniko handles the booking UI in an iframe.
+- `Custom Form`: your Elementor form collects answers, schedules appointments, and routes payment through the selected gateway.
 
-- **Cliniko API (shard-aware)**: Works with any region (e.g. `au4`, `us1`).
-- **Stripe Payments**: Pre-pay or pay-to-confirm with Stripe Elements.
-- **Elementor Widgets**:
-  - `Cliniko: Appointment Type Card`
-  - `Cliniko: Stripe Booking Form`
-- **Smart Flow**:
-  - If Cliniko Embed is configured → **Patient step** is **penultimate**, **Embed** is **final**.
-  - If not configured → **Patient** is the final step.
-- **PostMessage Handlers**: Responds to `cliniko-bookings-resize:*` and `cliniko-bookings-page:*`.
-- **Action Scheduler**: Async job queue (falls back to WP-Cron if unavailable).
-- **Hardened**: Extra escaping/sanitization for rendered attributes.
+For custom form mode, appointment scheduling can use:
+- `Next Available Time`
+- `Calendar Selection` with practitioner-aware availability
 
----
+## What Is New in 1.5.0
+- Custom-form calendar scheduling with selectable available times.
+- Monthly calendar with grouped slots (`Morning`, `Afternoon`, `Evening`).
+- Practitioner-aware availability for calendar selection.
+- Gateway-specific asset loading in custom form:
+  - Stripe mode only loads Stripe resources.
+  - Tyro Health mode only loads Tyro Health resources.
+- Improved attendee-based form linking behavior for appointment-related patient forms.
+- Better fallback styling for unstyled form mode.
 
-## 🧰 Requirements
+## Core Features
+- Shard-aware Cliniko API integration.
+- Elementor widgets for appointment cards and booking forms.
+- Multi-step booking flow with custom step sequencing.
+- Async scheduling pipeline through Action Scheduler (WP-Cron fallback).
+- Validation pipeline for patient form payloads.
+- Gateway handling for Stripe and Tyro Health.
 
-- **WordPress** ≥ 5.9
-- **PHP** ≥ 7.4 (tested up to 8.2)
-- **Elementor** ≥ 3.10
-- API keys:
-  - **Cliniko** (from *My Info → API Keys*)
-  - **Stripe** (Publishable + Secret)
+## Requirements
+- WordPress `>= 5.9`
+- PHP `>= 7.4` (tested up to 8.2)
+- Elementor `>= 3.10`
+- Cliniko API key
+- Stripe keys (publishable and secret) for Stripe mode
 
----
+## Installation
+1. Install the plugin in `/wp-content/plugins/` or upload the ZIP from WordPress admin.
+2. Activate the plugin.
+3. Open `Settings -> Cliniko Stripe Integration`.
+4. Configure credentials:
+   - Cliniko API Key
+   - Cliniko App Name
+   - Cliniko Shard (for example `au4`)
+   - Stripe Publishable Key
+   - Stripe Secret Key
+5. Click `Connect to Cliniko` and select business, practitioner, and appointment type.
 
-## 🚀 Installation
+Cliniko app and shard can be derived from your Cliniko URL:
+- Example: `https://my-clinic.au4.cliniko.com/...`
+- App Name: `my-clinic`
+- Shard: `au4`
 
-1. Upload to `/wp-content/plugins/` (or install as ZIP).
-2. Activate in **Plugins**.
-3. Go to **Settings → Cliniko Stripe Integration** and fill:
-   - **Cliniko API Key**
-   - **Cliniko App Name** (e.g. `lorem-ipsum`)
-   - **Cliniko Shard** (e.g. `au4`)
-   - **Stripe Publishable Key**
-   - **Stripe Secret Key**
-4. Click **Connect to Cliniko** to fetch **Businesses**, then select **Practitioner** and **Appointment Type**.
+## Elementor Widgets
 
-> 🧭 **Where do I find App Name + Shard?**  
-> From your Cliniko embed URL, e.g.  
-> `https://lorem-ipsum.au4.cliniko.com/bookings?...`  
-> App Name = `lorem-ipsum` • Shard = `au4`.
+### Cliniko: Appointment Type Card
+Displays appointment type details with configurable icon, price presentation, and CTA.
 
----
+Main controls:
+- Appointment type
+- Icon and colors
+- Price position
+- Button text/icon/link
+- Optional custom CSS class
 
-## 🧩 Elementor Widgets
+### Cliniko: Stripe Booking Form
+Main booking wizard widget.
 
-### 1) Cliniko: Appointment Type Card
-A stylable card for a single appointment type (name, description, price, CTA).
+Main capabilities:
+- Multi-step form flow
+- Cliniko embed mode support
+- Custom form mode support
+- Optional payment step depending on gateway mode
 
-**Controls**
-- Select Appointment Type
-- Icon / color
-- Price label + position
-- Button text/link/icon
-- Custom classes (e.g. Tailwind)
+## Custom Form Flow
+For custom form mode, the flow generally includes:
+1. Booking questions and patient details
+2. Appointment scheduling (`Next Available` or `Calendar Selection`)
+3. Payment handoff (if gateway enabled)
+4. Async scheduling and form processing in workers
 
-**Optional hover helper**
-```css
-.button-hover-slide {
-  background: linear-gradient(to left, var(--e-global-color-primary) 50%, var(--e-global-color-secondary) 50%);
-  background-size: 200% 100%;
-  background-position: right;
-  transition: background-position 0.4s ease;
-  color: #fff;
-}
-.button-hover-slide:hover {
-  background-position: left;
-  color: #000;
-}
-```
+Calendar mode behavior:
+- Calendar step displays date grid and available slots.
+- Practitioner selection is tied to calendar scheduling context.
+- Date buttons with no availability are disabled.
+- Slot selection updates `patient[appointment_start]`.
 
-### 2) Cliniko: Stripe Booking Form
-A multi-step flow that can include:
-1. Pre-form (optional)
-2. Patient Form (Cliniko template)
-3. Stripe payment
-4. (Optional) Cliniko Embed as the final step
+Gateway behavior:
+- Final wizard action should continue to payment flow (not direct browser submit).
+- Wizard UI can be hidden while payment UI is active.
 
-**Controls**
-- Appointment Type / Practitioner
-- Toggle multi-step
-- Map basic identity fields
-- Enable/disable patient fields
-- Enable **Cliniko Embed** (iframe)
+## Async Processing
+The plugin uses Action Scheduler for background jobs.
 
-**What happens behind the scenes**
-- Loads **Patient Form Template** from Cliniko
-- Uses **Stripe Elements** to securely capture payment
-- Submits patient + booking + notes to Cliniko
-- In **Embed mode**, listens for `cliniko-bookings-page:*` and `cliniko-bookings-resize:*` events and requires a `patient_booked_time` to sync
+Primary pattern:
+- Frontend submits structured payload.
+- Controller validates and persists payload metadata.
+- Worker processes booking and patient form tasks.
 
----
+If Action Scheduler is not available, WP-Cron is used as fallback.
 
-## 🔌 Endpoints & Payloads (Frontend → WP)
+## Security Notes
+- API credentials are stored in WordPress options with capability checks.
+- Inputs are sanitized/validated before processing.
+- Widget output uses escaped attributes/content.
+- Stripe secret key is never exposed in frontend payloads.
 
-The booking submitter builds a JSON payload like:
+## Troubleshooting
 
-```json
-{
-  "content": { "sections": [/* Cliniko-like structured Q&A */] },
-  "patient": {
-    "first_name": "Paulo",
-    "last_name": "Monteiro",
-    "email": "monteiro.paulovinicius@gmail.com",
-    "mobile_number": "0405637928"
-  },
-  "moduleId": "1747505259153991532",
-  "patient_form_template_id": "1739522739649127472",
-  "stripeToken": null
-}
-```
+### Calendar not visible in custom form wizard
+- Confirm appointment source is `custom_form`.
+- Confirm scheduling mode is `calendar`.
+- Confirm the wizard includes the `[data-appointment-selection]` block.
 
-**Embed mode (Cliniko iframe)**: one extra requirement
+### Payment step does not open
+- Confirm selected gateway is enabled in widget settings.
+- Confirm final wizard action triggers gateway flow instead of direct form submit.
+- Confirm only the selected gateway assets are loaded.
 
-- You **must** include a `patient_booked_time` (ISO string) and it will be merged into `patient` by the controller:
-  ```js
-  submitBookingForm(null, null, /* isClinikoIframe */ true, {
-    patientBookedTime: new Date().toISOString()
-  });
-  ```
+### Practitioner not populated
+- Confirm practitioner endpoint is reachable from site context.
+- Confirm appointment type is correctly configured.
 
-The controller validates via `PatientFormValidator`, persists a job payload, and enqueues the async worker using **Action Scheduler** (group: `wp-cliniko`). If Action Scheduler is missing, it falls back to **WP‑Cron**.
+## Changelog
+See `CHANGELOG.md` for release history.
 
----
+## Contributing
+Pull requests are welcome. For major changes, open an issue first with:
+- use case
+- expected behavior
+- implementation notes
 
-## 🧱 Action Scheduler (Queue)
-
-This plugin prefers **Action Scheduler**. If available, we enqueue with:
-```php
-as_schedule_single_action($when, 'cliniko_async_create_patient_form', [['payload_key' => $key]], 'wp-cliniko');
-```
-If not present, we fallback to:
-```php
-wp_schedule_single_event($when, 'cliniko_async_create_patient_form', [['payload_key' => $key]]);
-```
-
-**Troubleshooting**
-- Make sure Action Scheduler is bundled/loaded before enqueues (e.g., `includes/action-scheduler/action-scheduler.php`).
-- Check the **Scheduled Actions** admin page (if you use the separate plugin) or WP-Cron health.
-- Confirm your hooks are registered early enough.
-
----
-
-## 📨 PostMessage Events (Cliniko Embed)
-When **Cliniko Embed** is enabled, we listen for:
-- `cliniko-bookings-resize:<height>` → used to size the iframe wrapper
-- `cliniko-bookings-page:<name>` → e.g., `schedule`, `patient`, `confirmed`
-
-**Example**
-```js
-window.addEventListener('message', (e) => {
-  if (e.origin !== 'https://<app>.<shard>.cliniko.com') return;
-  if (typeof e.data !== 'string') return;
-
-  if (e.data.startsWith('cliniko-bookings-resize:')) {
-    const height = Number(e.data.split(':')[1]);
-    iframe.style.height = height + 'px';
-  }
-
-  if (e.data.startsWith('cliniko-bookings-page:')) {
-    // update internal step state, toggle local buttons, etc.
-  }
-
-  if (e.data === 'cliniko-bookings-page:confirmed') {
-    // hide iframe, call submitBookingForm(..., true, { patientBookedTime: ... })
-  }
-});
-```
-
----
-
-## 🔐 Security Notes
-- Store API keys in WordPress options with proper capability checks.
-- Escape all attributes and HTML output from widget controls.
-- Validate all incoming REST payloads via `PatientFormValidator`.
-- Never expose Stripe **Secret** key to the browser — only Publishable key in frontend.
-
----
-
-## 🧭 Roadmap
-- Webhook-based reconciliation (where possible)
-- More robust i18n and date/time handling
-- Per-appointment custom notes/metadata mapper
-- CLI commands for queue replays and health checks
-
----
-
-## 📝 Changelog
-See **[CHANGELOG.md](./CHANGELOG.md)** for full release notes. Latest: **1.3.4**
-
----
-
-## 📜 License
+## License
 MIT
-
----
-
-## 🤝 Contributing
-PRs are welcome! Please:
-- Open an issue first for major changes
-- Keep code formatted and typed (where applicable)
-- Add context to commits and test changes in WP/Elementor
-
----
-
-## 🧪 Dev Quick Ref
-
-**Namespace**
-```
-App\
-```
-
-**Key Classes**
-- Widgets
-  - `App\Widgets\AppointmentTypeCard\Widget`
-  - `App\Widgets\ClinikoStripeWidget`
-- Clients
-  - `App\Client\Cliniko\Client`
-  - `Stripe\Client`
-- Infra
-  - `App\Infra\JobDispatcher` (Action Scheduler → WP-Cron fallback)
-
-**Build/Debug**
-- Enable `WP_DEBUG` and `WP_DEBUG_LOG`
-- Xdebug (VSCode) recommended for step debugging
