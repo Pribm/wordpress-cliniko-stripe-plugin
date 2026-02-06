@@ -1,0 +1,274 @@
+/* =========================================================
+   Unstyled Form — Basic Calendar Styles
+   Keeps the calendar usable without full theme CSS.
+   ========================================================= */
+
+.cliniko-form--unstyled .is-hidden {
+  display: none !important;
+}
+
+.cliniko-form--unstyled .appointment-selection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.cliniko-form--unstyled .appointment-calendar,
+.cliniko-form--unstyled .appointment-day-times {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.cliniko-form--unstyled .appointment-calendar__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.cliniko-form--unstyled .appointment-calendar__nav {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.cliniko-form--unstyled .calendar-nav {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.cliniko-form--unstyled .calendar-nav:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f3f4f6;
+}
+
+.cliniko-form--unstyled .appointment-calendar__filters {
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.cliniko-form--unstyled .appointment-calendar__label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+
+.cliniko-form--unstyled .appointment-calendar__select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+}
+
+.cliniko-form--unstyled .appointment-calendar__month {
+  font-weight: 700;
+  font-size: 15px;
+  color: #111827;
+}
+
+.cliniko-form--unstyled .appointment-calendar__legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cliniko-form--unstyled .calendar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.cliniko-form--unstyled .calendar-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.cliniko-form--unstyled .calendar-legend-dot--morning { background: #0ea5e9; }
+.cliniko-form--unstyled .calendar-legend-dot--afternoon { background: #f59e0b; }
+.cliniko-form--unstyled .calendar-legend-dot--evening { background: #ef4444; }
+
+.cliniko-form--unstyled .appointment-calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.cliniko-form--unstyled .appointment-calendar__weekdays span {
+  text-align: center;
+}
+
+.cliniko-form--unstyled .appointment-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(32px, 1fr));
+  gap: 6px;
+}
+
+.cliniko-form--unstyled .appointment-calendar__grid.is-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.cliniko-form--unstyled .calendar-day {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  aspect-ratio: 1 / 1;
+}
+
+.cliniko-form--unstyled .calendar-day.is-blank {
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+
+.cliniko-form--unstyled .calendar-day.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+.cliniko-form--unstyled .calendar-day.is-selected {
+  border-color: #111827;
+  box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.12);
+}
+
+.cliniko-form--unstyled .calendar-day__number {
+  font-weight: 700;
+  font-size: 12px;
+  color: #111827;
+}
+
+.cliniko-form--unstyled .calendar-day__periods {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.cliniko-form--unstyled .calendar-period {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.cliniko-form--unstyled .calendar-period--morning.is-active { background: #0ea5e9; }
+.cliniko-form--unstyled .calendar-period--afternoon.is-active { background: #f59e0b; }
+.cliniko-form--unstyled .calendar-period--evening.is-active { background: #ef4444; }
+
+.cliniko-form--unstyled .appointment-day-times__title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #111827;
+}
+
+.cliniko-form--unstyled .appointment-day-times__hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin: -4px 0 10px;
+}
+
+.cliniko-form--unstyled .appointment-day-times__placeholder,
+.cliniko-form--unstyled .appointment-day-times__loading {
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  color: #6b7280;
+  background: #f9fafb;
+  margin-bottom: 12px;
+}
+
+.cliniko-form--unstyled .appointment-day-times__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cliniko-form--unstyled .appointment-day-times__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cliniko-form--unstyled .appointment-day-times__group-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.cliniko-form--unstyled .appointment-day-times__group-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cliniko-form--unstyled .appointment-time-slot {
+  border: 1px solid #111827;
+  color: #111827;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cliniko-form--unstyled .appointment-time-slot.is-selected {
+  background: #111827;
+  color: #ffffff;
+}
+
+.cliniko-form--unstyled .appointment-day-times__empty {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+@media (max-width: 720px) {
+  .cliniko-form--unstyled .appointment-selection {
+    grid-template-columns: 1fr;
+  }
+}

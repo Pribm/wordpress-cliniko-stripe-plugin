@@ -7,13 +7,13 @@ Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Description: Integração entre Stripe e Cliniko via WordPress.
 Author: Paulo Monteiro
 Author URI: https://github.com/Pribm
-Version: 1.4.1
+Version: 1.5.0
 GitHub Plugin URI: Pribm/wordpress-cliniko-stripe-plugin
 Primary Branch: main
 Release Asset: true
 */
 defined('ABSPATH') || exit;
-define('WP_CLINIKO_PLUGIN_VERSION', '1.4.1');
+define('WP_CLINIKO_PLUGIN_VERSION', '1.5.0');
 
 use Elementor\Plugin;
 
@@ -51,4 +51,38 @@ add_action('elementor/editor/after_enqueue_scripts', function () {
 
 App\Bootstrap::init();
 
- 
+// Extend CSP to allow Tyro Health checkout domains when present.
+add_filter('wp_headers', function (array $headers): array {
+  // Domains used by Tyro Health / Medipass SDK (staging + prod + CDN).
+  $allow = [
+    'https://test-tyro.mtf.gateway.mastercard.com', // Tyro staging checkout
+    'https://tyro.gateway.mastercard.com',          // Tyro production checkout
+    'https://unpkg.com',                            // SDK CDN
+    'https://stg-api-au.medipass.io',               // Staging API (token mint)
+    'https://api-au.medipass.io',                   // Production API
+  ];
+
+  // No existing CSP -> add a minimal connect-src only (non-invasive).
+  if (!isset($headers['Content-Security-Policy'])) {
+    $headers['Content-Security-Policy'] = "connect-src 'self' " . implode(' ', $allow);
+    return $headers;
+  }
+
+  // If there is a CSP, try to append to connect-src; fall back to appending a new directive.
+  $csp = $headers['Content-Security-Policy'];
+  $pattern = '/connect-src\s+([^;]+);?/i';
+  if (preg_match($pattern, $csp, $m)) {
+    $current = $m[1];
+    foreach ($allow as $domain) {
+      if (strpos($current, $domain) === false) {
+        $current .= ' ' . $domain;
+      }
+    }
+    $csp = preg_replace($pattern, 'connect-src ' . $current . ';', $csp, 1);
+  } else {
+    $csp .= '; connect-src ' . implode(' ', $allow);
+  }
+
+  $headers['Content-Security-Policy'] = $csp;
+  return $headers;
+});

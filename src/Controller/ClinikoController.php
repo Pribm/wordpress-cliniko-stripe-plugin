@@ -2,6 +2,8 @@
 namespace App\Controller;
 
 use App\Infra\JobDispatcher;
+use App\Model\AppointmentType;
+use App\Model\AvailableTimes;
 use App\Validator\PatientFormValidator;
 
 
@@ -64,6 +66,267 @@ class ClinikoController
                 'status' => 'queued',
             ],
         ], 202);
+    }
+
+    public function getAvailableTimes(WP_REST_Request $request): WP_REST_Response
+    {
+        $appointmentTypeId = sanitize_text_field((string) (
+            $request->get_param('appointment_type_id')
+            ?? $request->get_param('module_id')
+            ?? $request->get_param('moduleId')
+        ));
+        $from = sanitize_text_field((string) $request->get_param('from'));
+        $to = sanitize_text_field((string) $request->get_param('to'));
+        $practitionerId = sanitize_text_field((string) $request->get_param('practitioner_id'));
+        $page = $request->get_param('page');
+        $perPage = $request->get_param('per_page');
+
+        if (empty($appointmentTypeId) || empty($from) || empty($to)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Missing required fields: appointment_type_id, from, to.',
+            ], 422);
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Invalid date format. Use YYYY-MM-DD for from/to.',
+            ], 422);
+        }
+
+        $businessId = get_option('wp_cliniko_business_id');
+        if (empty($businessId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Cliniko business ID is not configured.',
+            ], 400);
+        }
+
+        // Resolve practitioner if not provided (use first for appointment type)
+        if (empty($practitionerId)) {
+            $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(true));
+            if (!$appointmentType) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => 'Appointment type not found.',
+                ], 404);
+            }
+
+            $practitioners = $appointmentType->getPractitioners();
+            if (empty($practitioners)) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => 'No practitioners available for this appointment type.',
+                ], 404);
+            }
+
+            $practitionerId = $practitioners[0]->getId();
+        }
+
+        $available = AvailableTimes::findForPractitionerAppointmentType(
+            (string) $businessId,
+            $practitionerId,
+            $appointmentTypeId,
+            $from,
+            $to,
+            cliniko_client(true),
+            $page !== null ? (int) $page : null,
+            $perPage !== null ? (int) $perPage : null
+        );
+
+        if (!$available) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Unable to fetch available times from Cliniko.',
+            ], 500);
+        }
+
+        $availableTimes = array_map(
+            fn($dto) => ['appointment_start' => $dto->appointmentStart],
+            $available->getAvailableTimes()
+        );
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'available_times' => $availableTimes,
+                'total_entries' => $available->getTotalEntries(),
+                'links' => [
+                    'self' => $available->getSelfUrl(),
+                    'next' => $available->getNextUrl(),
+                    'previous' => $available->getPreviousUrl(),
+                ],
+                'appointment_type_id' => $appointmentTypeId,
+                'practitioner_id' => $practitionerId,
+                'from' => $from,
+                'to' => $to,
+            ],
+        ], 200);
+    }
+
+    public function getPractitioners(WP_REST_Request $request): WP_REST_Response
+    {
+        $appointmentTypeId = sanitize_text_field((string) (
+            $request->get_param('appointment_type_id')
+            ?? $request->get_param('module_id')
+            ?? $request->get_param('moduleId')
+        ));
+
+        if (empty($appointmentTypeId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Missing required field: appointment_type_id.',
+            ], 422);
+        }
+
+        $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(true));
+        if (!$appointmentType) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Appointment type not found.',
+            ], 404);
+        }
+
+        $practitioners = $appointmentType->getPractitioners();
+        if (empty($practitioners)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'No practitioners available for this appointment type.',
+            ], 404);
+        }
+
+        $items = [];
+        foreach ($practitioners as $practitioner) {
+            $dto = $practitioner->getDTO();
+            if ($dto && property_exists($dto, 'active') && $dto->active === false) {
+                continue;
+            }
+            if ($dto && property_exists($dto, 'showInOnlineBookings') && $dto->showInOnlineBookings === false) {
+                continue;
+            }
+
+            $display = '';
+            if ($dto && (property_exists($dto, 'firstName') || property_exists($dto, 'lastName'))) {
+                $display = trim(($dto->firstName ?? '') . ' ' . ($dto->lastName ?? ''));
+            }
+            if ($display === '' && $dto && property_exists($dto, 'displayName') && $dto->displayName) {
+                $display = $dto->displayName;
+            }
+            if ($display === '') {
+                $display = $practitioner->getId();
+            }
+
+            $items[] = [
+                'id' => $practitioner->getId(),
+                'name' => $display,
+            ];
+        }
+
+        if (empty($items)) {
+            foreach ($practitioners as $practitioner) {
+                $dto = $practitioner->getDTO();
+            $display = '';
+            if ($dto && (property_exists($dto, 'firstName') || property_exists($dto, 'lastName'))) {
+                $display = trim(($dto->firstName ?? '') . ' ' . ($dto->lastName ?? ''));
+            }
+            if ($display === '' && $dto && property_exists($dto, 'displayName') && $dto->displayName) {
+                $display = $dto->displayName;
+            }
+            if ($display === '') {
+                $display = $practitioner->getId();
+            }
+
+                $items[] = [
+                    'id' => $practitioner->getId(),
+                    'name' => $display,
+                ];
+            }
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'appointment_type_id' => $appointmentTypeId,
+                'practitioners' => $items,
+            ],
+        ], 200);
+    }
+
+    public function getAppointmentCalendar(WP_REST_Request $request): WP_REST_Response
+    {
+        $appointmentTypeId = sanitize_text_field((string) (
+            $request->get_param('appointment_type_id')
+            ?? $request->get_param('module_id')
+            ?? $request->get_param('moduleId')
+        ));
+        $practitionerId = sanitize_text_field((string) $request->get_param('practitioner_id'));
+        $month = sanitize_text_field((string) $request->get_param('month'));
+
+        if (empty($appointmentTypeId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Missing required field: appointment_type_id.',
+            ], 422);
+        }
+
+        if (empty($practitionerId)) {
+            $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(true));
+            if (!$appointmentType) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => 'Appointment type not found.',
+                ], 404);
+            }
+            $practitioners = $appointmentType->getPractitioners();
+            if (empty($practitioners)) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => 'No practitioners available for this appointment type.',
+                ], 404);
+            }
+            $practitionerId = $practitioners[0]->getId();
+        }
+
+        $businessId = get_option('wp_cliniko_business_id');
+        if (empty($businessId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Cliniko business ID is not configured.',
+            ], 400);
+        }
+
+        $helperPath = plugin_dir_path(__DIR__) . 'Widgets/ClinikoForm/helpers/appointment_calendar.php';
+        if (file_exists($helperPath)) {
+            require_once $helperPath;
+        } else {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Calendar helper not found.',
+            ], 500);
+        }
+
+        $context = cliniko_build_appointment_calendar_context([
+            'business_id' => (string) $businessId,
+            'practitioner_id' => $practitionerId,
+            'appointment_type_id' => $appointmentTypeId,
+            'month' => $month ?: null,
+            'per_page' => 100,
+            'cache_ttl' => 600,
+        ]);
+
+        $grid = cliniko_render_appointment_calendar_grid($context);
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'month_label' => $context['month_label'],
+                'month_key' => $context['month_key'],
+                'grid_html' => $grid,
+                'practitioner_id' => $practitionerId,
+                'appointment_type_id' => $appointmentTypeId,
+            ],
+        ], 200);
     }
 }
 

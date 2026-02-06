@@ -2,12 +2,11 @@
 namespace App\Workers;
 
 use App\Client\Cliniko\Client;
-use App\DTO\CreatePatientCaseDTO;
 use App\DTO\CreatePatientDTO;
 use App\DTO\CreatePatientFormDTO;
 use App\Model\AppointmentType;
+use App\Model\Booking;
 use App\Model\IndividualAppointment;
-use App\Model\PatientCase;
 use App\Model\PatientForm;
 use App\Model\PatientFormTemplate;
 use App\Service\ClinikoService;
@@ -199,73 +198,58 @@ class ClinikoSchedulingWorker
                 $wpdb->update($table, ['patient_id' => (string) $pt->getId(), 'updated_at' => $now], ['payment_reference' => $paymentRef]);
             }
 
-            // 3) Slot & practitioner (simplified: take first available)
-            $nowDt = new DateTimeImmutable('now', new DateTimeZone('Australia/Sydney'));
+            // 3) Slot & practitioner (use site timezone to match Cliniko display)
+            $clinicTz = function_exists('wp_timezone') ? wp_timezone() : new DateTimeZone('UTC');
+            $nowDt = new DateTimeImmutable('now', $clinicTz);
             $to = $nowDt->add(new DateInterval('P7D'));
 
-            $practitioners = $apptType->getPractitioners() ?: [];
-            if (empty($practitioners)) {
-                throw new \RuntimeException('No practitioners available.');
+            $practitionerId = '';
+            if (!empty($patient['practitioner_id'])) {
+                $practitionerId = trim((string) $patient['practitioner_id']);
+            } elseif (!empty($args['practitioner_id'])) {
+                $practitionerId = trim((string) $args['practitioner_id']);
             }
 
-            $practitionerId = $practitioners[0]->getId();
+            if ($practitionerId === '') {
+                throw new \RuntimeException('Missing practitioner selection.');
+            }
             $appointmentTypeId = $apptType->getId();
             $businessId = get_option('wp_cliniko_business_id');
 
-            $next = $cliniko->getNextAvailableTime($businessId, $practitionerId, $appointmentTypeId, $nowDt->format('Y-m-d'), $to->format('Y-m-d'), $client);
-            if (!$next || empty($next->appointmentStart)) {
-                throw new \RuntimeException('No available appointment time found.');
-            }
+            $selectedStartRaw = $patient['appointment_start'] ?? null;
 
-            $start = new DateTimeImmutable($next->appointmentStart);
+            if (!empty($selectedStartRaw)) {
+                try {
+                    $start = new DateTimeImmutable($selectedStartRaw);
+                } catch (\Throwable $e) {
+                    throw new \RuntimeException('Invalid appointment time selected.');
+                }
+            } else {
+                $next = $cliniko->getNextAvailableTime(
+                    $businessId,
+                    $practitionerId,
+                    $appointmentTypeId,
+                    $nowDt->format('Y-m-d'),
+                    $to->format('Y-m-d'),
+                    $client
+                );
+                if (!$next || empty($next->appointmentStart)) {
+                    throw new \RuntimeException('No available appointment time found.');
+                }
+
+                $start = new DateTimeImmutable($next->appointmentStart);
+            }
             $end = $start->add(new DateInterval("PT{$apptType->getDurationInMinutes()}M"));
 
-            // 4) Patient case
-            $pcDTO = new CreatePatientCaseDTO();
-            $pcDTO->name = $apptType->getName();
-            $pcDTO->issueDate = $nowDt->format('Y-m-d');
-            $pcDTO->patientId = $pt->getId();
-
-            $pc = PatientCase::create($pcDTO, $client);
-            if (!$pc) {
-                throw new \RuntimeException('Failed to create patient case.');
-            }
-
-            if ($useLedger) {
-                $wpdb->update($table, ['patient_case_id' => (string) $pc->getId(), 'updated_at' => $now], ['payment_reference' => $paymentRef]);
-            }
-
-            // 5) Patient form (before appointment)
+            // 4) Patient form template (validate before scheduling)
             $_tpl = PatientFormTemplate::find($patientFormTemplateId, $client);
             if (!$_tpl) {
                 throw new \RuntimeException('Patient form template not found.');
             }
 
-            $label = $start->setTimezone(new DateTimeZone('Australia/Sydney'))->format('F j, Y \a\t g:i A (T)');
+            $label = $start->setTimezone($clinicTz)->format('F j, Y \a\t g:i A (T)');
 
-            $pfDTO = new CreatePatientFormDTO();
-            $pfDTO->completed = true;
-            $pfDTO->content_sections = $content;
-            $pfDTO->business_id = $businessId;
-            $pfDTO->patient_form_template_id = $patientFormTemplateId;
-            $pfDTO->patient_id = $pt->getId();
-            $pfDTO->attendee_id = $pt->getId();
-            $pfDTO->email_to_patient_on_completion = true;
-            $pfDTO->name = sprintf('%s - Appointment on %s', $_tpl->getName(), $label);
-
-            $pf = PatientForm::create($pfDTO, $client);
-            if (!$pf) {
-                throw new \RuntimeException('Failed to create patient form.');
-            }
-
-            if ($useLedger) {
-                $wpdb->update($table, [
-                    'patient_form_id' => (string) $pf->getId(),
-                    'updated_at'      => $now,
-                ], ['payment_reference' => $paymentRef]);
-            }
-
-            // 6) Appointment (last step, with form ID in notes)
+            // 5) Appointment (create first so we can attach the form)
             $appt = IndividualAppointment::create([
                 'appointment_type_id' => $appointmentTypeId,
                 'business_id'         => $businessId,
@@ -273,8 +257,6 @@ class ClinikoSchedulingWorker
                 'ends_at'             => $end->format(DATE_ATOM),
                 'patient_id'          => $pt->getId(),
                 'practitioner_id'     => $practitionerId,
-                'patient_case_id'     => $pc->getId(),
-                'notes'               => 'Linked patient form ID: ' . $pf->getId(),
             ], $client);
 
             if (!$appt) {
@@ -284,9 +266,65 @@ class ClinikoSchedulingWorker
             if ($useLedger) {
                 $wpdb->update($table, [
                     'appointment_id' => (string) $appt->getId(),
-                    'status'         => 'succeeded',
                     'updated_at'     => $now,
                 ], ['payment_reference' => $paymentRef]);
+            }
+
+            // 6) Patient form (attach to appointment)
+            $pf = null;
+            $patientFormError = null;
+
+            try {
+                $attendeeId = null;
+                $bookingId = $appt->getId();
+
+                if (!empty($bookingId)) {
+                    $booking = Booking::find($bookingId, $client);
+                    if ($booking) {
+                        $attendees = $booking->getAttendees();
+                        if (!empty($attendees)) {
+                            $attendeeId = $attendees[0]->getId();
+                        }
+                    }
+                }
+
+                if (empty($attendeeId)) {
+                    throw new \RuntimeException('Unable to resolve appointment attendee.');
+                }
+
+                $pfDTO = new CreatePatientFormDTO();
+                $pfDTO->completed = true;
+                $pfDTO->content_sections = $content;
+                $pfDTO->business_id = $businessId;
+                $pfDTO->patient_form_template_id = $patientFormTemplateId;
+                $pfDTO->patient_id = $pt->getId();
+                $pfDTO->appointment_id = $appt->getId();
+                $pfDTO->attendee_id = $attendeeId;
+                $pfDTO->email_to_patient_on_completion = true;
+                $pfDTO->name = sprintf('%s - Appointment on %s', $_tpl->getName(), $label);
+
+                $pf = PatientForm::create($pfDTO, $client);
+                if (!$pf) {
+                    throw new \RuntimeException('Failed to create patient form.');
+                }
+            } catch (\Throwable $formError) {
+                $patientFormError = substr($formError->getMessage(), 0, 500);
+                error_log('[ClinikoSchedulingWorker] Patient form attach failed: ' . $patientFormError);
+            }
+
+            if ($useLedger) {
+                $update = [
+                    'status'     => 'succeeded',
+                    'updated_at' => $now,
+                ];
+                if ($pf) {
+                    $update['patient_form_id'] = (string) $pf->getId();
+                }
+                if (!empty($patientFormError)) {
+                    $update['error_message'] = $patientFormError;
+                }
+
+                $wpdb->update($table, $update, ['payment_reference' => $paymentRef]);
             }
 
             // ----- SUCCESS: send success email -----

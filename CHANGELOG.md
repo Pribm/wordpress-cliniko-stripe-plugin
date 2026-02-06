@@ -1,3 +1,29 @@
+## [1.5.0] - 2026-02-06
+### Added
+- Custom-form calendar scheduling flow for paid bookings (Stripe and Tyro Health), including available-time selection from Cliniko.
+- Monthly appointment calendar rendering with practitioner-aware availability and day-level slot grouping (Morning, Afternoon, Evening).
+- Backend availability integration using the project architecture pattern (DTO/Model/Controller) for available-times/calendar endpoints.
+- Practitioner selection support in custom-form flow, driven from frontend selection while keeping credentials server-side.
+- Unstyled form fallback styles for calendar/times so scheduling UI remains usable without Elementor styling.
+
+### Changed
+- Appointment scheduling UX updated to show calendar and times panel as first-class booking steps in custom-form flows.
+- Calendar navigation and loading states improved (month navigation, loading transitions, disabled non-available days).
+- Theming alignment improved so calendar/buttons can inherit Elementor global colors while preserving period marker colors.
+- Scheduling worker flow kept asynchronous, with booking/form-link behavior aligned to attendee-based linking requirements.
+
+### Fixed
+- Payment-gateway asset loading now respects selected gateway in custom form:
+  - Stripe selected: only Stripe assets/flow loaded.
+  - Tyro Health selected: only Tyro Health assets/flow loaded.
+- Resolved mixed gateway injection scenarios where Tyro scripts could load on Stripe configuration.
+- Fixed custom-form patient form creation/linking path to use attendee-aware linking when attaching forms to appointments.
+- Improved booking/form time consistency handling in custom scheduling flow.
+
+## [1.4.3] - 2026-02-02
+### Added
+- Cliniko embed flow now collects patient address details (Address Line 1/2, City, State, Post Code) on the patient step.
+
 ## [1.4.1] - 2025-11-29
 ### Added
 - **Attendee Model + DTO:** introduced `Attendee` model and `AttendeeDTO` to represent Cliniko attendees with linked resources (booking, patient, patient case, invoices, patient forms) and standard getters/lazy-loading patterns.
@@ -198,10 +224,10 @@
 
 ### Added
 - New **Tools & Maintenance** page in the WordPress admin panel (`wp-cliniko-tools`)
-- ✅ **Clear API Cache** button to purge all Cliniko GET request transients
-- ✅ **Connectivity Test** for Cliniko and Stripe APIs with feedback display
-- ✅ **Trigger Data Sync** tool to manually sync appointment types from Cliniko
-- ✅ **System Info Display** section to show:
+- **Clear API Cache** button to purge all Cliniko GET request transients
+- **Connectivity Test** for Cliniko and Stripe APIs with feedback display
+- **Trigger Data Sync** tool to manually sync appointment types from Cliniko
+- **System Info Display** section to show:
   - Site URL, Home URL
   - WordPress and PHP versions
   - Active theme and server software
@@ -277,27 +303,23 @@
 - Loader would not hide on token or submission failures
 - Alerts were replaced with inline error messages for better user experience
 
-# 📦 Cliniko Stripe Integration — v1.1.1
+## [1.1.1] - 2025-07-14
 
-**Release Date:** 2025-07-14
-
-## ✨ Enhancements
+### Added
 
 - **Custom Button Class**: Added control to assign dynamic CSS classes to the booking button.
 - **Hover Slide Effect**: Enabled optional right-to-left hover background transition using Elementor global colors (`--e-global-color-primary` → `--e-global-color-secondary`).
 - **Improved Flexibility**: Users can now apply custom animations, Tailwind classes, or raw CSS using the dynamic class feature.
 
-## 🧰 Developer Notes
+### Internal
 
 - Updated button HTML in `render.phtml` to support dynamic class injection.
 - Added CSS guidance and usage examples for hover transitions based on global variables.
 
 
-# 📦 Cliniko Stripe Integration — v1.1.0
+## [1.1.0] - 2025-07-14
 
-**Release Date:** 2025-07-14
-
-## ✨ New Features
+### Added
 
 - **New Widget**: Created `Cliniko: Appointment Type Card` Elementor widget.
   - Dynamically fetches Appointment Types from Cliniko.
@@ -308,7 +330,7 @@
 - **Button Text Alignment**: Responsive alignment control for the button text (left, center, right).
 - **Card Height Control**: Define fixed, percentage, or viewport height for uniform layout.
 
-## 🎨 Style Enhancements
+### Changed
 
 - **Default Paddings**:
   - Card: `20px` on all sides
@@ -320,7 +342,7 @@
 - **SVG Icon Support**:
   - Added `svg` selectors to support custom uploaded icons with color and sizing controls
 
-## ⚙️ Performance
+### Performance
 
 - **Client Caching**:
   - Introduced `CachedClientDecorator` using WordPress `transient` API
@@ -330,7 +352,7 @@
 - **Editor Mode Optimization**:
   - In Elementor editor, data is loaded from cache via `get_transient()` to prevent unnecessary API calls
 
-## 🧹 Internal Improvements
+### Internal
 
 - Moved widget rendering into `.phtml` template
 - Organized controls into logical sections (Content, Layout, Style, Typography)
