@@ -1,3 +1,10 @@
+## [1.5.1] - 2026-02-09
+### Changed
+- Cliniko form rendering now reuses preloaded template sections to avoid duplicate API fetches.
+- External widget assets (Toastify, IMask, input masks, multistep/unstyled CSS) are emitted only once per page to reduce redundant downloads.
+- Payment charge endpoint now validates payload early and returns 422 on invalid requests before any payment attempt.
+- Appointment request validation now supports optional content-section validation (used for payment precheck flow).
+
 ## [1.5.0] - 2026-02-06
 ### Added
 - Custom-form calendar scheduling flow for paid bookings (Stripe and Tyro Health), including available-time selection from Cliniko.
