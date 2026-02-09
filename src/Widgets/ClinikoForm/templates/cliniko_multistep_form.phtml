@@ -24,6 +24,7 @@ function hex2rgb($hex)
 
 $settings = $this->get_settings();
 $form_template_id = $settings['cliniko_form_template_id'] ?? null;
+$sections_loaded = isset($sections_loaded) ? (bool)$sections_loaded : false;
 
 // ---------- Resolve Appointment Type / Practitioner IDs ----------
 $appointmentType = null;
@@ -50,8 +51,13 @@ if (empty($form_template_id)) {
 }
 
 try {
-  $template = PatientFormTemplate::find($form_template_id, cliniko_client(true));
-  $sections = $template ? $template->getSections() : [];
+  if (!$sections_loaded) {
+    $template = PatientFormTemplate::find($form_template_id, cliniko_client(true));
+    $sections = $template ? $template->getSections() : [];
+    $sections_loaded = true;
+  } else {
+    $sections = is_array($sections ?? null) ? $sections : [];
+  }
 } catch (\Throwable $e) {
   throw new ApiException($e->getMessage());
 }
@@ -193,18 +199,27 @@ $currentStep       = 1; // your JS can update this as the user navigates
 <?php endif; ?>
 
 <!-- External Libraries -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
-<script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-<script src="https://unpkg.com/imask"></script>
+<?php if (empty($GLOBALS['cliniko_form_assets_printed'])): ?>
+  <?php $GLOBALS['cliniko_form_assets_printed'] = true; ?>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <script src="https://unpkg.com/imask"></script>
+  <script src="<?= esc_url($assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '')) ?>"></script>
+<?php endif; ?>
 
 <!-- Versioned assets -->
-<script src="<?= esc_url($assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '')) ?>"></script>
-<?php if (!$is_unstyled_form): ?>
+  <?php if (!$is_unstyled_form): ?>
+    <?php if (empty($GLOBALS['cliniko_form_multistep_css_printed'])): ?>
+      <?php $GLOBALS['cliniko_form_multistep_css_printed'] = true; ?>
 <link rel="stylesheet" href="<?= esc_url($assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '')) ?>">
-<?php endif; ?>
-<?php if ($is_unstyled_form): ?>
+    <?php endif; ?>
+  <?php endif; ?>
+  <?php if ($is_unstyled_form): ?>
+    <?php if (empty($GLOBALS['cliniko_form_unstyled_css_printed'])): ?>
+      <?php $GLOBALS['cliniko_form_unstyled_css_printed'] = true; ?>
 <link rel="stylesheet" href="<?= esc_url($assets_url . 'css/unstyled-calendar.css' . ($unstyled_css_ver ? '?ver=' . $unstyled_css_ver : '')) ?>">
-<?php endif; ?>
+    <?php endif; ?>
+  <?php endif; ?>
 
 <!-- Multistep Form -->
 <form id="prepayment-form"

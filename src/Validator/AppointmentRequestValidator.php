@@ -20,7 +20,7 @@ class AppointmentRequestValidator
         ];
     }
 
-    public static function validate($payload): array
+    public static function validate($payload, bool $validateContent = true): array
     {
         $errors = [];
 
@@ -101,7 +101,9 @@ class AppointmentRequestValidator
             // --- end Medicare fields ---
         }
 
-        $errors = array_merge($errors, self::validateContentSections($payload['content'] ?? null));
+        if ($validateContent) {
+            $errors = array_merge($errors, self::validateContentSections($payload['content'] ?? null));
+        }
 
         return $errors;
     }

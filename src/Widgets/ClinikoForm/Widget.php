@@ -74,12 +74,16 @@ class Widget extends Widget_Base
       null
     );
 
+    $sections = [];
+    $sections_loaded = false;
     try {
       $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true), false);
       $sections = $templateModel ? $templateModel->getSections() : [];
+      $sections_loaded = true;
     } catch (\Exception $e) {
       new ApiException($e->getMessage());
       $sections = [];
+      $sections_loaded = false;
     }
 
     wp_enqueue_script(

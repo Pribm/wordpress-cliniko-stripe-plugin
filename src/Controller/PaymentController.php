@@ -5,6 +5,7 @@ use App\Client\Cliniko\Client;
 use App\Infra\JobDispatcher;
 use App\Model\AppointmentType;
 use App\Service\StripeService;
+use App\Validator\AppointmentRequestValidator;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -39,6 +40,21 @@ class PaymentController
         $signatureAttachmentId = $body['signature_attachment_id'] ?? null;
 
         $clinikoPatient = $patient;
+
+        // Validate payload early (before any payment attempt)
+        $validationPayload = $body;
+        $validationPayload['patient'] = $patient;
+        $validationPayload['content'] = $content;
+
+        $errors = AppointmentRequestValidator::validate($validationPayload, false);
+        
+        if (!empty($errors)) {
+            return new WP_REST_Response([
+                'status' => 'error',
+                'message' => 'Invalid request parameters.',
+                'errors' => $errors,
+            ], 422);
+        }
 
         if (!$moduleId || !$patientFormTemplateId) {
             return new WP_REST_Response([
