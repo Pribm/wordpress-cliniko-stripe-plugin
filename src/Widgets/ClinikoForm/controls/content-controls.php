@@ -3,7 +3,6 @@ if (!defined('ABSPATH'))
     exit;
 
 use App\Model\PatientFormTemplate;
-use App\Client\Cliniko\Client;
 use App\Model\AppointmentType;
 use Elementor\Controls_Manager;
 use Elementor\Repeater;
@@ -147,7 +146,7 @@ function register_content_controls($widget)
 
 function get_cliniko_form_templates()
 {
-    $client = Client::getInstance();
+    $client = cliniko_client(true, 21600);
     $patientFormTemplates = PatientFormTemplate::all($client);
 
     $templates = [];
@@ -215,7 +214,28 @@ function register_cliniko_form_controls($widget)
             'multi' => 'Multi-step (current)',
             'single' => 'Single-step (all fields)',
             'unstyled' => 'Unstyled (no theme CSS)',
+            'headless' => 'Headless (JSON only)',
         ],
+    ]);
+
+    $widget->add_control('cliniko_cache_ttl', [
+        'label' => 'Cliniko Cache TTL (seconds)',
+        'type' => Controls_Manager::NUMBER,
+        'min' => 60,
+        'max' => 604800, // 7 days
+        'step' => 60,
+        'default' => 21600, // 6 hours
+        'description' => 'How long to cache Cliniko templates/appointment data for this widget.',
+    ]);
+
+    $widget->add_control('cliniko_cache_refresh', [
+        'label' => 'Refresh Cliniko Cache',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'no',
+        'description' => 'Admin-only: forces a cache refresh on next render. Turn off after refreshing.',
     ]);
 
     $widget->add_control('unstyled_css_help', [
@@ -238,6 +258,24 @@ function register_cliniko_form_controls($widget)
         'condition' => ['form_type' => 'unstyled'],
     ]);
 
+    $widget->add_control('headless_help', [
+        'type' => Controls_Manager::RAW_HTML,
+        'raw' =>
+            '<strong>Headless mode</strong><br>' .
+            'No form UI is rendered. The Cliniko template is exposed via <code>formHandlerData.sections</code> so you can build your own UI.<br><br>' .
+            '<strong>Submitting</strong><br>' .
+            'Provide a payload with <code>patient</code> and <code>content</code> and expose it as <code>window.clinikoHeadlessPayload</code> or <code>window.clinikoGetHeadlessPayload()</code>.<br>' .
+            'The payment step will call <code>submitBookingForm(...)</code> and use that payload automatically.<br><br>' .
+            '<strong>Submission template</strong><br>' .
+            'A backend-ready skeleton is available at <code>formHandlerData.submission_template</code> or in the <code>.cliniko-form-submission-template-json</code> script tag.<br><br>' .
+            '<strong>Headless calendar helpers</strong><br>' .
+            'Use <code>window.ClinikoHeadlessCalendar</code> to call the same endpoints used by the standard form (practitioners, calendar, available times).<br><br>' .
+            '<strong>Payment UI</strong><br>' .
+            'Payment markup is still rendered (hidden by default). Show <code>#payment_form</code> when you’re ready to collect payment.',
+        'content_classes' => 'elementor-panel-alert elementor-panel-alert-info',
+        'condition' => ['form_type' => 'headless'],
+    ]);
+
     $widget->add_control(
         'hr',
         [
@@ -255,7 +293,7 @@ function register_cliniko_form_controls($widget)
 
     // Appointment Types
     $module_options = ['' => 'Select an appointment type'];
-    $client = Client::getInstance();
+    $client = cliniko_client(true, 21600);
     $modules = AppointmentType::all($client);
     foreach ($modules as $mod) {
         $module_options[$mod->getId()] = $mod->getName() . ' (' . $mod->getDurationInMinutes() . ' min)';

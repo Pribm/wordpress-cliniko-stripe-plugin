@@ -25,11 +25,17 @@ function hex2rgb($hex)
 $settings = $this->get_settings();
 $form_template_id = $settings['cliniko_form_template_id'] ?? null;
 $sections_loaded = isset($sections_loaded) ? (bool)$sections_loaded : false;
+$cliniko_cache_ttl = isset($cliniko_cache_ttl) ? (int)$cliniko_cache_ttl : 21600;
+if ($cliniko_cache_ttl < 60) {
+  $cliniko_cache_ttl = 60;
+} elseif ($cliniko_cache_ttl > 604800) {
+  $cliniko_cache_ttl = 604800;
+}
 
 // ---------- Resolve Appointment Type / Practitioner IDs ----------
 $appointmentType = null;
 try {
-  $appointmentType = AppointmentType::find($settings["module_id"] ?? null, cliniko_client(true));
+  $appointmentType = AppointmentType::find($settings["module_id"] ?? null, cliniko_client(true, $cliniko_cache_ttl));
 } catch (\Throwable $e) {
   // allow rendering without IDs; embed step will be skipped if not configured
 }
@@ -52,7 +58,7 @@ if (empty($form_template_id)) {
 
 try {
   if (!$sections_loaded) {
-    $template = PatientFormTemplate::find($form_template_id, cliniko_client(true));
+    $template = PatientFormTemplate::find($form_template_id, cliniko_client(true, $cliniko_cache_ttl));
     $sections = $template ? $template->getSections() : [];
     $sections_loaded = true;
   } else {
