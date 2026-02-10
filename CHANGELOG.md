@@ -1,3 +1,15 @@
+## [1.5.2] - 2026-02-10
+### Added
+- Headless custom form mode to expose Cliniko template JSON and a submission-ready payload skeleton.
+- Headless calendar helpers for practitioners, calendar grid, and available times (plus time grouping utilities).
+- Widget controls for Cliniko API cache TTL and manual cache refresh.
+- Expanded headless documentation with payload schema and API reference details.
+
+### Changed
+- Headless submissions now read `window.clinikoHeadlessPayload` or `window.clinikoGetHeadlessPayload()` when no form UI is present.
+- Stripe headless flow initializes when the payment form becomes visible.
+- Tyro Health submission falls back to headless payload data when DOM fields are not present.
+
 ## [1.5.1] - 2026-02-09
 ### Changed
 - Cliniko form rendering now reuses preloaded template sections to avoid duplicate API fetches.

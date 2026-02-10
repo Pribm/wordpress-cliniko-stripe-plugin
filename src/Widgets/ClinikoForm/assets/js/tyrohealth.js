@@ -63,6 +63,35 @@
     return "";
   }
 
+  function getHeadlessPatient() {
+    if (!window.formHandlerData?.is_headless) return null;
+
+    let payload = null;
+    if (typeof window.clinikoGetHeadlessPayload === "function") {
+      try {
+        payload = window.clinikoGetHeadlessPayload();
+      } catch (e) {
+        err("clinikoGetHeadlessPayload error:", e);
+      }
+    }
+
+    if (!payload || typeof payload !== "object") {
+      payload = window.clinikoHeadlessPayload;
+    }
+
+    const patient = payload?.patient;
+    return patient && typeof patient === "object" ? patient : null;
+  }
+
+  function coalesce(...values) {
+    for (const v of values) {
+      if (v !== null && v !== undefined && String(v).trim() !== "") {
+        return String(v).trim();
+      }
+    }
+    return "";
+  }
+
   function normalizeDob(input) {
     const v = (input || "").trim();
     if (!v) return "";
@@ -76,6 +105,8 @@
   }
 
   function collectPatient() {
+    const headless = getHeadlessPatient();
+
     const firstName = readValue([
       "#patient-first-name",
       'input[name="patient[firstName]"]',
@@ -104,12 +135,18 @@
       'input[type="date"]',
     ]);
 
+    const resolvedFirstName = coalesce(firstName, headless?.first_name, headless?.firstName);
+    const resolvedLastName = coalesce(lastName, headless?.last_name, headless?.lastName);
+    const resolvedEmail = coalesce(email, headless?.email);
+    const resolvedMobile = coalesce(mobile, headless?.mobile, headless?.phone);
+    const resolvedDob = coalesce(dobRaw, headless?.date_of_birth, headless?.dob, headless?.dobString);
+
     return {
-      firstName,
-      lastName,
-      dob: normalizeDob(dobRaw),
-      ...(email ? { email } : {}),
-      ...(mobile ? { mobile } : {}),
+      firstName: resolvedFirstName,
+      lastName: resolvedLastName,
+      dob: normalizeDob(resolvedDob),
+      ...(resolvedEmail ? { email: resolvedEmail } : {}),
+      ...(resolvedMobile ? { mobile: resolvedMobile } : {}),
     };
   }
 

@@ -13,6 +13,129 @@ use Elementor\Widget_Base;
 
 class Widget extends Widget_Base
 {
+  private function readProp($source, string $key, $default = null)
+  {
+    if (is_array($source)) {
+      return $source[$key] ?? $default;
+    }
+    if (is_object($source) && isset($source->{$key})) {
+      return $source->{$key};
+    }
+    return $default;
+  }
+
+  private function build_patient_skeleton(): array
+  {
+    return [
+      'first_name' => '',
+      'last_name' => '',
+      'email' => '',
+      'phone' => '',
+      'medicare' => '',
+      'medicare_reference_number' => '',
+      'address_1' => '',
+      'address_2' => '',
+      'city' => '',
+      'state' => '',
+      'post_code' => '',
+      'country' => '',
+      'date_of_birth' => '',
+      'appointment_start' => '',
+      'practitioner_id' => '',
+    ];
+  }
+
+  private function build_submission_template($sections): array
+  {
+    $outputSections = [];
+    if (!is_array($sections)) {
+      $sections = [];
+    }
+
+    foreach ($sections as $section) {
+      $sectionName = (string)($this->readProp($section, 'name', '') ?? '');
+      $sectionDescription = (string)($this->readProp($section, 'description', '') ?? '');
+      $questions = [];
+
+      $rawQuestions = $this->readProp($section, 'questions', []);
+      if (!is_array($rawQuestions)) {
+        $rawQuestions = [];
+      }
+
+      foreach ($rawQuestions as $q) {
+        $type = (string)($this->readProp($q, 'type', 'text') ?? 'text');
+        if ($type === 'signature') {
+          continue;
+        }
+
+        $question = [
+          'name' => (string)($this->readProp($q, 'name', '') ?? ''),
+          'type' => $type,
+          'required' => (bool)$this->readProp($q, 'required', false),
+        ];
+
+        $rawAnswers = $this->readProp($q, 'answers', []);
+        if (!is_array($rawAnswers)) {
+          $rawAnswers = [];
+        }
+
+        $otherEnabled = false;
+        $other = $this->readProp($q, 'other', null);
+        if (is_object($other) && isset($other->enabled)) {
+          $otherEnabled = (bool)$other->enabled;
+        } elseif (is_array($other) && isset($other['enabled'])) {
+          $otherEnabled = (bool)$other['enabled'];
+        }
+
+        if (in_array($type, ['checkboxes', 'radiobuttons'], true)) {
+          $answers = [];
+          foreach ($rawAnswers as $opt) {
+            $value = null;
+            if (is_array($opt)) {
+              $value = $opt['value'] ?? null;
+            } elseif (is_object($opt) && isset($opt->value)) {
+              $value = $opt->value;
+            }
+            if ($value === null || $value === '') {
+              continue;
+            }
+            $answers[] = ['value' => $value];
+          }
+
+          if (count($answers) === 0 && !$otherEnabled) {
+            continue;
+          }
+
+          $question['answers'] = $answers;
+          if ($otherEnabled) {
+            $question['other'] = ['enabled' => true, 'selected' => false, 'value' => ''];
+          }
+        } else {
+          $question['answer'] = '';
+        }
+
+        $questions[] = $question;
+      }
+
+      if (count($questions) === 0) {
+        continue;
+      }
+
+      $outputSections[] = [
+        'name' => $sectionName,
+        'description' => $sectionDescription,
+        'questions' => $questions,
+      ];
+    }
+
+    return [
+      'patient' => $this->build_patient_skeleton(),
+      'content' => [
+        'sections' => $outputSections,
+      ],
+    ];
+  }
+
   public function get_name()
   {
     return 'cliniko_stripe_payment';
@@ -54,6 +177,26 @@ class Widget extends Widget_Base
     );
 
     $settings = $this->get_settings();
+    $cliniko_cache_ttl = isset($settings['cliniko_cache_ttl']) ? (int)$settings['cliniko_cache_ttl'] : 21600;
+    if ($cliniko_cache_ttl < 60) {
+      $cliniko_cache_ttl = 60;
+    } elseif ($cliniko_cache_ttl > 604800) {
+      $cliniko_cache_ttl = 604800;
+    }
+
+    $form_type = isset($settings['form_type']) ? strtolower(trim($settings['form_type'])) : 'multi';
+    $form_type = in_array($form_type, ['multi', 'single', 'unstyled', 'headless'], true) ? $form_type : 'multi';
+    $is_headless = $form_type === 'headless';
+
+    $cliniko_cache_refresh = ($settings['cliniko_cache_refresh'] ?? '') === 'yes';
+    if ($cliniko_cache_refresh && current_user_can('manage_options') && empty($GLOBALS['cliniko_cache_busted'])) {
+      global $wpdb;
+      if (isset($wpdb) && $wpdb instanceof \wpdb) {
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_cliniko_api_%'");
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_cliniko_api_%'");
+      }
+      $GLOBALS['cliniko_cache_busted'] = true;
+    }
 
     $is_editor = Plugin::$instance->editor->is_edit_mode();
     $form_template_id = $settings['cliniko_form_template_id'] ?? null;
@@ -77,7 +220,7 @@ class Widget extends Widget_Base
     $sections = [];
     $sections_loaded = false;
     try {
-      $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true), false);
+      $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true, $cliniko_cache_ttl), false);
       $sections = $templateModel ? $templateModel->getSections() : [];
       $sections_loaded = true;
     } catch (\Exception $e) {
@@ -210,11 +353,16 @@ class Widget extends Widget_Base
       "{$pad['top']}{$pad['unit']} {$pad['right']}{$pad['unit']} {$pad['bottom']}{$pad['unit']} {$pad['left']}{$pad['unit']}" :
       '12px 24px';
 
+    $submission_template = $this->build_submission_template($sections ?? []);
+    $submission_template['moduleId'] = $settings['module_id'] ?? '';
+    $submission_template['patient_form_template_id'] = $form_template_id ?? '';
+
     wp_localize_script(
       'form-handler-js',
       'formHandlerData',
       [
         'sections' => $sections ?? [],
+        'submission_template' => $submission_template,
         'btn_bg' => esc_attr($settings['form_button_color'] ?? '#0073e6'),
         'btn_text' => esc_attr($settings['form_button_text_color'] ?? '#ffffff'),
         'btn_pad' => $btn_pad,
@@ -234,7 +382,8 @@ class Widget extends Widget_Base
         'appearance' => $appearance,
         'logo_url' => $logo_url,
         'cliniko_embed' => $settings['appointment_source'],
-        'form_type' => $settings['form_type'] ?? 'multi',
+        'form_type' => $form_type,
+        'is_headless' => $is_headless,
         // expose gateway selection for frontend handlers (keeps original casing if present)
         'custom_form_payment' => $settings['custom_form_payment'] ?? 'stripe',
         'appointment_time_selection' => $settings['appointment_time_selection'] ?? 'calendar',
@@ -245,10 +394,38 @@ class Widget extends Widget_Base
       'save_on_exit' => $settings['save_on_exit'] === 'yes',
     ]);
 
+    if ($is_headless && empty($sections)) {
+      echo '<p style="color: red;">No sections found in the Cliniko form template.</p>';
+      return;
+    }
+
     // ------------------------------------------------------------
-    // Render multistep template always (this is your main form)
+    // Render multistep template (main form) unless headless
     // ------------------------------------------------------------
-    require_once __DIR__ . '/templates/cliniko_multistep_form.phtml';
+    if ($is_headless) {
+      $assets_url = plugin_dir_url(__FILE__) . 'assets/';
+      $assets_path = plugin_dir_path(__FILE__) . 'assets/';
+      $input_masks_ver = file_exists($assets_path . 'js/input-masks.js') ? filemtime($assets_path . 'js/input-masks.js') : null;
+
+      if (empty($GLOBALS['cliniko_form_assets_printed'])) {
+        $GLOBALS['cliniko_form_assets_printed'] = true;
+        echo '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />';
+        echo '<script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>';
+        echo '<script src="https://unpkg.com/imask"></script>';
+        echo '<script src="' . esc_url($assets_url . 'js/input-masks.js' . ($input_masks_ver ? '?ver=' . $input_masks_ver : '')) . '"></script>';
+      }
+
+      echo '<div class="cliniko-form-headless" data-cliniko-headless="1" data-form-template-id="' . esc_attr($form_template_id ?? '') . '">';
+      echo '<script type="application/json" class="cliniko-form-template-json">' . wp_json_encode($sections ?? []) . '</script>';
+      echo '<script type="application/json" class="cliniko-form-submission-template-json">' . wp_json_encode($submission_template) . '</script>';
+
+      if ($is_editor) {
+        echo '<p style="margin: 8px 0; color: #6b7280;">Headless mode: render your form UI with JS using formHandlerData.sections.</p>';
+      }
+      echo '</div>';
+    } else {
+      require_once __DIR__ . '/templates/cliniko_multistep_form.phtml';
+    }
 
 
     //FINAL STEP

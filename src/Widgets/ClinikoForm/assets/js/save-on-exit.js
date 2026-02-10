@@ -7,6 +7,7 @@
   const NEXT_BTN_SEL = "#step-next";
 
   const formType = String(window.formHandlerData?.form_type || "multi").toLowerCase();
+  if (formType === "headless") return;
   const isSingleStep = formType === "single" || formType === "unstyled";
 
   // ✅ Unique storage key per form/page

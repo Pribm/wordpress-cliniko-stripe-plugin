@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.5.1`
+- Current plugin version: `1.5.2`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,11 +14,12 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.5.1
-- Avoided duplicate Cliniko template fetches during widget rendering.
-- Prevented duplicate external library and CSS injections when multiple widgets are on the same page.
-- Added early payload validation for payment requests (fail fast on invalid input).
-- Added optional content-section validation toggle to support payment flow prechecks.
+## What Is New in 1.5.2
+- Added headless custom form mode with template JSON exposure and a submission-ready payload skeleton.
+- Added headless calendar helpers for practitioners, calendar grid, and available times.
+- Added headless-friendly submission handling for Stripe and Tyro Health flows.
+- Added configurable Cliniko API cache TTL and a manual cache refresh toggle in the widget.
+- Expanded headless documentation with payload and API reference details.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
@@ -89,6 +90,445 @@ Calendar mode behavior:
 Gateway behavior:
 - Final wizard action should continue to payment flow (not direct browser submit).
 - Wizard UI can be hidden while payment UI is active.
+
+## Headless Mode (Custom Form)
+Headless mode renders no form UI. The Cliniko template is exposed so you can build your own UI while keeping the payment step intact.
+
+Where the template is exposed:
+- `formHandlerData.sections` (global JS object)
+- `.cliniko-form-headless .cliniko-form-template-json` (JSON script tag)
+
+Submission-ready skeleton:
+- `formHandlerData.submission_template`
+- `.cliniko-form-headless .cliniko-form-submission-template-json` (JSON script tag)
+
+Headless calendar (build your own UI):
+- Helper: `window.ClinikoHeadlessCalendar` (available only in headless mode).
+- Defaults: if you omit `appointmentTypeId`, it falls back to `formHandlerData.module_id`.
+- Date format: use `YYYY-MM-DD` for `dateKey`, `from`, and `to`.
+
+How to submit:
+1. Build a payload with `patient` and `content` from your UI.
+2. Expose it as `window.clinikoHeadlessPayload` or `window.clinikoGetHeadlessPayload()`.
+3. Show the payment UI when ready.
+
+Payment UI notes:
+- Stripe: call `showStripePaymentForm()` or set `#payment_form` to `display:flex` and let the payment button handle submission.
+- Tyro Health: show `#payment_form`. Ensure your headless patient fields map to the IDs/names read by `tyrohealth.js` (for example `#patient-first-name`, `#patient-last-name`, `#patient-email`), or adjust `tyrohealth.js` to your field IDs.
+
+Headless calendar flow (recommended):
+1. Load practitioners (optional).
+2. Load the current month grid via `fetchCalendar()` and render it (you can use `grid_html` or your own UI).
+3. On date click, load times via `fetchAllTimesForDate()`.
+4. Group the times with `groupTimesByPeriod()` for morning/afternoon/evening.
+5. When the user selects a time, call `updateHeadlessPatient({ appointment_start, practitioner_id })`.
+6. If you use `clinikoGetHeadlessPayload()`, write these fields into the returned payload yourself (the helper can’t mutate a computed payload).
+
+Headless calendar example (minimal):
+```js
+const cal = window.ClinikoHeadlessCalendar;
+const practitioners = await cal.fetchPractitioners();
+const practitionerId = practitioners?.[0]?.id || "";
+const monthKey = cal.getMonthKeyFromDate(new Date());
+const calendar = await cal.fetchCalendar({ practitionerId, monthKey });
+// calendar.grid_html, calendar.month_label, calendar.month_key
+
+const dateKey = "2026-02-10";
+const times = await cal.fetchAllTimesForDate({ dateKey, practitionerId });
+const buckets = cal.groupTimesByPeriod(times);
+// render buckets.morning / buckets.afternoon / buckets.evening
+
+cal.updateHeadlessPatient({ appointment_start: times[0], practitioner_id: practitionerId });
+```
+
+
+Minimal payload shape:
+```json
+{
+  "moduleId": "appointment_type_id",
+  "patient_form_template_id": "form_template_id",
+  "patient": {
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "email": "jane@example.com",
+    "phone": "0400 000 000",
+    "medicare": "1234 56789 1",
+    "medicare_reference_number": "1"
+  },
+  "content": {
+    "sections": [
+      {
+        "name": "Section Name",
+        "questions": [
+          {
+            "name": "Question Label",
+            "type": "text",
+            "required": true,
+            "answer": "Free text answer"
+          },
+          {
+            "name": "Options Question",
+            "type": "radiobuttons",
+            "required": true,
+            "answers": [
+              { "value": "Yes", "selected": true },
+              { "value": "No" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Headless Payload Details
+The widget exposes a submission template with these shapes. You can use it directly or clone it and fill the answers.
+
+Patient object fields (all string values):
+- `patient.first_name`
+- `patient.last_name`
+- `patient.email`
+- `patient.phone`
+- `patient.medicare`
+- `patient.medicare_reference_number`
+- `patient.address_1`
+- `patient.address_2`
+- `patient.city`
+- `patient.state`
+- `patient.post_code`
+- `patient.country`
+- `patient.date_of_birth`
+- `patient.appointment_start` (ISO 8601 string)
+- `patient.practitioner_id`
+
+Content schema notes:
+- `content.sections` is an array of sections from the Cliniko template.
+- `content.sections[].questions[].name` is the stable key and label.
+- `content.sections[].questions[].type` can be `text`, `textarea`, `checkboxes`, or `radiobuttons`.
+- `content.sections[].questions[].required` is a boolean.
+- For `text`/`textarea`, send `answer` (string).
+- For `checkboxes`/`radiobuttons`, send `answers` (array of `{ value, selected }`).
+- For `radiobuttons`, only one `answers[].selected` can be `true`.
+- If the template enables "other", include `other` as `{ enabled: true, selected: true|false, value: "..." }`.
+- `signature` questions are not allowed in payloads.
+
+## Headless API Reference
+These are the REST endpoints the headless helpers call. They are registered under the WordPress REST API and are publicly accessible by default.
+
+Base path:
+`/wp-json/v1`
+
+Response conventions:
+- Cliniko data endpoints return `{ success: true, data: ... }` on success.
+- Payment endpoints return `{ status: "success", payment: ..., scheduling: ... }` on success.
+- Errors return a `message` and may include an `errors` array with `{ field, label, code, detail }`.
+
+### GET /practitioners
+Lists practitioners for an appointment type.
+
+Query params:
+- `appointment_type_id` (required). Aliases: `module_id`, `moduleId`.
+
+Example request:
+`GET /wp-json/v1/practitioners?appointment_type_id=123`
+
+Returns:
+- `success` boolean
+- `data.appointment_type_id` string
+- `data.practitioners` array of `{ id, name }` (inactive/hidden practitioners are filtered when possible)
+
+Example response:
+```json
+{
+  "success": true,
+  "data": {
+    "appointment_type_id": "123",
+    "practitioners": [
+      { "id": "456", "name": "Jane Smith" }
+    ]
+  }
+}
+```
+
+### GET /appointment-calendar
+Returns an HTML calendar grid (plus labels) for a given appointment type and optional practitioner.
+
+Query params:
+- `appointment_type_id` (required). Aliases: `module_id`, `moduleId`.
+- `practitioner_id` (optional). If omitted, the first practitioner for the appointment type is used.
+- `month` (optional). Format: `YYYY-MM`. Defaults to the current month.
+
+Example request:
+`GET /wp-json/v1/appointment-calendar?appointment_type_id=123&practitioner_id=456&month=2026-02`
+
+Returns:
+- `success` boolean
+- `data.month_label` string (human-readable month)
+- `data.month_key` string (format `YYYY-MM`)
+- `data.grid_html` string (calendar day grid HTML)
+- `data.practitioner_id` string
+- `data.appointment_type_id` string
+
+Example response:
+```json
+{
+  "success": true,
+  "data": {
+    "month_label": "February 2026",
+    "month_key": "2026-02",
+    "grid_html": "<div class=\"calendar-day ...\">...</div>",
+    "practitioner_id": "456",
+    "appointment_type_id": "123"
+  }
+}
+```
+
+### GET /available-times
+Returns available appointment start times for a given date range.
+
+Query params:
+- `appointment_type_id` (required). Aliases: `module_id`, `moduleId`.
+- `from` (required). Format: `YYYY-MM-DD`.
+- `to` (required). Format: `YYYY-MM-DD`.
+- `practitioner_id` (optional). If omitted, the first practitioner for the appointment type is used.
+- `page` (optional). Defaults to `1`.
+- `per_page` (optional). Defaults to `100`, max `100`.
+
+Example request:
+`GET /wp-json/v1/available-times?appointment_type_id=123&from=2026-02-10&to=2026-02-10&practitioner_id=456`
+
+Returns:
+- `success` boolean
+- `data.available_times` array of `{ appointment_start }`
+- `data.total_entries` integer
+- `data.links.self|next|previous` strings
+- `data.appointment_type_id` string
+- `data.practitioner_id` string
+- `data.from` string
+- `data.to` string
+
+Example response:
+```json
+{
+  "success": true,
+  "data": {
+    "available_times": [
+      { "appointment_start": "2026-02-10T01:30:00Z" }
+    ],
+    "total_entries": 12,
+    "links": {
+      "self": "https://example.com/wp-json/v1/available-times?...",
+      "next": null,
+      "previous": null
+    },
+    "appointment_type_id": "123",
+    "practitioner_id": "456",
+    "from": "2026-02-10",
+    "to": "2026-02-10"
+  }
+}
+```
+
+### POST /send-patient-form
+Queues a patient form submission to Cliniko (no payment). This is also the endpoint used for the Cliniko iframe flow.
+
+Body (JSON):
+- `patient_form_template_id` (required)
+- `patient.email` (required)
+- `patient.patient_booked_time` (required). ISO 8601 UTC string (example: `2026-02-10T01:30:00Z`)
+- `content.sections` (required). Use the same structure you get from the headless template JSON.
+- `moduleId` (optional)
+
+Example request body:
+```json
+{
+  "moduleId": "123",
+  "patient_form_template_id": "999",
+  "patient": {
+    "email": "jane@example.com",
+    "patient_booked_time": "2026-02-10T01:30:00Z"
+  },
+  "content": {
+    "sections": [
+      {
+        "name": "Section Name",
+        "questions": [
+          {
+            "name": "Question Label",
+            "type": "text",
+            "required": true,
+            "answer": "Free text answer"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Notes:
+- `signature` questions are not allowed in `content`.
+- Required questions must include valid answers. For radiobuttons, only one option may be selected.
+- If an "other" option is selected, it must include a non-empty `other.value`.
+
+Success response (HTTP 202):
+```json
+{
+  "success": true,
+  "message": "Patient form creation has been queued.",
+  "queued": {
+    "payload_key": "cliniko_pf_job_payload_...",
+    "status": "queued"
+  }
+}
+```
+
+Error response (HTTP 400):
+```json
+{
+  "success": false,
+  "message": "Invalid request parameters.",
+  "errors": [
+    { "field": "patient.email", "label": "Email", "code": "invalid", "detail": "Email is invalid or missing." }
+  ]
+}
+```
+
+### POST /payments/charge (Stripe)
+Charges Stripe and queues scheduling. Also handles zero-cost bookings (no Stripe token required when payment is not required).
+
+Body (JSON):
+- `moduleId` (required)
+- `patient_form_template_id` (required)
+- `stripeToken` (required if payment is required; must start with `tok_` or `pm_`)
+- `patient` (required)
+- `patient.first_name`, `patient.last_name`, `patient.email` (required)
+- `patient.medicare` (required, 10 digits)
+- `patient.medicare_reference_number` (required, single digit 1-9)
+- `content` (optional; accepted but not validated here)
+- `signature_attachment_id` (optional)
+
+Example request body:
+```json
+{
+  "moduleId": "123",
+  "patient_form_template_id": "999",
+  "stripeToken": "tok_visa",
+  "patient": {
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "email": "jane@example.com",
+    "medicare": "1234 56789 1",
+    "medicare_reference_number": "1"
+  },
+  "content": {
+    "sections": []
+  }
+}
+```
+
+Success response:
+```json
+{
+  "status": "success",
+  "payment": {
+    "id": "ch_...",
+    "amount": 12500,
+    "currency": "aud",
+    "receipt_url": "https://...",
+    "card_last4": "4242",
+    "brand": "visa"
+  },
+  "scheduling": { "status": "queued" }
+}
+```
+
+Notes:
+- If the appointment type does not require payment, `stripeToken` can be omitted and the response will include a `null` payment id with amount `0`.
+- `content` is accepted as-is; keep its structure aligned with the template.
+
+### POST /tyrohealth/sdk-token
+Returns a short-lived Tyro Health Partner SDK token.
+
+Request body: none
+
+Success response:
+```json
+{ "token": "..." }
+```
+
+### POST /tyrohealth/invoice
+Returns pricing metadata for the Tyro Health SDK.
+
+Body (JSON):
+- `moduleId` (required)
+
+Example request body:
+```json
+{
+  "moduleId": "123"
+}
+```
+
+Success response:
+```json
+{
+  "success": true,
+  "data": {
+    "chargeAmount": "125.00",
+    "invoiceReference": "Appointment Type Name",
+    "providerNumber": "123456"
+  }
+}
+```
+
+### POST /tyrohealth/charge
+Queues scheduling after a Tyro Health transaction.
+
+Body (JSON):
+- `moduleId` (required)
+- `patient_form_template_id` (required)
+- `tyroTransactionId` or `transactionId` (required when payment is required)
+- `invoiceReference` (optional)
+- `patient` (required)
+- `content` (optional; accepted but not validated here)
+- `signature_attachment_id` (optional)
+
+Example request body:
+```json
+{
+  "moduleId": "123",
+  "patient_form_template_id": "999",
+  "tyroTransactionId": "txn_abc123",
+  "patient": {
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "email": "jane@example.com"
+  },
+  "content": {
+    "sections": []
+  }
+}
+```
+
+Success response:
+```json
+{
+  "status": "success",
+  "payment": {
+    "id": "txn_...",
+    "amount": 12500,
+    "currency": "aud",
+    "receipt_url": null
+  },
+  "scheduling": { "status": "queued" }
+}
+```
+
+Notes:
+- If the appointment type does not require payment, `tyroTransactionId` can be omitted and the response will include a `null` payment id with amount `0`.
+- `content` is accepted as-is; keep its structure aligned with the template.
 
 ## Async Processing
 The plugin uses Action Scheduler for background jobs.
