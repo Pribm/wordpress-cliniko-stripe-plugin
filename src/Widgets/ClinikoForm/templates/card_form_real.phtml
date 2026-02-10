@@ -6,7 +6,13 @@ use App\Model\AppointmentType;
 
 include_once __DIR__ . "/control-variables.php";
 
-$payment_details = AppointmentType::find($settings['module_id'], cliniko_client(true));
+$cacheTtl = isset($cliniko_cache_ttl) ? (int)$cliniko_cache_ttl : 21600;
+if ($cacheTtl < 60) {
+  $cacheTtl = 60;
+} elseif ($cacheTtl > 604800) {
+  $cacheTtl = 604800;
+}
+$payment_details = AppointmentType::find($settings['module_id'], cliniko_client(true, $cacheTtl));
 ?>
 
 <div id="payment_form" style="

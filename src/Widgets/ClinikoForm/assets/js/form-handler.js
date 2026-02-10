@@ -8,6 +8,7 @@ let nextBtn;
 let prevBtn;
 let isClinikoForm;
 let formType = "multi";
+let isHeadless = false;
 let progressEl;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -18,9 +19,16 @@ document.addEventListener("DOMContentLoaded", () => {
   prevBtn = document.getElementById("step-prev");
   isClinikoForm = formHandlerData.cliniko_embed === "cliniko_embed";
   formType = String(formHandlerData?.form_type || "multi").toLowerCase();
+  isHeadless = formType === "headless";
   progressEl = document.getElementById("form-progress-indicator");
 
-  mountForm();
+  if (!isHeadless) {
+    mountForm();
+  } else {
+    window.currentStep = 0;
+    initHeadlessCalendarHelpers();
+    initHeadlessPaymentWatcher();
+  }
 });
 
 function getSelectedGateway() {
@@ -46,6 +54,243 @@ function shouldUseCalendarTimes() {
 
 function shouldUsePractitionerSelection() {
   return !isClinikoForm && isPaymentEnabled && (isStripeSelected() || isTyroSelected());
+}
+
+function initHeadlessCalendarHelpers() {
+  if (!isHeadless) return;
+
+  const endpoints = {
+    practitioners: formHandlerData?.practitioners_url,
+    calendar: formHandlerData?.appointment_calendar_url,
+    availableTimes: formHandlerData?.available_times_url,
+  };
+
+  const defaultAppointmentTypeId = formHandlerData?.module_id || "";
+  const defaultPerPage = Math.min(
+    100,
+    Math.max(1, Number(formHandlerData?.available_times_per_page || 100))
+  );
+
+  const buildUrl = (base, params) => {
+    if (!base) throw new Error("Endpoint not configured.");
+    const url = new URL(base, window.location.origin);
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== "") {
+        url.searchParams.set(k, String(v));
+      }
+    });
+    return url.toString();
+  };
+
+  const fetchJson = async (url) => {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.message || "Request failed.");
+    }
+    return data?.data ?? data ?? {};
+  };
+
+  const ensureHeadlessPayload = () => {
+    if (typeof window.clinikoGetHeadlessPayload === "function") {
+      return null;
+    }
+
+    if (!window.clinikoHeadlessPayload || typeof window.clinikoHeadlessPayload !== "object") {
+      if (formHandlerData?.submission_template) {
+        try {
+          window.clinikoHeadlessPayload = JSON.parse(
+            JSON.stringify(formHandlerData.submission_template)
+          );
+        } catch (_) {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+    if (!window.clinikoHeadlessPayload.patient || typeof window.clinikoHeadlessPayload.patient !== "object") {
+      window.clinikoHeadlessPayload.patient = {};
+    }
+    return window.clinikoHeadlessPayload;
+  };
+
+  const updateHeadlessPatient = (fields = {}) => {
+    const payload = ensureHeadlessPayload();
+    if (!payload) return false;
+    Object.entries(fields).forEach(([k, v]) => {
+      payload.patient[k] = v;
+    });
+    return true;
+  };
+
+  const getMonthKeyFromDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  };
+
+  const shiftMonthKey = (monthKey, delta) => {
+    if (!monthKey) return "";
+    const [yearStr, monthStr] = monthKey.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!year || !month) return "";
+    const dt = new Date(year, month - 1 + delta, 1);
+    return getMonthKeyFromDate(dt);
+  };
+
+  const groupTimesByPeriod = (times) => {
+    const buckets = { morning: [], afternoon: [], evening: [] };
+    (times || []).forEach((iso) => {
+      const dt = new Date(iso);
+      if (Number.isNaN(dt.getTime())) return;
+      const hour = dt.getHours();
+      if (hour < 12) buckets.morning.push(iso);
+      else if (hour < 17) buckets.afternoon.push(iso);
+      else buckets.evening.push(iso);
+    });
+    return buckets;
+  };
+
+  const fetchPractitioners = async ({ appointmentTypeId } = {}) => {
+    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const url = buildUrl(endpoints.practitioners, { appointment_type_id: id });
+    const payload = await fetchJson(url);
+    return Array.isArray(payload.practitioners) ? payload.practitioners : [];
+  };
+
+  const fetchCalendar = async ({ appointmentTypeId, practitionerId, monthKey } = {}) => {
+    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const url = buildUrl(endpoints.calendar, {
+      appointment_type_id: id,
+      practitioner_id: practitionerId || "",
+      month: monthKey || "",
+    });
+    return await fetchJson(url); // { grid_html, month_label, month_key }
+  };
+
+  const fetchAvailableTimes = async ({
+    appointmentTypeId,
+    practitionerId,
+    from,
+    to,
+    perPage,
+    page,
+  } = {}) => {
+    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const url = buildUrl(endpoints.availableTimes, {
+      appointment_type_id: id,
+      practitioner_id: practitionerId || "",
+      from: from || "",
+      to: to || "",
+      per_page: String(perPage || defaultPerPage),
+      page: String(page || 1),
+    });
+    const payload = await fetchJson(url);
+    const rawTimes = payload.available_times || [];
+    const items = Array.isArray(rawTimes)
+      ? rawTimes.map((t) => t?.appointment_start || t?.appointmentStart || t).filter(Boolean)
+      : [];
+    const total = Number(payload.total_entries || items.length);
+    return { items, total };
+  };
+
+  const fetchAllTimesForDate = async ({
+    dateKey,
+    appointmentTypeId,
+    practitionerId,
+    perPage,
+    maxPages = 20,
+  } = {}) => {
+    let page = 1;
+    let collected = [];
+    let total = 0;
+    let safety = 0;
+
+    while (safety < maxPages) {
+      const res = await fetchAvailableTimes({
+        appointmentTypeId,
+        practitionerId,
+        from: dateKey,
+        to: dateKey,
+        perPage,
+        page,
+      });
+      collected = collected.concat(res.items);
+      total = res.total || collected.length;
+      if (collected.length >= total || res.items.length === 0) break;
+      page += 1;
+      safety += 1;
+    }
+
+    return collected;
+  };
+
+  window.ClinikoHeadlessCalendar = {
+    endpoints,
+    getMonthKeyFromDate,
+    shiftMonthKey,
+    toDateInputValue,
+    groupTimesByPeriod,
+    fetchPractitioners,
+    fetchCalendar,
+    fetchAvailableTimes,
+    fetchAllTimesForDate,
+    updateHeadlessPatient,
+  };
+}
+
+function initHeadlessPaymentWatcher() {
+  if (!isHeadless || !isPaymentEnabled || !isStripeSelected()) return;
+
+  const paymentForm = document.getElementById("payment_form");
+  if (!paymentForm) return;
+
+  const isVisible = (el) => {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden";
+  };
+
+  const maybeInit = () => {
+    if (!isVisible(paymentForm)) return;
+    safeInitStripe();
+  };
+
+  maybeInit();
+
+  const observer = new MutationObserver(() => maybeInit());
+  observer.observe(paymentForm, { attributes: true, attributeFilter: ["style", "class"] });
+
+  window.addEventListener("load", () => maybeInit());
+}
+
+function getHeadlessPayload() {
+  if (typeof window.clinikoGetHeadlessPayload === "function") {
+    try {
+      return window.clinikoGetHeadlessPayload();
+    } catch (e) {
+      console.error("clinikoGetHeadlessPayload error:", e);
+      return null;
+    }
+  }
+  if (window.clinikoHeadlessPayload && typeof window.clinikoHeadlessPayload === "object") {
+    return window.clinikoHeadlessPayload;
+  }
+  return null;
+}
+
+function normalizeHeadlessPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const content = payload.content || null;
+  const patient = payload.patient || null;
+  if (!content || !patient) return null;
+  return { content, patient };
 }
 
 function toDateInputValue(date) {
@@ -1392,7 +1637,13 @@ async function showStripePaymentForm() {
   const preForm = document.getElementById("prepayment-form");
   const paymentForm = document.getElementById("payment_form");
 
-  preForm.style.display = "none";
+  if (!paymentForm) {
+    return;
+  }
+
+  if (preForm) {
+    preForm.style.display = "none";
+  }
   paymentForm.style.display = "flex";
 
   // ✅ Only init Stripe if Stripe gateway is selected
@@ -1407,9 +1658,11 @@ async function showStripePaymentForm() {
   if (backBtn && !backBtn.dataset.bound) {
     backBtn.dataset.bound = "1";
     backBtn.addEventListener("click", () => {
-      preForm.style.display = "block";
+      if (preForm) {
+        preForm.style.display = "block";
+        showStep(window.currentStep);
+      }
       paymentForm.style.display = "none";
-      showStep(window.currentStep);
     });
   }
 }
@@ -1624,7 +1877,19 @@ async function submitBookingForm(
   opts = {}
 ) {
   const formElement = document.getElementById("prepayment-form");
-  const { content, patient } = parseFormToStructuredBody(formElement);
+  const headlessPayload = (isHeadless || !formElement)
+    ? normalizeHeadlessPayload(getHeadlessPayload())
+    : null;
+
+  if (!headlessPayload && !formElement) {
+    const msg =
+      "Headless payload missing. Provide window.clinikoHeadlessPayload or window.clinikoGetHeadlessPayload().";
+    if (errorEl) errorEl.textContent = msg;
+    else showToast(msg, "error");
+    return;
+  }
+
+  const { content, patient } = headlessPayload || parseFormToStructuredBody(formElement);
 
   // ---- normalize payment input (string token OR object) ----
   const payment = (() => {
