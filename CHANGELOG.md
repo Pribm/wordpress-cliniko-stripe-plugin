@@ -1,3 +1,12 @@
+## [1.5.3] - 2026-02-12
+### Fixed
+- Added backend payload sanitization for `radiobuttons` and `checkboxes` so `answers[].selected = false` is stripped before payload validation/dispatch.
+- Applied the sanitizer across all form intake routes:
+  - `POST /wp-json/v1/send-patient-form`
+  - `POST /wp-json/v1/payments/charge`
+  - `POST /wp-json/v1/tyrohealth/charge`
+- Prevented Cliniko API validation failures caused by explicitly sending `selected: false` for non-selected options.
+
 ## [1.5.2] - 2026-02-10
 ### Added
 - Headless custom form mode to expose Cliniko template JSON and a submission-ready payload skeleton.

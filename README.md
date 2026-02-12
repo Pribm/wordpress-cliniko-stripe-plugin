@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.5.2`
+- Current plugin version: `1.5.3`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,12 +14,10 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.5.2
-- Added headless custom form mode with template JSON exposure and a submission-ready payload skeleton.
-- Added headless calendar helpers for practitioners, calendar grid, and available times.
-- Added headless-friendly submission handling for Stripe and Tyro Health flows.
-- Added configurable Cliniko API cache TTL and a manual cache refresh toggle in the widget.
-- Expanded headless documentation with payload and API reference details.
+## What Is New in 1.5.3
+- Added backend sanitization for choice questions so `selected: false` is stripped from `radiobuttons` and `checkboxes` answers before dispatch to Cliniko.
+- Applied sanitization consistently across all form intake routes (`send-patient-form`, `payments/charge`, `tyrohealth/charge`).
+- Reduced Cliniko payload validation failures caused by explicit false-selection flags.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
@@ -152,7 +150,7 @@ Minimal payload shape:
     "last_name": "Doe",
     "email": "jane@example.com",
     "phone": "0400 000 000",
-    "medicare": "1234 56789 1",
+    "medicare": "1234 56789",
     "medicare_reference_number": "1"
   },
   "content": {
@@ -210,6 +208,7 @@ Content schema notes:
 - For `text`/`textarea`, send `answer` (string).
 - For `checkboxes`/`radiobuttons`, send `answers` (array of `{ value, selected }`).
 - For `radiobuttons`, only one `answers[].selected` can be `true`.
+- `selected: false` entries are sanitized server-side (removed before Cliniko payload dispatch).
 - If the template enables "other", include `other` as `{ enabled: true, selected: true|false, value: "..." }`.
 - `signature` questions are not allowed in payloads.
 
@@ -370,6 +369,7 @@ Example request body:
 Notes:
 - `signature` questions are not allowed in `content`.
 - Required questions must include valid answers. For radiobuttons, only one option may be selected.
+- `selected: false` values in `checkboxes`/`radiobuttons` are stripped server-side before Cliniko submission.
 - If an "other" option is selected, it must include a non-empty `other.value`.
 
 Success response (HTTP 202):
@@ -404,9 +404,13 @@ Body (JSON):
 - `stripeToken` (required if payment is required; must start with `tok_` or `pm_`)
 - `patient` (required)
 - `patient.first_name`, `patient.last_name`, `patient.email` (required)
-- `patient.medicare` (required, 10 digits)
+- `patient.practitioner_id` (required, numeric Cliniko ID)
+- `patient.medicare` (required, 9 digits)
 - `patient.medicare_reference_number` (required, single digit 1-9)
-- `content` (optional; accepted but not validated here)
+- `patient.date_of_birth` (optional, `YYYY-MM-DD` if provided)
+- `patient.appointment_start` (optional, ISO 8601 datetime if provided)
+- `patient.appointment_date` (optional, `YYYY-MM-DD` if provided)
+- `content` (required; validated to match Cliniko patient form structure)
 - `signature_attachment_id` (optional)
 
 Example request body:
@@ -419,8 +423,11 @@ Example request body:
     "first_name": "Jane",
     "last_name": "Doe",
     "email": "jane@example.com",
-    "medicare": "1234 56789 1",
-    "medicare_reference_number": "1"
+    "practitioner_id": "1547537765724333824",
+    "medicare": "1234 56789",
+    "medicare_reference_number": "1",
+    "date_of_birth": "1992-02-23",
+    "appointment_start": "2026-02-12T05:50:00Z"
   },
   "content": {
     "sections": []

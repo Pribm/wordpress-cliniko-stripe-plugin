@@ -5,6 +5,7 @@ use App\Admin\Modules\Credentials;
 use App\Client\Cliniko\Client;
 use App\Infra\JobDispatcher;
 use App\Model\AppointmentType;
+use App\Service\PatientFormPayloadSanitizer;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -137,6 +138,7 @@ class TyroController
 
         $patient = is_array($body['patient'] ?? null) ? $body['patient'] : json_decode($body['patient'] ?? '[]', true);
         $content = is_array($body['content'] ?? null) ? $body['content'] : json_decode($body['content'] ?? '[]', true);
+        $content = PatientFormPayloadSanitizer::sanitizeContent($content);
         $signatureAttachmentId = $body['signature_attachment_id'] ?? null;
 
         if (!$moduleId || !$patientFormTemplateId) {
