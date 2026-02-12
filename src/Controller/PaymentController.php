@@ -4,8 +4,10 @@ namespace App\Controller;
 use App\Client\Cliniko\Client;
 use App\Infra\JobDispatcher;
 use App\Model\AppointmentType;
+use App\Service\PatientFormPayloadSanitizer;
 use App\Service\StripeService;
 use App\Validator\AppointmentRequestValidator;
+use App\Validator\PatientFormValidator;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -37,6 +39,7 @@ class PaymentController
         // Forwarded to the background worker (but stored server-side to keep action args tiny):
         $patient = is_array($body['patient'] ?? null) ? $body['patient'] : json_decode($body['patient'] ?? '[]', true);
         $content = is_array($body['content'] ?? null) ? $body['content'] : json_decode($body['content'] ?? '[]', true);
+        $content = PatientFormPayloadSanitizer::sanitizeContent($content);
         $signatureAttachmentId = $body['signature_attachment_id'] ?? null;
 
         $clinikoPatient = $patient;
@@ -46,7 +49,10 @@ class PaymentController
         $validationPayload['patient'] = $patient;
         $validationPayload['content'] = $content;
 
+        // 1) Validate scheduling + patient fields used by charge/worker
         $errors = AppointmentRequestValidator::validate($validationPayload, false);
+        // 2) Validate form content shape to match Cliniko patient form payload expectations
+        $errors = array_merge($errors, PatientFormValidator::validateContentSections($content));
         
         if (!empty($errors)) {
             return new WP_REST_Response([

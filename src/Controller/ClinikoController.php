@@ -4,6 +4,7 @@ namespace App\Controller;
 use App\Infra\JobDispatcher;
 use App\Model\AppointmentType;
 use App\Model\AvailableTimes;
+use App\Service\PatientFormPayloadSanitizer;
 use App\Validator\PatientFormValidator;
 
 
@@ -19,6 +20,9 @@ class ClinikoController
     public function createPatientForm(WP_REST_Request $request): WP_REST_Response
     {
         $body = json_decode($request->get_body(), true) ?: $request->get_params();
+        if (is_array($body)) {
+            $body = PatientFormPayloadSanitizer::sanitizePayload($body);
+        }
 
         // 1️⃣ Validação de payload
         $errors = PatientFormValidator::validate($body);
