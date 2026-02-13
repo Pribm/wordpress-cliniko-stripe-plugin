@@ -58,7 +58,7 @@ class PatientFormValidator
             ],
             'content.sections[].questions[].type' => [
                 'type' => 'string',
-                'enum' => ['text', 'checkboxes', 'radiobuttons', 'textarea'],
+                'enum' => ['text', 'checkboxes', 'radiobuttons', 'textarea', 'paragraph'],
                 'example' => 'checkboxes'
             ],
             'content.sections[].questions[].required' => [
@@ -188,7 +188,7 @@ class PatientFormValidator
                 }
 
                 if ($required) {
-                    if ($type === 'text' && empty($question['answer'])) {
+                    if (in_array($type, ['text', 'textarea', 'paragraph'], true) && empty($question['answer'])) {
                         $errors[] = self::makeError(
                             "$path.answer",
                             'Answer',
@@ -199,6 +199,33 @@ class PatientFormValidator
                     }
                     if (in_array($type, ['checkboxes', 'radiobuttons'], true)) {
                         $answers = is_array($question['answers'] ?? null) ? $question['answers'] : [];
+
+                        foreach ($answers as $answerIndex => $answerItem) {
+                            $answerPath = "$path.answers.$answerIndex";
+                            $value = is_array($answerItem) ? trim((string) ($answerItem['value'] ?? '')) : '';
+
+                            if ($value === '') {
+                                $errors[] = self::makeError(
+                                    "$answerPath.value",
+                                    'Answer Value',
+                                    'required',
+                                    'Each answer option must include a non-empty value.',
+                                    $expected['content.sections[].questions[].answers[].value'] ?? []
+                                );
+                                continue;
+                            }
+
+                            if (is_array($answerItem) && array_key_exists('selected', $answerItem) && !is_bool($answerItem['selected'])) {
+                                $errors[] = self::makeError(
+                                    "$answerPath.selected",
+                                    'Answer Selected',
+                                    'invalid',
+                                    'Answer selected must be a boolean when provided.',
+                                    $expected['content.sections[].questions[].answers[].selected'] ?? []
+                                );
+                            }
+                        }
+
                         $selectedAnswers = array_filter($answers, fn($a) => !empty($a['selected']));
 
                         // ✅ Handle "other" option
@@ -210,7 +237,7 @@ class PatientFormValidator
                         $totalSelected = count($selectedAnswers) + ($otherSelected ? 1 : 0);
 
                         // Required: at least one selected (answers OR other)
-                        if ($required && $totalSelected === 0) {
+                        if ($totalSelected === 0) {
                             $errors[] = self::makeError(
                                 "$path.answers",
                                 'Answers',

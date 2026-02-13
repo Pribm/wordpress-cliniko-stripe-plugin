@@ -56,6 +56,49 @@ function shouldUsePractitionerSelection() {
   return !isClinikoForm && isPaymentEnabled && (isStripeSelected() || isTyroSelected());
 }
 
+function getCalendarFrontendCacheStore() {
+  if (!window.__clinikoCalendarCacheStore) {
+    window.__clinikoCalendarCacheStore = {
+      values: new Map(),
+      pending: new Map(),
+    };
+  }
+  return window.__clinikoCalendarCacheStore;
+}
+
+function readCalendarCacheValue(store, key) {
+  const entry = store.values.get(key);
+  if (!entry) return null;
+  if (!entry.expiresAt || entry.expiresAt < Date.now()) {
+    store.values.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function writeCalendarCacheValue(store, key, value, ttlMs) {
+  const ttl = Math.max(1, Number(ttlMs || 1));
+  store.values.set(key, {
+    value,
+    expiresAt: Date.now() + ttl,
+  });
+}
+
+function withPendingCalendarRequest(store, key, loader) {
+  if (store.pending.has(key)) {
+    return store.pending.get(key);
+  }
+
+  const promise = Promise.resolve()
+    .then(loader)
+    .finally(() => {
+      store.pending.delete(key);
+    });
+
+  store.pending.set(key, promise);
+  return promise;
+}
+
 function initHeadlessCalendarHelpers() {
   if (!isHeadless) return;
 
@@ -70,6 +113,12 @@ function initHeadlessCalendarHelpers() {
     100,
     Math.max(1, Number(formHandlerData?.available_times_per_page || 100))
   );
+  const cacheStore = getCalendarFrontendCacheStore();
+  const cacheTtlMs = {
+    practitioners: 5 * 60 * 1000,
+    calendar: 2 * 60 * 1000,
+    timesPage: 30 * 1000,
+  };
 
   const buildUrl = (base, params) => {
     if (!base) throw new Error("Endpoint not configured.");
@@ -159,19 +208,77 @@ function initHeadlessCalendarHelpers() {
 
   const fetchPractitioners = async ({ appointmentTypeId } = {}) => {
     const id = appointmentTypeId || defaultAppointmentTypeId;
-    const url = buildUrl(endpoints.practitioners, { appointment_type_id: id });
-    const payload = await fetchJson(url);
-    return Array.isArray(payload.practitioners) ? payload.practitioners : [];
+    const cacheKey = `cliniko:practitioners:${id}`;
+    const cached = readCalendarCacheValue(cacheStore, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    return withPendingCalendarRequest(cacheStore, cacheKey, async () => {
+      const url = buildUrl(endpoints.practitioners, { appointment_type_id: id });
+      const payload = await fetchJson(url);
+      const list = Array.isArray(payload.practitioners) ? payload.practitioners : [];
+      writeCalendarCacheValue(cacheStore, cacheKey, list, cacheTtlMs.practitioners);
+      return list;
+    });
   };
 
   const fetchCalendar = async ({ appointmentTypeId, practitionerId, monthKey } = {}) => {
     const id = appointmentTypeId || defaultAppointmentTypeId;
-    const url = buildUrl(endpoints.calendar, {
-      appointment_type_id: id,
-      practitioner_id: practitionerId || "",
-      month: monthKey || "",
+    const practitioner = practitionerId || "";
+    const month = monthKey || "";
+    const cacheKey = `cliniko:calendar:${id}:${practitioner}:${month}`;
+    const cached = readCalendarCacheValue(cacheStore, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    return withPendingCalendarRequest(cacheStore, cacheKey, async () => {
+      const url = buildUrl(endpoints.calendar, {
+        appointment_type_id: id,
+        practitioner_id: practitioner,
+        month,
+      });
+      const payload = await fetchJson(url); // { grid_html, month_label, month_key }
+      writeCalendarCacheValue(cacheStore, cacheKey, payload, cacheTtlMs.calendar);
+      return payload;
     });
-    return await fetchJson(url); // { grid_html, month_label, month_key }
+  };
+
+  const prefetchCalendarWindow = async ({
+    appointmentTypeId,
+    practitionerId,
+    monthKey,
+    monthsAhead = 1,
+  } = {}) => {
+    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const practitioner = practitionerId || "";
+    let cursor = monthKey || getMonthKeyFromDate(new Date());
+
+    if (!id || !practitioner || !cursor) return false;
+
+    const tasks = [
+      fetchCalendar({
+        appointmentTypeId: id,
+        practitionerId: practitioner,
+        monthKey: cursor,
+      }),
+    ];
+
+    for (let i = 0; i < Math.max(0, Number(monthsAhead || 0)); i += 1) {
+      cursor = shiftMonthKey(cursor, 1);
+      if (!cursor) break;
+      tasks.push(
+        fetchCalendar({
+          appointmentTypeId: id,
+          practitionerId: practitioner,
+          monthKey: cursor,
+        })
+      );
+    }
+
+    await Promise.allSettled(tasks);
+    return true;
   };
 
   const fetchAvailableTimes = async ({
@@ -183,21 +290,36 @@ function initHeadlessCalendarHelpers() {
     page,
   } = {}) => {
     const id = appointmentTypeId || defaultAppointmentTypeId;
-    const url = buildUrl(endpoints.availableTimes, {
-      appointment_type_id: id,
-      practitioner_id: practitionerId || "",
-      from: from || "",
-      to: to || "",
-      per_page: String(perPage || defaultPerPage),
-      page: String(page || 1),
+    const practitioner = practitionerId || "";
+    const fromDate = from || "";
+    const toDate = to || "";
+    const perPageValue = String(perPage || defaultPerPage);
+    const pageValue = String(page || 1);
+    const cacheKey = `cliniko:times:${id}:${practitioner}:${fromDate}:${toDate}:${perPageValue}:${pageValue}`;
+    const cached = readCalendarCacheValue(cacheStore, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    return withPendingCalendarRequest(cacheStore, cacheKey, async () => {
+      const url = buildUrl(endpoints.availableTimes, {
+        appointment_type_id: id,
+        practitioner_id: practitioner,
+        from: fromDate,
+        to: toDate,
+        per_page: perPageValue,
+        page: pageValue,
+      });
+      const payload = await fetchJson(url);
+      const rawTimes = payload.available_times || [];
+      const items = Array.isArray(rawTimes)
+        ? rawTimes.map((t) => t?.appointment_start || t?.appointmentStart || t).filter(Boolean)
+        : [];
+      const total = Number(payload.total_entries || items.length);
+      const result = { items, total };
+      writeCalendarCacheValue(cacheStore, cacheKey, result, cacheTtlMs.timesPage);
+      return result;
     });
-    const payload = await fetchJson(url);
-    const rawTimes = payload.available_times || [];
-    const items = Array.isArray(rawTimes)
-      ? rawTimes.map((t) => t?.appointment_start || t?.appointmentStart || t).filter(Boolean)
-      : [];
-    const total = Number(payload.total_entries || items.length);
-    return { items, total };
   };
 
   const fetchAllTimesForDate = async ({
@@ -239,6 +361,7 @@ function initHeadlessCalendarHelpers() {
     groupTimesByPeriod,
     fetchPractitioners,
     fetchCalendar,
+    prefetchCalendarWindow,
     fetchAvailableTimes,
     fetchAllTimesForDate,
     updateHeadlessPatient,
@@ -363,6 +486,14 @@ async function initAvailableTimesPicker() {
     100,
     Math.max(1, Number(formHandlerData?.available_times_per_page || 100))
   );
+  const frontendCache = getCalendarFrontendCacheStore();
+  const frontendCacheTtlMs = {
+    practitioners: 5 * 60 * 1000,
+    calendar: 2 * 60 * 1000,
+    timesPage: 30 * 1000,
+  };
+  let calendarRequestSeq = 0;
+  let dayRequestSeq = 0;
 
   function setStatus(message, isError = false) {
     if (!statusEl) return;
@@ -447,23 +578,35 @@ async function initAvailableTimesPicker() {
     calendarPrevBtn.disabled = currentMonthKey <= thisMonthKey;
   }
 
-  async function fetchPractitioners() {
-    if (!practitionersEndpoint || !appointmentTypeId) return [];
-    const url = new URL(practitionersEndpoint, window.location.origin);
-    url.searchParams.set("appointment_type_id", appointmentTypeId);
-
-    const res = await fetch(url.toString(), {
+  async function fetchJson(url, fallbackMessage) {
+    const res = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
       credentials: "same-origin",
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.success === false) {
-      throw new Error(data?.message || "Failed to load practitioners.");
+      throw new Error(data?.message || fallbackMessage || "Request failed.");
+    }
+    return data?.data ?? data ?? {};
+  }
+
+  async function fetchPractitioners() {
+    if (!practitionersEndpoint || !appointmentTypeId) return [];
+    const cacheKey = `cliniko:practitioners:${appointmentTypeId}`;
+    const cached = readCalendarCacheValue(frontendCache, cacheKey);
+    if (cached) {
+      return cached;
     }
 
-    const payload = data?.data ?? data ?? {};
-    return Array.isArray(payload.practitioners) ? payload.practitioners : [];
+    return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
+      const url = new URL(practitionersEndpoint, window.location.origin);
+      url.searchParams.set("appointment_type_id", appointmentTypeId);
+      const payload = await fetchJson(url.toString(), "Failed to load practitioners.");
+      const list = Array.isArray(payload.practitioners) ? payload.practitioners : [];
+      writeCalendarCacheValue(frontendCache, cacheKey, list, frontendCacheTtlMs.practitioners);
+      return list;
+    });
   }
 
   function populatePractitionerSelect(list) {
@@ -498,87 +641,126 @@ async function initAvailableTimesPicker() {
     practitionerSelectWrap.classList.remove("is-hidden");
   }
 
+  async function fetchCalendarPayload(practitioner, monthKey = null) {
+    if (!calendarEndpoint || !appointmentTypeId) {
+      throw new Error("Calendar endpoint not configured.");
+    }
+    const month = monthKey || currentMonthKey || "";
+    const cacheKey = `cliniko:calendar:${appointmentTypeId}:${practitioner || ""}:${month}`;
+    const cached = readCalendarCacheValue(frontendCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
+      const url = new URL(calendarEndpoint, window.location.origin);
+      url.searchParams.set("appointment_type_id", appointmentTypeId);
+      if (practitioner) url.searchParams.set("practitioner_id", practitioner);
+      if (month) url.searchParams.set("month", month);
+      const data = await fetchJson(url.toString(), "Failed to load calendar.");
+      writeCalendarCacheValue(frontendCache, cacheKey, data, frontendCacheTtlMs.calendar);
+      return data;
+    });
+  }
+
+  async function prefetchCalendarMonth(practitioner, monthKey) {
+    if (!practitioner || !monthKey) return false;
+    try {
+      await fetchCalendarPayload(practitioner, monthKey);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function prefetchCalendarWindow(practitioner, baseMonthKey) {
+    const base = baseMonthKey || currentMonthKey || getMonthKeyFromDate(new Date());
+    if (!practitioner || !base) return false;
+    const next = shiftMonthKey(base, 1);
+    const tasks = [prefetchCalendarMonth(practitioner, base)];
+    if (next) tasks.push(prefetchCalendarMonth(practitioner, next));
+    await Promise.allSettled(tasks);
+    return true;
+  }
+
   async function refreshCalendar(practitioner, monthKey = null) {
-    if (!calendarEndpoint || !appointmentTypeId || !calendarGrid) return;
+    if (!calendarGrid) return;
+    const requestSeq = ++calendarRequestSeq;
 
     calendarGrid.classList.add("is-loading");
     calendarGrid.setAttribute("aria-busy", "true");
+    try {
+      const payload = await fetchCalendarPayload(practitioner, monthKey);
 
-    const url = new URL(calendarEndpoint, window.location.origin);
-    url.searchParams.set("appointment_type_id", appointmentTypeId);
-    if (practitioner) url.searchParams.set("practitioner_id", practitioner);
-    if (monthKey) url.searchParams.set("month", monthKey);
+      if (requestSeq !== calendarRequestSeq) {
+        return;
+      }
 
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data?.success === false) {
-      calendarGrid.classList.remove("is-loading");
-      calendarGrid.removeAttribute("aria-busy");
-      calendarGrid.innerHTML = "";
-      throw new Error(data?.message || "Failed to load calendar.");
-    }
+      calendarGrid.innerHTML = payload.grid_html || "";
 
-    const payload = data?.data ?? data ?? {};
-    calendarGrid.innerHTML = payload.grid_html || "";
-    calendarGrid.classList.remove("is-loading");
-    calendarGrid.removeAttribute("aria-busy");
+      const monthLabel = document.getElementById("appointment-calendar-month");
+      if (monthLabel && payload.month_label) {
+        monthLabel.textContent = payload.month_label;
+      }
 
-    const monthLabel = document.getElementById("appointment-calendar-month");
-    if (monthLabel && payload.month_label) {
-      monthLabel.textContent = payload.month_label;
-    }
+      if (payload.month_key) {
+        currentMonthKey = payload.month_key;
+        calendarGrid.dataset.calendarMonth = payload.month_key;
+      }
+      updateNavState();
 
-    if (payload.month_key) {
-      currentMonthKey = payload.month_key;
-      calendarGrid.dataset.calendarMonth = payload.month_key;
-    }
-    updateNavState();
+      const enabledDays = calendarGrid.querySelectorAll(
+        ".calendar-day:not(.is-blank):not(.is-disabled)"
+      );
+      if (enabledDays.length === 0) {
+        setStatus("No available times for the rest of this month.");
+      } else {
+        setStatus("Select a day to view times.");
+      }
 
-    const enabledDays = calendarGrid.querySelectorAll(
-      ".calendar-day:not(.is-blank):not(.is-disabled)"
-    );
-    if (enabledDays.length === 0) {
-      setStatus("No available times for the rest of this month.");
-    } else {
-      setStatus("Select a day to view times.");
+      const lookAheadMonth = shiftMonthKey(currentMonthKey, 1);
+      if (lookAheadMonth) {
+        void prefetchCalendarMonth(practitioner, lookAheadMonth);
+      }
+    } finally {
+      if (requestSeq === calendarRequestSeq) {
+        calendarGrid.classList.remove("is-loading");
+        calendarGrid.removeAttribute("aria-busy");
+      }
     }
   }
 
   async function fetchPage(from, to, page) {
-    const url = new URL(endpoint, window.location.origin);
-    url.searchParams.set("appointment_type_id", appointmentTypeId);
-    url.searchParams.set("from", from);
-    url.searchParams.set("to", to);
-    url.searchParams.set("per_page", String(perPage));
-    url.searchParams.set("page", String(page));
-    if (practitionerId) {
-      url.searchParams.set("practitioner_id", practitionerId);
+    const cacheKey = `cliniko:times:${appointmentTypeId}:${practitionerId || ""}:${from}:${to}:${perPage}:${page}`;
+    const cached = readCalendarCacheValue(frontendCache, cacheKey);
+    if (cached) {
+      return cached;
     }
 
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
+    return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
+      const url = new URL(endpoint, window.location.origin);
+      url.searchParams.set("appointment_type_id", appointmentTypeId);
+      url.searchParams.set("from", from);
+      url.searchParams.set("to", to);
+      url.searchParams.set("per_page", String(perPage));
+      url.searchParams.set("page", String(page));
+      if (practitionerId) {
+        url.searchParams.set("practitioner_id", practitionerId);
+      }
+
+      const payload = await fetchJson(url.toString(), "Failed to load available times.");
+      const rawTimes = payload.available_times || [];
+      const items = Array.isArray(rawTimes)
+        ? rawTimes
+            .map((t) => t?.appointment_start || t?.appointmentStart || t)
+            .filter(Boolean)
+        : [];
+
+      const total = Number(payload.total_entries || items.length);
+      const result = { items, total };
+      writeCalendarCacheValue(frontendCache, cacheKey, result, frontendCacheTtlMs.timesPage);
+      return result;
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data?.success === false) {
-      throw new Error(data?.message || "Failed to load available times.");
-    }
-
-    const payload = data?.data ?? data ?? {};
-    const rawTimes = payload.available_times || [];
-    const items = Array.isArray(rawTimes)
-      ? rawTimes
-          .map((t) => t?.appointment_start || t?.appointmentStart || t)
-          .filter(Boolean)
-      : [];
-
-    const total = Number(payload.total_entries || items.length);
-    return { items, total };
   }
 
   async function fetchAllTimesForDate(dateKey) {
@@ -745,6 +927,7 @@ async function initAvailableTimesPicker() {
 
   async function selectDay(cell, dateKey, preselectIso = null) {
     if (!calendarReady) return;
+    const requestSeq = ++dayRequestSeq;
     calendarGrid
       .querySelectorAll(".calendar-day.is-selected")
       .forEach((el) => el.classList.remove("is-selected"));
@@ -770,6 +953,7 @@ async function initAvailableTimesPicker() {
 
     if (timesCache.has(dateKey)) {
       const cached = timesCache.get(dateKey);
+      if (requestSeq !== dayRequestSeq) return;
       updatePeriodIndicators(cell, cached);
       renderTimes(dateKey, cached, preselectIso);
       return;
@@ -779,10 +963,12 @@ async function initAvailableTimesPicker() {
     try {
       times = await fetchAllTimesForDate(dateKey);
     } catch (e) {
+      if (requestSeq !== dayRequestSeq) return;
       setStatus(e?.message || "Failed to load available times.", true);
       return;
     }
 
+    if (requestSeq !== dayRequestSeq) return;
     timesCache.set(dateKey, times);
     updatePeriodIndicators(cell, times);
     renderTimes(dateKey, times, preselectIso);
@@ -821,6 +1007,7 @@ async function initAvailableTimesPicker() {
 
         if (calendarReady) {
           try {
+            await prefetchCalendarWindow(selected, currentMonthKey);
             await refreshCalendar(selected, currentMonthKey);
           } catch (e) {
             setStatus(e?.message || "Failed to load calendar.", true);
@@ -833,6 +1020,7 @@ async function initAvailableTimesPicker() {
   async function initializeCalendarState() {
     if (calendarReady && calendarEndpoint && practitionerSelect) {
       try {
+        await prefetchCalendarWindow(practitionerId, currentMonthKey);
         await refreshCalendar(practitionerId, currentMonthKey);
       } catch (e) {
         setStatus(e?.message || "Failed to load calendar.", true);
@@ -948,110 +1136,256 @@ function extractNestedFields(form, parentKey) {
   return result;
 }
 
-function parseFormToStructuredBody(formEl) {
-  const formData = new FormData(formEl);
-  const sectionsData = formHandlerData.sections || [];
+function onlyDigits(value) {
+  return String(value || "").replace(/\D+/g, "");
+}
 
-  const structured = {
-    content: {
-      sections: sectionsData
-        .map((section) => {
-          const questions = section.questions
-            .map((q) => {
-              const question = {
-                name: q.name,
-                type: q.type,
-                required: !!q.required,
-              };
+function isValidYmdDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return (
+    dt.getUTCFullYear() === year &&
+    dt.getUTCMonth() + 1 === month &&
+    dt.getUTCDate() === day
+  );
+}
 
-              // CHECKBOXES
-              if (q.type === "checkboxes" && Array.isArray(q.answers)) {
-                const rawSelected = formData.getAll(q.name + "[]") || [];
+function normalizeDateYmd(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
 
-                // include all options; mark only selected
-                question.answers = q.answers.map((opt) => {
-                  const entry = { value: opt.value };
-                  if (rawSelected.includes(opt.value)) entry.selected = true;
-                  return entry;
-                });
+  if (isValidYmdDate(raw)) return raw;
 
-                if (q.other?.enabled) {
-                  const otherChecked =
-                    rawSelected.includes("__other__") ||
-                    rawSelected.includes("other");
-                  const otherValue = (
-                    formData.get(q.name + "_other") || ""
-                  ).trim();
+  const slash = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slash) {
+    const ymd = `${slash[3]}-${slash[2]}-${slash[1]}`;
+    return isValidYmdDate(ymd) ? ymd : "";
+  }
 
-                  question.other = otherChecked
-                    ? { value: otherValue, enabled: true, selected: true } // value may be "" (allowed)
-                    : { enabled: true };
-                }
+  const compact = onlyDigits(raw);
+  if (compact.length === 8) {
+    const ymd = `${compact.slice(4, 8)}-${compact.slice(2, 4)}-${compact.slice(0, 2)}`;
+    return isValidYmdDate(ymd) ? ymd : "";
+  }
 
-                // RADIOBUTTONS
-              } else if (
-                q.type === "radiobuttons" &&
-                Array.isArray(q.answers)
-              ) {
-                const selected = formData.get(q.name);
+  return "";
+}
 
-                question.answers = q.answers.map((opt) => {
-                  const entry = { value: opt.value };
-                  if (selected === opt.value) entry.selected = true;
-                  return entry;
-                });
+function normalizePatientForSubmission(patientRaw) {
+  const patient = patientRaw && typeof patientRaw === "object" ? { ...patientRaw } : {};
+  const normalized = {};
 
-                if (q.other?.enabled) {
-                  const isOther =
-                    selected === "__other__" || selected === "other";
-                  const otherValue = (
-                    formData.get(q.name + "_other") || ""
-                  ).trim();
-                  question.other = isOther
-                    ? { value: otherValue, enabled: true, selected: true }
-                    : { enabled: true };
-                }
-
-                // SIMPLE INPUTS
-              } else {
-                question.answer = formData.get(q.name);
-              }
-
-              return question;
-            })
-            .filter((q) => {
-              // ✅ keep original behavior: drop signature questions
-              if (q.type === "signature") return false;
-
-              // keep original “empty question” guards
-              if (
-                q.answers &&
-                Array.isArray(q.answers) &&
-                q.answers.length === 0
-              )
-                return false;
-              if (
-                "answer" in q &&
-                typeof q.answer === "string" &&
-                q.answer.trim() === ""
-              )
-                return false;
-
-              return true;
-            });
-
-          return {
-            name: section.name,
-            description: section.description,
-            questions,
-          };
-        })
-        .filter((section) => section.questions.length > 0),
-    },
-    ...extractNestedFields(formEl, "patient"),
+  const copyTrim = (key) => {
+    if (!(key in patient)) return;
+    normalized[key] = String(patient[key] || "").trim();
   };
 
-  return structured;
+  [
+    "first_name",
+    "last_name",
+    "email",
+    "address_1",
+    "address_2",
+    "city",
+    "state",
+    "country",
+    "practitioner_id",
+    "appointment_start",
+    "appointment_date",
+  ].forEach(copyTrim);
+
+  if ("medicare" in patient) {
+    normalized.medicare = onlyDigits(patient.medicare).slice(0, 9);
+  }
+
+  if ("medicare_reference_number" in patient) {
+    normalized.medicare_reference_number = onlyDigits(
+      patient.medicare_reference_number
+    ).slice(0, 1);
+  }
+
+  if ("phone" in patient) {
+    let digits = onlyDigits(patient.phone);
+    if (digits.startsWith("61")) digits = "0" + digits.slice(2);
+    normalized.phone = digits.slice(0, 10);
+  }
+
+  if ("post_code" in patient) {
+    const digits = onlyDigits(patient.post_code);
+    normalized.post_code = digits ? digits.slice(0, 4) : String(patient.post_code || "").trim();
+  }
+
+  if ("date_of_birth" in patient) {
+    normalized.date_of_birth = normalizeDateYmd(patient.date_of_birth);
+  }
+
+  if (!normalized.appointment_date && normalized.appointment_start) {
+    const match = normalized.appointment_start.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) normalized.appointment_date = match[1];
+  }
+
+  Object.entries(patient).forEach(([key, value]) => {
+    if (Object.prototype.hasOwnProperty.call(normalized, key)) return;
+    if (typeof value === "string") {
+      normalized[key] = value.trim();
+    } else {
+      normalized[key] = value;
+    }
+  });
+
+  return normalized;
+}
+
+function normalizeContentForSubmission(contentRaw) {
+  const sectionsIn = Array.isArray(contentRaw?.sections) ? contentRaw.sections : [];
+
+  const sections = sectionsIn.map((section) => {
+    const questionsIn = Array.isArray(section?.questions) ? section.questions : [];
+
+    const questions = questionsIn
+      .map((q) => {
+        const type = String(q?.type || "text");
+        if (type === "signature") return null;
+
+        const question = {
+          name: String(q?.name || ""),
+          type,
+          required: !!q?.required,
+        };
+
+        if (type === "checkboxes" || type === "radiobuttons") {
+          const legacySelected = new Set();
+          if (type === "checkboxes" && Array.isArray(q?.answer)) {
+            q.answer.forEach((v) => {
+              const value = String(v || "").trim();
+              if (value) legacySelected.add(value);
+            });
+          }
+          if (type === "radiobuttons" && typeof q?.answer === "string") {
+            const value = String(q.answer || "").trim();
+            if (value) legacySelected.add(value);
+          }
+
+          const answersIn = Array.isArray(q?.answers) ? q.answers : [];
+          question.answers = answersIn
+            .map((answer) => {
+              if (answer && typeof answer === "object") {
+                const value = String(answer.value || "").trim();
+                if (!value) return null;
+                return { value, selected: !!answer.selected || legacySelected.has(value) };
+              }
+              const value = String(answer || "").trim();
+              if (!value) return null;
+              return { value, selected: legacySelected.has(value) };
+            })
+            .filter(Boolean);
+
+          if (question.answers.length === 0 && legacySelected.size > 0) {
+            question.answers = Array.from(legacySelected).map((value) => ({
+              value,
+              selected: true,
+            }));
+          }
+
+          if (q?.other && typeof q.other === "object" && q.other.enabled) {
+            if (q.other.selected) {
+              question.other = {
+                enabled: true,
+                selected: true,
+                value: String(q.other.value || "").trim(),
+              };
+            } else {
+              question.other = { enabled: true };
+            }
+          }
+
+          return question;
+        }
+
+        question.answer = String(q?.answer ?? "");
+        return question;
+      })
+      .filter(Boolean);
+
+    return {
+      name: String(section?.name || ""),
+      description: String(section?.description || ""),
+      questions,
+    };
+  });
+
+  return { sections };
+}
+
+function parseFormToStructuredBody(formEl) {
+  const formData = new FormData(formEl);
+  const sectionsData = Array.isArray(formHandlerData.sections)
+    ? formHandlerData.sections
+    : [];
+
+  const rawContent = {
+    sections: sectionsData.map((section) => {
+      const sectionQuestions = Array.isArray(section?.questions) ? section.questions : [];
+
+      const questions = sectionQuestions
+        .map((q) => {
+          const question = {
+            name: q?.name,
+            type: q?.type,
+            required: !!q?.required,
+          };
+
+          if (q?.type === "checkboxes" && Array.isArray(q.answers)) {
+            const rawSelected = new Set((formData.getAll(q.name + "[]") || []).map(String));
+            question.answers = q.answers.map((opt) => {
+              const value = String(opt?.value || "");
+              return { value, selected: rawSelected.has(value) };
+            });
+
+            if (q.other?.enabled) {
+              const otherChecked =
+                rawSelected.has("__other__") || rawSelected.has("other");
+              const otherValue = (formData.get(q.name + "_other") || "").trim();
+              question.other = otherChecked
+                ? { value: otherValue, enabled: true, selected: true }
+                : { enabled: true };
+            }
+          } else if (q?.type === "radiobuttons" && Array.isArray(q.answers)) {
+            const selected = String(formData.get(q.name) || "");
+            question.answers = q.answers.map((opt) => {
+              const value = String(opt?.value || "");
+              return { value, selected: selected === value };
+            });
+
+            if (q.other?.enabled) {
+              const isOther = selected === "__other__" || selected === "other";
+              const otherValue = (formData.get(q.name + "_other") || "").trim();
+              question.other = isOther
+                ? { value: otherValue, enabled: true, selected: true }
+                : { enabled: true };
+            }
+          } else {
+            question.answer = String(formData.get(q?.name) ?? "");
+          }
+
+          return question;
+        })
+        .filter((question) => question.type !== "signature");
+
+      return {
+        name: section?.name,
+        description: section?.description,
+        questions,
+      };
+    }),
+  };
+
+  const extracted = extractNestedFields(formEl, "patient");
+  return {
+    content: normalizeContentForSubmission(rawContent),
+    patient: normalizePatientForSubmission(extracted?.patient || {}),
+  };
 }
 
 let embedFormStep = 0;
@@ -1421,15 +1755,15 @@ function isCurrentStepValid() {
       continue;
     }
 
-    // Medicare number (10 digits, ignoring spaces)
+    // Medicare number (9 digits, reference number is separate)
     if (field.name === "patient[medicare]") {
       const clean = value.replace(/\D/g, "");
-      if (clean.length !== 10) {
+      if (clean.length !== 9) {
         field.style.borderColor = "red";
         isValid = false;
         const msg = document.createElement("div");
         msg.className = "field-error";
-        msg.textContent = "Medicare number must contain exactly 10 digits.";
+        msg.textContent = "Medicare number must contain exactly 9 digits.";
         parent.appendChild(msg);
         continue;
       }
@@ -1889,7 +2223,9 @@ async function submitBookingForm(
     return;
   }
 
-  const { content, patient } = headlessPayload || parseFormToStructuredBody(formElement);
+  const parsed = headlessPayload || parseFormToStructuredBody(formElement);
+  const content = normalizeContentForSubmission(parsed?.content || {});
+  const patient = normalizePatientForSubmission(parsed?.patient || {});
 
   // ---- normalize payment input (string token OR object) ----
   const payment = (() => {
@@ -1909,7 +2245,6 @@ async function submitBookingForm(
 
   // ---- basic validation for tyrohealth payload (avoid silent bad submits) ----
   if (!isClinikoIframe && payment.gateway === "tyrohealth" && !payment.transactionId) {
-    console.log("here")
     const msg = "Missing Tyro transactionId.";
     if (errorEl) errorEl.textContent = msg;
     else showToast(msg, "error");
@@ -1951,8 +2286,8 @@ async function submitBookingForm(
     patient: isClinikoIframe
       ? { ...patient, patient_booked_time: patientBookedTimeIso }
       : patient,
-    moduleId: formHandlerData.module_id,
-    patient_form_template_id: formHandlerData.patient_form_template_id,
+    moduleId: String(formHandlerData.module_id || ""),
+    patient_form_template_id: String(formHandlerData.patient_form_template_id || ""),
 
     // ✅ NEW: unified payment object (recommended for backend going forward)
     payment: payment.gateway

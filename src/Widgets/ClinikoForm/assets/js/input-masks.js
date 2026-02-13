@@ -13,12 +13,12 @@ document.addEventListener("DOMContentLoaded", function () {
     IMask(postcodeInput, { mask: '0000' });
   }
 
-  // ➕ Medicare number (display as 1234 56789 1)
+  // ➕ Medicare number (display as 1234 56789; 9 digits total)
   const medicareInput = document.querySelector('input[name="patient[medicare]"]');
   if (medicareInput) {
     IMask(medicareInput, {
-      // 10 digits shown as 4 + 5 + 1 with spaces
-      mask: '0000 00000 0'
+      // 9 digits shown as 4 + 5 with spaces
+      mask: '0000 00000'
     });
   }
 

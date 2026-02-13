@@ -245,13 +245,16 @@ class Widget extends Widget_Base
       []
     );
 
-    wp_enqueue_script(
-      'save-on-exit',
-      plugin_dir_url(__FILE__) . 'assets/js/save-on-exit.js',
-      ["jquery"],
-      null,
-      []
-    );
+    $save_on_exit_enabled = ($settings['save_on_exit'] ?? '') === 'yes' && !$is_headless;
+    if ($save_on_exit_enabled) {
+      wp_enqueue_script(
+        'save-on-exit',
+        plugin_dir_url(__FILE__) . 'assets/js/save-on-exit.js',
+        ['jquery', 'form-handler-js'],
+        null,
+        []
+      );
+    }
 
     $appointment_source = $settings['appointment_source'] ?? '';
     if ($appointment_source === 'custom_form' && $settings['enable_payment'] === 'yes') {
@@ -390,9 +393,11 @@ class Widget extends Widget_Base
       ]
     );
 
-    wp_localize_script("save-on-exit", "saveOnExitData", [
-      'save_on_exit' => $settings['save_on_exit'] === 'yes',
-    ]);
+    if ($save_on_exit_enabled) {
+      wp_localize_script('save-on-exit', 'saveOnExitData', [
+        'save_on_exit' => true,
+      ]);
+    }
 
     if ($is_headless && empty($sections)) {
       echo '<p style="color: red;">No sections found in the Cliniko form template.</p>';

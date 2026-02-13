@@ -109,7 +109,7 @@ class ClinikoController
 
         // Resolve practitioner if not provided (use first for appointment type)
         if (empty($practitionerId)) {
-            $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(true));
+            $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(false));
             if (!$appointmentType) {
                 return new WP_REST_Response([
                     'success' => false,
@@ -134,7 +134,7 @@ class ClinikoController
             $appointmentTypeId,
             $from,
             $to,
-            cliniko_client(true),
+            cliniko_client(false),
             $page !== null ? (int) $page : null,
             $perPage !== null ? (int) $perPage : null
         );
@@ -176,6 +176,8 @@ class ClinikoController
             ?? $request->get_param('module_id')
             ?? $request->get_param('moduleId')
         ));
+        $refreshParam = strtolower(trim((string) $request->get_param('refresh')));
+        $forceRefresh = in_array($refreshParam, ['1', 'true', 'yes'], true);
 
         if (empty($appointmentTypeId)) {
             return new WP_REST_Response([
@@ -184,7 +186,7 @@ class ClinikoController
             ], 422);
         }
 
-        $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(true));
+        $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(!$forceRefresh));
         if (!$appointmentType) {
             return new WP_REST_Response([
                 'success' => false,
@@ -275,7 +277,7 @@ class ClinikoController
         }
 
         if (empty($practitionerId)) {
-            $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(true));
+            $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(false));
             if (!$appointmentType) {
                 return new WP_REST_Response([
                     'success' => false,
@@ -316,7 +318,6 @@ class ClinikoController
             'appointment_type_id' => $appointmentTypeId,
             'month' => $month ?: null,
             'per_page' => 100,
-            'cache_ttl' => 600,
         ]);
 
         $grid = cliniko_render_appointment_calendar_grid($context);
