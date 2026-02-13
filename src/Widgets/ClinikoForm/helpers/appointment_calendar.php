@@ -33,7 +33,6 @@ if (!function_exists('cliniko_build_appointment_calendar_context')) {
    *   practitioner_id?: string,
    *   appointment_type_id?: string,
    *   timezone?: DateTimeZone|string,
-   *   cache_ttl?: int,
    *   per_page?: int,
    *   month?: string
    * } $args
@@ -94,39 +93,23 @@ if (!function_exists('cliniko_build_appointment_calendar_context')) {
     }
 
     if ($businessId !== '' && $practitionerId !== '' && $appointmentTypeId !== '' && $fromDate <= $monthEnd) {
-      $cacheTtl = isset($args['cache_ttl']) ? max(60, (int) $args['cache_ttl']) : 600;
       $perPage = isset($args['per_page']) ? max(1, (int) $args['per_page']) : 100;
 
-      $cacheKey = 'cliniko_calendar_summary_' . md5(implode('|', [
-        $businessId,
-        $practitionerId,
-        $appointmentTypeId,
-        $monthStart->format('Y-m'),
-        $tz->getName(),
-        (string) $perPage,
-      ]));
-
-      $cached = get_transient($cacheKey);
-      if (is_array($cached)) {
-        $summary = $cached;
-      } else {
-        try {
-          $service = new ClinikoService();
-          $summary = $service->getAvailabilitySummaryForRange(
-            $businessId,
-            $practitionerId,
-            $appointmentTypeId,
-            $fromDate->format('Y-m-d'),
-            $monthEnd->format('Y-m-d'),
-            cliniko_client(true),
-            $tz,
-            $perPage
-          );
-          set_transient($cacheKey, $summary, $cacheTtl);
-        } catch (Throwable $e) {
-          $availabilityFailed = true;
-          $summary = [];
-        }
+      try {
+        $service = new ClinikoService();
+        $summary = $service->getAvailabilitySummaryForRange(
+          $businessId,
+          $practitionerId,
+          $appointmentTypeId,
+          $fromDate->format('Y-m-d'),
+          $monthEnd->format('Y-m-d'),
+          cliniko_client(false),
+          $tz,
+          $perPage
+        );
+      } catch (Throwable $e) {
+        $availabilityFailed = true;
+        $summary = [];
       }
     } else {
       $availabilityFailed = true;

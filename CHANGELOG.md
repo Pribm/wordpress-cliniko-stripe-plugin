@@ -1,3 +1,16 @@
+## [1.5.4] - 2026-02-13
+### Changed
+- Calendar month/day availability summary now always comes directly from Cliniko API (backend summary transient path removed).
+- Calendar-related endpoints now resolve practitioner fallback and availability with live Cliniko reads; practitioners endpoint now supports `refresh=1` to bypass practitioner cache.
+- Admin cache clear in Tools now removes both `cliniko_api_*` and legacy `cliniko_cal_sum_*` transients (including timeout entries).
+- Calendar frontend in `form-handler.js` now uses request dedupe, short-lived in-memory cache, and sliding prefetch for current + next month.
+- `save-on-exit.js` is now enqueued/localized only when `save_on_exit` is enabled (and not headless), preventing unused script injection.
+- Medicare mask updated to 9 digits (`0000 00000`) to match current validation rules.
+
+### Fixed
+- Strengthened payload validation for appointment submissions (numeric Cliniko IDs, stricter patient/date/time/contact checks).
+- Improved patient/content normalization before submit to keep payloads consistent across form UI and headless flows.
+
 ## [1.5.3] - 2026-02-12
 ### Fixed
 - Added backend payload sanitization for `radiobuttons` and `checkboxes` so `answers[].selected = false` is stripped before payload validation/dispatch.

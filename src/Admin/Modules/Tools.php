@@ -179,7 +179,11 @@ public static function renderPage(): void
         global $wpdb;
 
         $count = $wpdb->query(
-            "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_cliniko_api_%'"
+            "DELETE FROM {$wpdb->options}
+             WHERE option_name LIKE '_transient_cliniko_api_%'
+                OR option_name LIKE '_transient_timeout_cliniko_api_%'
+                OR option_name LIKE '_transient_cliniko_cal_sum_%'
+                OR option_name LIKE '_transient_timeout_cliniko_cal_sum_%'"
         );
 
         wp_redirect(add_query_arg(['page' => 'wp-cliniko-tools', 'cache_cleared' => '1'], admin_url('admin.php')));
