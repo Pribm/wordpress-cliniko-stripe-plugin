@@ -60,7 +60,7 @@ class ClinikoController
         error_log("[Dispatch] Added option: " . (get_option($payloadKey) ? 'yes' : 'no'));
         $jobDispatcher = new JobDispatcher();
         // 5️⃣ Enfileira o Worker de forma assíncrona
-        $jobDispatcher->enqueue('cliniko_async_create_patient_form', ['payload_key' => $payloadKey], 2);
+        $jobDispatcher->enqueue('cliniko_async_create_patient_form', ['payload_key' => $payloadKey], 0);
 
         // 6️⃣ Retorna resposta imediata ao frontend
         return new WP_REST_Response([

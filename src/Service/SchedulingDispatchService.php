@@ -8,7 +8,7 @@ if (!defined('ABSPATH'))
 
 class SchedulingDispatchService
 {
-    private const DEFAULT_DELAY_SECONDS = 5;
+    private const DEFAULT_DELAY_SECONDS = 0;
 
     /**
      * Persist heavy payload and enqueue the scheduling worker.

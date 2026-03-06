@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.5.5`
+- Current plugin version: `1.5.6`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,10 +14,10 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.5.5
-- Added backend sanitization for choice questions so `selected: false` is stripped from `radiobuttons` and `checkboxes` answers before dispatch to Cliniko.
-- Applied sanitization consistently across all form intake routes (`send-patient-form`, `payments/charge`, `tyrohealth/charge`).
-- Reduced Cliniko payload validation failures caused by explicit false-selection flags.
+## What Is New in 1.5.6
+- Reduced worker dispatch latency by defaulting scheduling jobs to immediate enqueue (`0s` delay).
+- Added Action Scheduler async enqueue path for immediate jobs while preserving delayed scheduling and WP-Cron fallback.
+- Improved end-to-end booking processing responsiveness under concurrent traffic.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
