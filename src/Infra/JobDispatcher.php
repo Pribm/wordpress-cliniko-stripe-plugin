@@ -13,6 +13,12 @@ class JobDispatcher implements JobDispatcherInterface
     {
         if ($uniqueKey) { $args['_unique'] = $uniqueKey; }
 
+        if ($delaySeconds <= 0 && function_exists('as_enqueue_async_action')) {
+            // Keep a single array argument shape for worker handlers that expect handle(array $args).
+            as_enqueue_async_action($job, [$args], 'wp-cliniko', false);
+            return;
+        }
+
         if (function_exists('as_schedule_single_action')) {
             $when = time() + max(0, $delaySeconds);
             as_schedule_single_action($when, $job, [ $args ], 'wp-cliniko');

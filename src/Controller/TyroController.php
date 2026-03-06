@@ -2,10 +2,9 @@
 namespace App\Controller;
 
 use App\Admin\Modules\Credentials;
-use App\Client\Cliniko\Client;
-use App\Infra\JobDispatcher;
 use App\Model\AppointmentType;
 use App\Service\PatientFormPayloadSanitizer;
+use App\Service\SchedulingDispatchService;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -83,7 +82,7 @@ class TyroController
 
         // 1) Fetch price from moduleId (Cliniko appointment type)
         try {
-            $appointmentType = AppointmentType::find($moduleId, cliniko_client(true));
+            $appointmentType = AppointmentType::find($moduleId, cliniko_client(true, Credentials::getClinikoApiCacheTtl()));
             if (!$appointmentType) {
                 return new WP_REST_Response([
                     'success' => false,
@@ -148,40 +147,28 @@ class TyroController
             ], 422);
         }
 
-        $client = Client::getInstance();
+        $client = cliniko_client(true, Credentials::getClinikoApiCacheTtl());
         $apptType = AppointmentType::find($moduleId, $client);
 
         if (!$apptType) {
             return new WP_REST_Response(['status' => 'error', 'message' => 'Appointment type not found.'], 404);
         }
 
+        $amount = $apptType->getBillableItemsFinalPrice();
+        $schedulingDispatch = new SchedulingDispatchService();
+
         // If no payment is required, schedule directly
-        if (!$apptType->requiresPayment()) {
-            $payload = [
-                'patient' => $patient,
-                'content' => $content,
-                'signature_attachment_id' => $signatureAttachmentId,
-            ];
-
-            $payloadKey = 'cliniko_job_payload_free_' . uniqid();
-            if (!add_option($payloadKey, $payload, '', false)) {
-                update_option($payloadKey, $payload, false);
-            }
-
-            $dispatcher = new JobDispatcher();
-            $dispatcher->enqueue(
-                'cliniko_schedule_appointment',
-                [
-                    'moduleId' => $moduleId,
-                    'patient_form_template_id' => $patientFormTemplateId,
-                    'payment_reference' => null,
-                    'amount' => 0,
-                    'currency' => 'aud',
-                    'payload_key' => $payloadKey,
-                    'appointment_label' => $apptType->getName(),
-                ],
-                5,
-                $payloadKey
+        if ($amount <= 0) {
+            $schedulingDispatch->dispatch(
+                (string) $moduleId,
+                (string) $patientFormTemplateId,
+                $patient,
+                $content,
+                $signatureAttachmentId,
+                null,
+                0,
+                'aud',
+                (string) $apptType->getName()
             );
 
             return new WP_REST_Response([
@@ -203,34 +190,16 @@ class TyroController
             ], 422);
         }
 
-        $amount = $apptType->getBillableItemsFinalPrice();
-
-        // Store heavy payload server-side; pass only a reference to the worker
-        $payload = [
-            'patient' => $patient,
-            'content' => $content,
-            'signature_attachment_id' => $signatureAttachmentId,
-        ];
-
-        $payloadKey = 'cliniko_job_payload_' . $transactionId;
-        if (!add_option($payloadKey, $payload, '', false)) {
-            update_option($payloadKey, $payload, false);
-        }
-
-        $dispatcher = new JobDispatcher();
-        $dispatcher->enqueue(
-            'cliniko_schedule_appointment',
-            [
-                'moduleId' => $moduleId,
-                'patient_form_template_id' => $patientFormTemplateId,
-                'payment_reference' => $transactionId,
-                'amount' => $amount,
-                'currency' => 'aud',
-                'payload_key' => $payloadKey,
-                'appointment_label' => $apptType->getName(),
-            ],
-            5,
-            $transactionId
+        $schedulingDispatch->dispatch(
+            (string) $moduleId,
+            (string) $patientFormTemplateId,
+            $patient,
+            $content,
+            $signatureAttachmentId,
+            (string) $transactionId,
+            $amount,
+            'aud',
+            (string) $apptType->getName()
         );
 
         return new WP_REST_Response([

@@ -1,10 +1,10 @@
 <?php
 namespace App\Controller;
 
-use App\Client\Cliniko\Client;
-use App\Infra\JobDispatcher;
+use App\Admin\Modules\Credentials;
 use App\Model\AppointmentType;
 use App\Service\PatientFormPayloadSanitizer;
+use App\Service\SchedulingDispatchService;
 use App\Service\StripeService;
 use App\Validator\AppointmentRequestValidator;
 use App\Validator\PatientFormValidator;
@@ -70,41 +70,27 @@ class PaymentController
         }
 
 
-        $client = Client::getInstance();
+        $client = cliniko_client(true, Credentials::getClinikoApiCacheTtl());
         $apptType = AppointmentType::find($moduleId, $client);
 
         if (!$apptType) {
             return new WP_REST_Response(['status' => 'error', 'message' => 'Appointment type not found.'], 404);
         }
 
-        if (!$apptType->requiresPayment()) {
-            // 1) Build payload (patient + form content)
-            $payload = [
-                'patient' => $clinikoPatient,
-                'content' => $content,
-                'signature_attachment_id' => $signatureAttachmentId,
-            ];
+        $amount = $apptType->getBillableItemsFinalPrice();
+        $schedulingDispatch = new SchedulingDispatchService();
 
-            $payloadKey = 'cliniko_job_payload_free_' . uniqid();
-            if (!add_option($payloadKey, $payload, '', false)) {
-                update_option($payloadKey, $payload, false);
-            }
-
-            // 2) Enqueue background scheduling job without any payment reference
-            $dispatcher = new JobDispatcher();
-            $dispatcher->enqueue(
-                'cliniko_schedule_appointment',
-                [
-                    'moduleId' => $moduleId,
-                    'patient_form_template_id' => $patientFormTemplateId,
-                    'payment_reference' => null,
-                    'amount' => 0,
-                    'currency' => 'aud',
-                    'payload_key' => $payloadKey,
-                    'appointment_label' => $apptType->getName(),
-                ],
-                5,
-                $payloadKey // idempotency key
+        if ($amount <= 0) {
+            $schedulingDispatch->dispatch(
+                (string) $moduleId,
+                (string) $patientFormTemplateId,
+                $clinikoPatient,
+                $content,
+                $signatureAttachmentId,
+                null,
+                0,
+                'aud',
+                (string) $apptType->getName()
             );
 
             return new WP_REST_Response([
@@ -135,7 +121,6 @@ class PaymentController
             ], 422);
         }
 
-        $amount = $apptType->getBillableItemsFinalPrice();
         $description = $apptType->getName();
 
         // Don’t propagate sensitive values into Stripe metadata:
@@ -153,49 +138,24 @@ class PaymentController
                 $patient['email'] ?? null
             );
 
-            if (!$charge || empty($charge->id)) {
+            if (empty($charge->id)) {
                 return new WP_REST_Response(['status' => 'error', 'message' => 'Payment failed.'], 402);
             }
 
-            // 2) Store heavy payload server-side; pass only a small reference to the worker
-            $payload = [
-                'patient' => $clinikoPatient,     // potentially large
-                'content' => $content,            // potentially very large
-                'signature_attachment_id' => $signatureAttachmentId,
-            ];
-
-            $payloadKey = 'cliniko_job_payload_' . $charge->id;
-            // Autoload = 'no' so this doesn’t bloat memory on every request
-            if (
-                !add_option(
-                    $payloadKey,
-                    $payload,
-                    '',
-                    false
-                )
-            ) {
-                update_option($payloadKey, $payload, false);
-            }
-
-            // 3) Enqueue background scheduling job (idempotent by charge id) with tiny args
-            $dispatcher = new JobDispatcher();
-            $dispatcher->enqueue(
-                'cliniko_schedule_appointment',
-                [
-                    'moduleId' => $moduleId,
-                    'patient_form_template_id' => $patientFormTemplateId,
-                    'payment_reference' => $charge->id,
-                    'amount' => $amount,
-                    'currency' => 'aud',
-                    'payload_key' => $payloadKey,   // <-- worker will load the heavy data
-                    'appointment_label' => $apptType->getName()
-                ],
-                5,
-                $charge->id
+            $schedulingDispatch->dispatch(
+                (string) $moduleId,
+                (string) $patientFormTemplateId,
+                $clinikoPatient,
+                $content,
+                $signatureAttachmentId,
+                (string) $charge->id,
+                $amount,
+                'aud',
+                (string) $apptType->getName()
             );
 
             // 4) Return immediately; scheduling runs in background
-            return new WP_REST_RESPONSE([
+            return new WP_REST_Response([
                 'status' => 'success',
                 'payment' => [
                     'id' => $charge->id,

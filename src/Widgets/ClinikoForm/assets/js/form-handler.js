@@ -106,6 +106,7 @@ function initHeadlessCalendarHelpers() {
     practitioners: formHandlerData?.practitioners_url,
     calendar: formHandlerData?.appointment_calendar_url,
     availableTimes: formHandlerData?.available_times_url,
+    nextAvailableTimes: formHandlerData?.next_available_times_url,
   };
 
   const defaultAppointmentTypeId = formHandlerData?.module_id || "";
@@ -353,6 +354,127 @@ function initHeadlessCalendarHelpers() {
     return collected;
   };
 
+  const toYmdOrEmpty = (value) => {
+    if (!value) return "";
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? "" : toDateInputValue(value);
+    }
+    const dt = new Date(value);
+    return Number.isNaN(dt.getTime()) ? "" : toDateInputValue(dt);
+  };
+
+  const fetchNextAvailableTimes = async ({
+    appointmentTypeId,
+    practitionerIds,
+    from,
+    to,
+    includeUnavailable = true,
+    refreshPractitioners = false,
+  } = {}) => {
+    const id = appointmentTypeId || defaultAppointmentTypeId;
+    if (!id) throw new Error("Appointment type not configured.");
+    if (!endpoints.nextAvailableTimes) {
+      throw new Error("Next available times endpoint not configured.");
+    }
+
+    let practitioners = [];
+    if (Array.isArray(practitionerIds) && practitionerIds.length > 0) {
+      practitioners = practitionerIds
+        .map((item) => {
+          if (item && typeof item === "object") {
+            const pid = String(item.id || item.practitioner_id || "").trim();
+            if (!pid) return null;
+            return {
+              id: pid,
+              name: String(item.name || item.practitioner_name || pid),
+            };
+          }
+          const pid = String(item || "").trim();
+          if (!pid) return null;
+          return { id: pid, name: pid };
+        })
+        .filter(Boolean);
+    } else {
+      if (refreshPractitioners) {
+        const cacheKey = `cliniko:practitioners:${id}`;
+        cacheStore.values.delete(cacheKey);
+        cacheStore.pending.delete(cacheKey);
+      }
+      const list = await fetchPractitioners({ appointmentTypeId: id });
+      practitioners = (Array.isArray(list) ? list : [])
+        .map((item) => {
+          const pid = String(item?.id || "").trim();
+          if (!pid) return null;
+          return { id: pid, name: String(item?.name || pid) };
+        })
+        .filter(Boolean);
+    }
+
+    if (!practitioners.length) return [];
+
+    const payload = await fetchJson(
+      buildUrl(endpoints.nextAvailableTimes, {
+        appointment_type_id: id,
+        practitioner_ids: practitioners.map((p) => p.id).join(","),
+        from: toYmdOrEmpty(from),
+        to: toYmdOrEmpty(to),
+        _ts: Date.now(), // avoid browser/proxy stale responses for fresh lookups
+      })
+    );
+
+    const rawItems = Array.isArray(payload.next_available_times)
+      ? payload.next_available_times
+      : [];
+    const byId = new Map();
+    rawItems.forEach((item) => {
+      const pid = String(item?.practitioner_id || "").trim();
+      if (pid) byId.set(pid, item);
+    });
+
+    const merged = practitioners.map((p) => {
+      const serverItem = byId.get(p.id);
+      return {
+        practitioner_id: p.id,
+        practitioner_name: String(
+          serverItem?.practitioner_name || p.name || p.id
+        ),
+        appointment_start:
+          serverItem?.appointment_start || serverItem?.appointmentStart || null,
+      };
+    });
+
+    merged.sort((a, b) => {
+      const aStart = a?.appointment_start;
+      const bStart = b?.appointment_start;
+
+      if (!aStart && !bStart) {
+        return String(a?.practitioner_name || "").localeCompare(
+          String(b?.practitioner_name || "")
+        );
+      }
+      if (!aStart) return 1;
+      if (!bStart) return -1;
+
+      const aTs = new Date(aStart).getTime();
+      const bTs = new Date(bStart).getTime();
+      const aBad = Number.isNaN(aTs);
+      const bBad = Number.isNaN(bTs);
+      if (aBad && bBad) return 0;
+      if (aBad) return 1;
+      if (bBad) return -1;
+      if (aTs === bTs) {
+        return String(a?.practitioner_name || "").localeCompare(
+          String(b?.practitioner_name || "")
+        );
+      }
+      return aTs - bTs;
+    });
+
+    return includeUnavailable
+      ? merged
+      : merged.filter((item) => !!item.appointment_start);
+  };
+
   window.ClinikoHeadlessCalendar = {
     endpoints,
     getMonthKeyFromDate,
@@ -364,6 +486,7 @@ function initHeadlessCalendarHelpers() {
     prefetchCalendarWindow,
     fetchAvailableTimes,
     fetchAllTimesForDate,
+    fetchNextAvailableTimes,
     updateHeadlessPatient,
   };
 }
