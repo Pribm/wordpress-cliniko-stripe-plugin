@@ -138,7 +138,7 @@ class PaymentController
                 $patient['email'] ?? null
             );
 
-            if (!$charge || empty($charge->id)) {
+            if (empty($charge->id)) {
                 return new WP_REST_Response(['status' => 'error', 'message' => 'Payment failed.'], 402);
             }
 
@@ -155,7 +155,7 @@ class PaymentController
             );
 
             // 4) Return immediately; scheduling runs in background
-            return new WP_REST_RESPONSE([
+            return new WP_REST_Response([
                 'status' => 'success',
                 'payment' => [
                     'id' => $charge->id,

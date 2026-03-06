@@ -239,6 +239,14 @@ namespace App\Model {
         {
             return self::$instance;
         }
+
+        /**
+         * @return array<int,object>
+         */
+        public static function all($client): array
+        {
+            return self::$instance ? [self::$instance] : [];
+        }
     }
 
     class Booking
@@ -309,6 +317,14 @@ namespace App\Model {
         {
             return self::$instance;
         }
+
+        /**
+         * @return array<int,object>
+         */
+        public static function all($client): array
+        {
+            return self::$instance ? [self::$instance] : [];
+        }
     }
 }
 
@@ -342,6 +358,29 @@ namespace App\Service {
     {
         /** @var array<int,array<string,mixed>> */
         public static $refunds = [];
+
+        /**
+         * @param array<string,mixed> $metadata
+         * @return object
+         */
+        public function createChargeFromToken(
+            string $token,
+            int $amount,
+            string $description = '',
+            array $metadata = [],
+            ?string $receiptEmail = null
+        ) {
+            return (object) [
+                'id' => 'ch_fake_1',
+                'receipt_url' => null,
+                'payment_method_details' => (object) [
+                    'card' => (object) [
+                        'last4' => '4242',
+                        'brand' => 'visa',
+                    ],
+                ],
+            ];
+        }
 
         /**
          * @param array<string,mixed> $metadata

@@ -306,14 +306,12 @@ abstract class AbstractModel
      */
     public static function queryOneByQueryString(string $query, ApiClientInterface $client, bool $throwOnError = false): ?static
     {
-        $instance = new static(null, $client);
-
         // garante que começa com '?'
         if ($query !== '' && $query[0] !== '?') {
             $query = '?' . $query;
         }
 
-        $path = $instance->getResourcePath();
+        $path = static::getResourcePath();
         $url = "{$path}{$query}";
         $response = $client->get($url);
 
@@ -324,18 +322,18 @@ abstract class AbstractModel
             return null;
         }
 
-        $listKey = $instance->getListKey();                // ex.: 'bookings'
+        $listKey = static::getListKey();                // ex.: 'bookings'
         $rows = $response->data[$listKey] ?? [];
 
         if (!is_array($rows) || empty($rows)) {
             return null;
         }
 
-        $dtoClass = $instance->getDtoClass();
+        $dtoClass = static::getDtoClass();
         /** @var object $dto */
         $dto = $dtoClass::fromArray($rows[0]);
 
-        return new static($dto, $client);
+        return static::newInstance($dto, $client);
     }
 
     /**
@@ -347,14 +345,12 @@ abstract class AbstractModel
      */
     public static function queryManyByQueryString(string $query, ApiClientInterface $client, bool $throwOnError = false): array
     {
-        $instance = new static(null, $client);
-
         // garante que começa com '?'
         if ($query !== '' && $query[0] !== '?') {
             $query = '?' . $query;
         }
 
-        $path = $instance->getResourcePath();
+        $path = static::getResourcePath();
         $response = $client->get("{$path}{$query}");
 
         if (!$response->isSuccessful()) {
@@ -364,20 +360,20 @@ abstract class AbstractModel
             return [];
         }
 
-        $listKey = $instance->getListKey();                // ex.: 'bookings'
+        $listKey = static::getListKey();                // ex.: 'bookings'
         $rows = $response->data[$listKey] ?? [];
 
         if (!is_array($rows) || empty($rows)) {
             return [];
         }
 
-        $dtoClass = $instance->getDtoClass();
+        $dtoClass = static::getDtoClass();
         $items = [];
 
         foreach ($rows as $row) {
             /** @var object $dto */
             $dto = $dtoClass::fromArray($row);
-            $items[] = new static($dto, $client);
+            $items[] = static::newInstance($dto, $client);
         }
 
         return $items;

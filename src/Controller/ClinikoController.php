@@ -76,15 +76,15 @@ class ClinikoController
     public function getAvailableTimes(WP_REST_Request $request): WP_REST_Response
     {
         $appointmentTypeId = sanitize_text_field((string) (
-            $request->get_param('appointment_type_id')
-            ?? $request->get_param('module_id')
-            ?? $request->get_param('moduleId')
+            $this->requestParam($request, 'appointment_type_id')
+            ?? $this->requestParam($request, 'module_id')
+            ?? $this->requestParam($request, 'moduleId')
         ));
-        $from = sanitize_text_field((string) $request->get_param('from'));
-        $to = sanitize_text_field((string) $request->get_param('to'));
-        $practitionerId = sanitize_text_field((string) $request->get_param('practitioner_id'));
-        $page = $request->get_param('page');
-        $perPage = $request->get_param('per_page');
+        $from = sanitize_text_field((string) $this->requestParam($request, 'from'));
+        $to = sanitize_text_field((string) $this->requestParam($request, 'to'));
+        $practitionerId = sanitize_text_field((string) $this->requestParam($request, 'practitioner_id'));
+        $page = $this->requestParam($request, 'page');
+        $perPage = $this->requestParam($request, 'per_page');
 
         if (empty($appointmentTypeId) || empty($from) || empty($to)) {
             return new WP_REST_Response([
@@ -173,11 +173,11 @@ class ClinikoController
     public function getPractitioners(WP_REST_Request $request): WP_REST_Response
     {
         $appointmentTypeId = sanitize_text_field((string) (
-            $request->get_param('appointment_type_id')
-            ?? $request->get_param('module_id')
-            ?? $request->get_param('moduleId')
+            $this->requestParam($request, 'appointment_type_id')
+            ?? $this->requestParam($request, 'module_id')
+            ?? $this->requestParam($request, 'moduleId')
         ));
-        $refreshParam = strtolower(trim((string) $request->get_param('refresh')));
+        $refreshParam = strtolower(trim((string) $this->requestParam($request, 'refresh')));
         $forceRefresh = in_array($refreshParam, ['1', 'true', 'yes'], true);
 
         if (empty($appointmentTypeId)) {
@@ -263,12 +263,12 @@ class ClinikoController
     public function getAppointmentCalendar(WP_REST_Request $request): WP_REST_Response
     {
         $appointmentTypeId = sanitize_text_field((string) (
-            $request->get_param('appointment_type_id')
-            ?? $request->get_param('module_id')
-            ?? $request->get_param('moduleId')
+            $this->requestParam($request, 'appointment_type_id')
+            ?? $this->requestParam($request, 'module_id')
+            ?? $this->requestParam($request, 'moduleId')
         ));
-        $practitionerId = sanitize_text_field((string) $request->get_param('practitioner_id'));
-        $month = sanitize_text_field((string) $request->get_param('month'));
+        $practitionerId = sanitize_text_field((string) $this->requestParam($request, 'practitioner_id'));
+        $month = sanitize_text_field((string) $this->requestParam($request, 'month'));
 
         if (empty($appointmentTypeId)) {
             return new WP_REST_Response([
@@ -313,7 +313,14 @@ class ClinikoController
             ], 500);
         }
 
-        $context = cliniko_build_appointment_calendar_context([
+        if (!\function_exists('cliniko_build_appointment_calendar_context') || !\function_exists('cliniko_render_appointment_calendar_grid')) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Calendar helper functions are unavailable.',
+            ], 500);
+        }
+
+        $context = \cliniko_build_appointment_calendar_context([
             'business_id' => (string) $businessId,
             'practitioner_id' => $practitionerId,
             'appointment_type_id' => $appointmentTypeId,
@@ -321,7 +328,7 @@ class ClinikoController
             'per_page' => 100,
         ]);
 
-        $grid = cliniko_render_appointment_calendar_grid($context);
+        $grid = \cliniko_render_appointment_calendar_grid($context);
 
         return new WP_REST_Response([
             'success' => true,
@@ -338,15 +345,15 @@ class ClinikoController
     public function getNextAvailableTimes(WP_REST_Request $request): WP_REST_Response
     {
         $appointmentTypeId = sanitize_text_field((string) (
-            $request->get_param('appointment_type_id')
-            ?? $request->get_param('module_id')
-            ?? $request->get_param('moduleId')
+            $this->requestParam($request, 'appointment_type_id')
+            ?? $this->requestParam($request, 'module_id')
+            ?? $this->requestParam($request, 'moduleId')
         ));
-        $from = sanitize_text_field((string) $request->get_param('from'));
-        $to = sanitize_text_field((string) $request->get_param('to'));
-        $refreshParam = strtolower(trim((string) $request->get_param('refresh')));
+        $from = sanitize_text_field((string) $this->requestParam($request, 'from'));
+        $to = sanitize_text_field((string) $this->requestParam($request, 'to'));
+        $refreshParam = strtolower(trim((string) $this->requestParam($request, 'refresh')));
         $forceRefresh = in_array($refreshParam, ['1', 'true', 'yes'], true);
-        $requestedPractitionerIdsRaw = $request->get_param('practitioner_ids');
+        $requestedPractitionerIdsRaw = $this->requestParam($request, 'practitioner_ids');
 
         if (empty($appointmentTypeId)) {
             return new WP_REST_Response([
@@ -496,10 +503,12 @@ class ClinikoController
         usort($items, static function (array $a, array $b): int {
             $aStart = $a['appointment_start'] ?? null;
             $bStart = $b['appointment_start'] ?? null;
+            $aName = (string) $a['practitioner_name'];
+            $bName = (string) $b['practitioner_name'];
 
             // Keep practitioners without availability at the end.
             if (empty($aStart) && empty($bStart)) {
-                return strcmp((string) ($a['practitioner_name'] ?? ''), (string) ($b['practitioner_name'] ?? ''));
+                return strcmp($aName, $bName);
             }
             if (empty($aStart)) return 1;
             if (empty($bStart)) return -1;
@@ -511,7 +520,7 @@ class ClinikoController
             if ($bTs === false) return -1;
 
             if ($aTs === $bTs) {
-                return strcmp((string) ($a['practitioner_name'] ?? ''), (string) ($b['practitioner_name'] ?? ''));
+                return strcmp($aName, $bName);
             }
 
             return $aTs <=> $bTs;
@@ -533,6 +542,15 @@ class ClinikoController
         $response->header('Expires', '0');
 
         return $response;
+    }
+
+    /**
+     * @return mixed|null
+     */
+    private function requestParam(WP_REST_Request $request, string $key)
+    {
+        $params = $request->get_params();
+        return array_key_exists($key, $params) ? $params[$key] : null;
     }
 }
 

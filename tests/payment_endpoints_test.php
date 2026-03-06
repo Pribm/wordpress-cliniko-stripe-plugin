@@ -22,6 +22,10 @@ if (!class_exists('WP_REST_Request')) {
 
         public function __construct(string $method = 'POST', string $route = '')
         {
+            // keep constructor signature compatible with WP and consume params for static analysis
+            if ($method === '' && $route === '') {
+                $this->body = '';
+            }
         }
 
         public function set_body(string $body): void
@@ -49,6 +53,14 @@ if (!class_exists('WP_REST_Request')) {
         {
             return $this->params;
         }
+
+        /**
+         * @return mixed|null
+         */
+        public function get_param(string $key)
+        {
+            return array_key_exists($key, $this->params) ? $this->params[$key] : null;
+        }
     }
 }
 
@@ -58,6 +70,8 @@ if (!class_exists('WP_REST_Response')) {
         /** @var mixed */
         private $data;
         private int $status;
+        /** @var array<string,string> */
+        private array $headers = [];
 
         /**
          * @param mixed $data
@@ -79,6 +93,16 @@ if (!class_exists('WP_REST_Response')) {
         public function get_status(): int
         {
             return $this->status;
+        }
+
+        public function header(string $key, string $value, bool $replace = true): void
+        {
+            if (!$replace && array_key_exists($key, $this->headers)) {
+                $this->headers[$key] .= ', ' . $value;
+                return;
+            }
+
+            $this->headers[$key] = $value;
         }
     }
 }
