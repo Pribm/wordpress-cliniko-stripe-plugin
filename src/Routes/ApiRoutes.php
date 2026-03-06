@@ -57,6 +57,12 @@ class ApiRoutes
             'permission_callback' => '__return_true',
         ]);
 
+        register_rest_route('v1', '/next-available-times', [
+            'methods' => 'GET',
+            'callback' => [$clinikoController, 'getNextAvailableTimes'],
+            'permission_callback' => '__return_true',
+        ]);
+
 
         register_rest_route('v1', '/payments/charge', [
             'methods' => 'POST',

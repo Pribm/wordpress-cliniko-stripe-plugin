@@ -269,7 +269,7 @@ function register_cliniko_form_controls($widget)
             '<strong>Submission template</strong><br>' .
             'A backend-ready skeleton is available at <code>formHandlerData.submission_template</code> or in the <code>.cliniko-form-submission-template-json</code> script tag.<br><br>' .
             '<strong>Headless calendar helpers</strong><br>' .
-            'Use <code>window.ClinikoHeadlessCalendar</code> to call the same endpoints used by the standard form (practitioners, calendar, available times).<br><br>' .
+            'Use <code>window.ClinikoHeadlessCalendar</code> to call the same endpoints used by the standard form (practitioners, calendar, available times), plus fresh next-available lookups per practitioner.<br><br>' .
             '<strong>Payment UI</strong><br>' .
             'Payment markup is still rendered (hidden by default). Show <code>#payment_form</code> when you’re ready to collect payment.',
         'content_classes' => 'elementor-panel-alert elementor-panel-alert-info',

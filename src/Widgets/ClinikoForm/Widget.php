@@ -376,6 +376,7 @@ class Widget extends Widget_Base
         // 'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
         'payment_url' => get_site_url() . '/wp-json/v1/payments/charge',
         'available_times_url' => get_site_url() . '/wp-json/v1/available-times',
+        'next_available_times_url' => get_site_url() . '/wp-json/v1/next-available-times',
         'practitioners_url' => get_site_url() . '/wp-json/v1/practitioners',
         'appointment_calendar_url' => get_site_url() . '/wp-json/v1/appointment-calendar',
         'available_times_per_page' => 100,
