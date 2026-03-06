@@ -199,6 +199,7 @@ abstract class AbstractModel
         }
 
         if (isset($response->data['errors'])) {
+            $errordata = $response->data['errors'];
             throw new ApiException("API validation error at {$path}.", [
                 'errors' => $response->data['errors'],
                 'serialized_obj' => $payload,

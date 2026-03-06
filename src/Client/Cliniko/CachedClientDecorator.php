@@ -30,7 +30,7 @@ class CachedClientDecorator implements ApiClientInterface
         $response = $this->client->get($url);
 
         if ($response->isSuccessful() && !empty($response->data)) {
-            set_transient($cacheKey, $response->data, $this->ttl);
+            $this->storeCacheValue($cacheKey, $response->data);
         }
 
         return $response;
@@ -44,7 +44,7 @@ class CachedClientDecorator implements ApiClientInterface
         $response = $this->client->get($url);
 
         if ($response->isSuccessful()) {
-            set_transient($cacheKey, $response->data, $this->ttl);
+            $this->storeCacheValue($cacheKey, $response->data);
         }
 
         return $response;
@@ -66,5 +66,29 @@ class CachedClientDecorator implements ApiClientInterface
         // Invalida o cache da chave relacionada
         $this->invalidate($url);
         return $this->client->put($url, $data);
+    }
+
+    /**
+     * Persist value in transient storage.
+     * ttl <= 0 means persistent cache (manual invalidation), stored with autoload disabled.
+     *
+     * @param mixed $value
+     */
+    private function storeCacheValue(string $cacheKey, $value): void
+    {
+        if ($this->ttl > 0) {
+            set_transient($cacheKey, $value, $this->ttl);
+            return;
+        }
+
+        $optionName = '_transient_' . $cacheKey;
+        $timeoutName = '_transient_timeout_' . $cacheKey;
+
+        // Remove timeout to keep this entry non-expiring.
+        delete_option($timeoutName);
+
+        if (!add_option($optionName, $value, '', false)) {
+            update_option($optionName, $value, false);
+        }
     }
 }

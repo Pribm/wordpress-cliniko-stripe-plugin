@@ -9,6 +9,7 @@ class Credentials
     /** Existing option keys */
     private const OPT_APP_NAME = 'wp_cliniko_app_name';
     private const OPT_SHARD    = 'wp_cliniko_shard';
+    private const OPT_CLINIKO_CACHE_TTL = 'wp_cliniko_api_cache_ttl';
 
     /** NEW: Tyro Health option keys */
     private const OPT_TYRO_ENV          = 'wp_tyro_env';                 // stg|prod
@@ -45,6 +46,27 @@ class Credentials
             return 'au1';
         }
         return $value;
+    }
+
+    public static function sanitizeClinikoCacheTtl($value): int
+    {
+        $ttl = (int) $value;
+
+        // 0 means "no expiry" (manual invalidation via Tools -> Clear API Cache).
+        if ($ttl <= 0) {
+            return 0;
+        }
+
+        if ($ttl < 60) {
+            return 60;
+        }
+
+        // Cap at 1 year for safety.
+        if ($ttl > 31536000) {
+            return 31536000;
+        }
+
+        return $ttl;
     }
 
     // NEW
@@ -89,6 +111,10 @@ class Credentials
         register_setting('wp_cliniko_stripe_group', self::OPT_SHARD, [
             'sanitize_callback' => [self::class, 'sanitizeShard'],
             'default' => 'au1',
+        ]);
+        register_setting('wp_cliniko_stripe_group', self::OPT_CLINIKO_CACHE_TTL, [
+            'sanitize_callback' => [self::class, 'sanitizeClinikoCacheTtl'],
+            'default' => 21600,
         ]);
 
         register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key');
@@ -158,6 +184,12 @@ class Credentials
             }
             echo "</select>";
             echo "<p class='description'>Click <em>Connect to Cliniko</em>, choose your business, then <em>Save</em>.</p>";
+        }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
+
+        add_settings_field(self::OPT_CLINIKO_CACHE_TTL, 'Cliniko API Cache TTL (seconds)', function () {
+            $val = (int) get_option(self::OPT_CLINIKO_CACHE_TTL, 21600);
+            echo "<input type='number' min='0' step='60' id='" . esc_attr(self::OPT_CLINIKO_CACHE_TTL) . "' name='" . esc_attr(self::OPT_CLINIKO_CACHE_TTL) . "' value='" . esc_attr((string) $val) . "' class='small-text' />";
+            echo "<p class='description'>Set cache lifetime for Cliniko API GET responses used by charge-time lookups. Use <code>0</code> for no expiry (manual refresh via <em>Tools -> Clear API Cache</em>).</p>";
         }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 
         add_settings_field('wp_stripe_public_key', 'Stripe Public Key', function () {
@@ -437,6 +469,11 @@ class Credentials
     public static function getApiBase(): string
     {
         return 'https://api.' . self::getShard() . '.cliniko.com';
+    }
+
+    public static function getClinikoApiCacheTtl(): int
+    {
+        return self::sanitizeClinikoCacheTtl(get_option(self::OPT_CLINIKO_CACHE_TTL, 21600));
     }
 
     public static function getEmbedHost(): ?string

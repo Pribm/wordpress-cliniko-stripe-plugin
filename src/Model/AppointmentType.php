@@ -36,14 +36,20 @@ class AppointmentType extends AbstractModel
      */
     public function getAppointmentTypeBillableItems(): array
     {
+        if ($this->appointmentTypeBillableItems !== null) {
+            return $this->appointmentTypeBillableItems;
+        }
+
         if (!$this->dto->billableItemsUrl) {
-            return [];
+            $this->appointmentTypeBillableItems = [];
+            return $this->appointmentTypeBillableItems;
         }
 
         $data = $this->safeGetLinkedEntity($this->dto->billableItemsUrl);
 
         if (empty($data)) {
-            return [];
+            $this->appointmentTypeBillableItems = [];
+            return $this->appointmentTypeBillableItems;
         }
 
         $this->appointmentTypeBillableItems = array_map(

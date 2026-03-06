@@ -198,7 +198,7 @@ public static function renderPage(): void
 
     check_admin_referer('wp_cliniko_trigger_sync');
 
-    $client = cliniko_client(true);
+    $client = cliniko_client(true, Credentials::getClinikoApiCacheTtl());
 
     try {
         AppointmentType::all($client);
