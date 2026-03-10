@@ -25,4 +25,12 @@ interface ApiClientInterface
      * @param array<string, mixed> $data
      */
     public function put(string $url, array $data): ClientResponse;
+
+    /**
+     * Performs a PATCH request.
+     *
+     * @param string $url
+     * @param array<string, mixed> $data
+     */
+    public function patch(string $url, array $data): ClientResponse;
 }

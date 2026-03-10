@@ -6,13 +6,22 @@ if (!defined('ABSPATH')) exit;
 
 class ClientResponse
 {
-    public readonly ?array $data;
-    public readonly ?string $error;
+    public ?array $data;
+    public ?string $error;
+    public ?int $statusCode;
+    public ?string $rawBody;
 
-    public function __construct(?array $data = null, ?string $error = null)
+    public function __construct(
+        ?array $data = null,
+        ?string $error = null,
+        ?int $statusCode = null,
+        ?string $rawBody = null
+    )
     {
         $this->data = $data;
         $this->error = $error;
+        $this->statusCode = $statusCode;
+        $this->rawBody = $rawBody;
     }
 
     public function isSuccessful(): bool

@@ -16,6 +16,7 @@ if (!defined('ABSPATH'))
 
 class PaymentController
 {
+    /** @deprecated Legacy v1 controller. New custom-form flow uses BookingAttemptController. */
     /**
      * POST /wp-json/wp-cliniko/v1/payments/charge
      * Body (JSON):

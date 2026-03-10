@@ -13,6 +13,7 @@ if (!defined('ABSPATH'))
 
 class TyroController
 {
+    /** @deprecated Legacy v1 controller. New custom-form flow uses BookingAttemptController. */
     /**
      * POST /wp-json/v1/tyrohealth/sdk-token
      * Returns: { token: '...' }

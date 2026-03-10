@@ -18,6 +18,7 @@ use WP_REST_Response;
 
 class ClinikoController
 {
+    /** @deprecated Legacy v1 controller retained for Cliniko embed compatibility. */
     public function createPatientForm(WP_REST_Request $request): WP_REST_Response
     {
         $body = json_decode($request->get_body(), true) ?: $request->get_params();
@@ -60,7 +61,7 @@ class ClinikoController
         error_log("[Dispatch] Added option: " . (get_option($payloadKey) ? 'yes' : 'no'));
         $jobDispatcher = new JobDispatcher();
         // 5️⃣ Enfileira o Worker de forma assíncrona
-        $jobDispatcher->enqueue('cliniko_async_create_patient_form', ['payload_key' => $payloadKey], 0);
+        $jobDispatcher->enqueue('cliniko_async_create_patient_form', ['payload_key' => $payloadKey], 2);
 
         // 6️⃣ Retorna resposta imediata ao frontend
         return new WP_REST_Response([
@@ -553,6 +554,4 @@ class ClinikoController
         return array_key_exists($key, $params) ? $params[$key] : null;
     }
 }
-
-
 

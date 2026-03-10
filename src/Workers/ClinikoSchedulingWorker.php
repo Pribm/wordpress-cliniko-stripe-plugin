@@ -100,6 +100,9 @@ class ClinikoSchedulingWorker
         $moduleId = $args['moduleId'] ?? null;
         $patientFormTemplateId = $args['patient_form_template_id'] ?? null;
         $amountCents = isset($args['amount']) ? (int) $args['amount'] : 0;
+        $useLedger = false;
+        $appointmentId = null;
+        $patientFormError = null;
 
         $patient = is_array($args['patient'] ?? null) ? $args['patient'] : [];
         $content = is_array($args['content'] ?? null) ? $args['content'] : [];
@@ -269,10 +272,10 @@ class ClinikoSchedulingWorker
                     'updated_at'     => $now,
                 ], ['payment_reference' => $paymentRef]);
             }
+            $appointmentId = (string) $appt->getId();
 
             // 6) Patient form (attach to appointment)
             $pf = null;
-            $patientFormError = null;
 
             try {
                 $attendeeId = null;
@@ -310,6 +313,11 @@ class ClinikoSchedulingWorker
             } catch (\Throwable $formError) {
                 $patientFormError = substr($formError->getMessage(), 0, 500);
                 error_log('[ClinikoSchedulingWorker] Patient form attach failed: ' . $patientFormError);
+                throw new \RuntimeException(
+                    'Failed to attach patient form to appointment: ' . $patientFormError,
+                    0,
+                    $formError
+                );
             }
 
             if ($useLedger) {
@@ -331,6 +339,7 @@ class ClinikoSchedulingWorker
             $notifier->sendSuccess($args, $patient, $isFree ? null : $paymentRef, $amountCents);
 
         } catch (\Throwable $e) {
+            $refundSucceeded = false;
             if (!$isFree && !empty($paymentRef)) {
                 try {
                     (new StripeService())->refundCharge(
@@ -345,9 +354,24 @@ class ClinikoSchedulingWorker
                             'payment_reference' => $paymentRef,
                         ]
                     );
+                    $refundSucceeded = true;
                 } catch (\Throwable $refundError) {
                     error_log("[ClinikoSchedulingWorker] Refund failed for $paymentRef: " . $refundError->getMessage());
                 }
+            }
+
+            if ($useLedger) {
+                $ledgerUpdate = [
+                    'updated_at' => $now,
+                    'error_message' => substr($e->getMessage(), 0, 500),
+                    'status' => $refundSucceeded ? 'refunded' : 'started',
+                ];
+
+                if ($appointmentId) {
+                    $ledgerUpdate['appointment_id'] = $appointmentId;
+                }
+
+                $wpdb->update($table, $ledgerUpdate, ['payment_reference' => $paymentRef]);
             }
 
             $notifier->sendFailure($args, $patient, $isFree ? null : $paymentRef, $amountCents);

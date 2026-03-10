@@ -7,13 +7,13 @@ Plugin URI: https://github.com/Pribm/wordpress-cliniko-stripe-plugin
 Description: Integração entre Stripe e Cliniko via WordPress.
 Author: Paulo Monteiro
 Author URI: https://github.com/Pribm
-Version: 1.5.6
+Version: 1.6.0
 GitHub Plugin URI: Pribm/wordpress-cliniko-stripe-plugin
 Primary Branch: main
 Release Asset: true
 */
 defined('ABSPATH') || exit;
-define('WP_CLINIKO_PLUGIN_VERSION', '1.5.6');
+define('WP_CLINIKO_PLUGIN_VERSION', '1.6.0');
 
 use Elementor\Plugin;
 
@@ -43,7 +43,7 @@ add_action('elementor/editor/after_enqueue_scripts', function () {
       'appointment-card-panel-sync',
       plugin_dir_url(__FILE__) . 'src/Widgets/assets/js/card-button-sync.js',
       ['jquery'],
-      null,
+      defined('WP_CLINIKO_PLUGIN_VERSION') ? WP_CLINIKO_PLUGIN_VERSION : null,
       true
     );
   }

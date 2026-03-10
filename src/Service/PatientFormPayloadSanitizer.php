@@ -36,7 +36,19 @@ class PatientFormPayloadSanitizer
                 }
 
                 $type = strtolower((string) ($question['type'] ?? ''));
+                $required = !empty($question['required']);
+
+                if (
+                    !$required
+                    && in_array($type, ['text', 'textarea', 'paragraph'], true)
+                    && array_key_exists('answer', $question)
+                    && trim((string) $question['answer']) === ''
+                ) {
+                    unset($question['answer']);
+                }
+
                 if (!in_array($type, ['radiobuttons', 'checkboxes'], true)) {
+                    $section['questions'][$questionIndex] = $question;
                     continue;
                 }
 

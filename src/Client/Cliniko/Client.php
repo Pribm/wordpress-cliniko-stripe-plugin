@@ -1,8 +1,8 @@
 <?php
 namespace App\Client\Cliniko;
 
-use App\Contracts\ClientResponse;
 use App\Contracts\ApiClientInterface;
+use App\Contracts\ClientResponse;
 
 if (!defined('ABSPATH')) exit;
 
@@ -51,19 +51,14 @@ class Client implements ApiClientInterface
             'headers' => $this->getDefaultHeaders()
         ]);
 
-        if (is_wp_error($response)) {
-            return new ClientResponse(null, $response->get_error_message());
-        }
-
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-
-        return new ClientResponse($data);
+        return $this->buildClientResponse($response);
     }
 
     public function post(string $endpoint, array $data): ClientResponse
     {
         $url = $this->baseUrl . ltrim($endpoint, '/');
+
+        $toCopy = json_encode($data);
 
         $response = wp_remote_post($url, [
             'headers' => array_merge($this->getDefaultHeaders(), [
@@ -72,14 +67,7 @@ class Client implements ApiClientInterface
             'body' => json_encode($data)
         ]);
 
-        if (is_wp_error($response)) {
-            return new ClientResponse(null, $response->get_error_message());
-        }
-
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-
-        return new ClientResponse($data);
+        return $this->buildClientResponse($response);
     }
 
     public function put(string $endpoint, array $data): ClientResponse
@@ -94,14 +82,22 @@ class Client implements ApiClientInterface
             'body' => json_encode($data)
         ]);
 
-        if (is_wp_error($response)) {
-            return new ClientResponse(null, $response->get_error_message());
-        }
+        return $this->buildClientResponse($response);
+    }
 
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
+    public function patch(string $endpoint, array $data): ClientResponse
+    {
+        $url = $this->baseUrl . ltrim($endpoint, '/');
 
-        return new ClientResponse($data);
+        $response = wp_remote_request($url, [
+            'method' => 'PATCH',
+            'headers' => array_merge($this->getDefaultHeaders(), [
+                'Content-Type' => 'application/json'
+            ]),
+            'body' => json_encode($data)
+        ]);
+
+        return $this->buildClientResponse($response);
     }
 
     public function delete(string $endpoint): ClientResponse
@@ -117,10 +113,20 @@ class Client implements ApiClientInterface
             return new ClientResponse(null, $response->get_error_message());
         }
 
-        $status = wp_remote_retrieve_response_code($response);
-        $success = $status === 204;
+        $status = (int) wp_remote_retrieve_response_code($response);
+        $body = (string) wp_remote_retrieve_body($response);
+        $data = $this->decodeBody($body);
 
-        return new ClientResponse(['deleted' => $success]);
+        if ($status !== 204) {
+            return new ClientResponse(
+                $data,
+                $this->formatHttpError($status, $data, $body),
+                $status,
+                $body
+            );
+        }
+
+        return new ClientResponse(['deleted' => true], null, $status, $body);
     }
 
     private function getDefaultHeaders(): array
@@ -129,5 +135,58 @@ class Client implements ApiClientInterface
             'Authorization' => $this->authHeader,
             'Accept' => 'application/json'
         ];
+    }
+
+    /**
+     * @param array<string,mixed>|\WP_Error $response
+     */
+    private function buildClientResponse($response): ClientResponse
+    {
+        if (is_wp_error($response)) {
+            return new ClientResponse(null, $response->get_error_message());
+        }
+
+        $status = (int) wp_remote_retrieve_response_code($response);
+        $body = (string) wp_remote_retrieve_body($response);
+        $data = $this->decodeBody($body);
+
+        if ($status < 200 || $status >= 300) {
+            return new ClientResponse(
+                $data,
+                $this->formatHttpError($status, $data, $body),
+                $status,
+                $body
+            );
+        }
+
+        return new ClientResponse($data, null, $status, $body);
+    }
+
+    private function decodeBody(string $body): ?array
+    {
+        if ($body === '') {
+            return null;
+        }
+
+        $decoded = json_decode($body, true);
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    private function formatHttpError(int $status, ?array $data, string $body): string
+    {
+        $parts = ["HTTP {$status}"];
+
+        if (is_array($data)) {
+            if (isset($data['message']) && is_string($data['message']) && $data['message'] !== '') {
+                $parts[] = $data['message'];
+            } elseif (isset($data['errors'])) {
+                $encoded = json_encode($data['errors'], JSON_UNESCAPED_SLASHES);
+                if (is_string($encoded) && $encoded !== '') {
+                    $parts[] = $encoded;
+                }
+            }
+        }
+
+        return implode(' - ', $parts);
     }
 }

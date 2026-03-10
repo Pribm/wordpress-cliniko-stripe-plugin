@@ -118,7 +118,10 @@ abstract class AbstractModel
         if (!$response->isSuccessful()) {
 
             if ($throwOnError) {
-                throw new ApiException("Failed to find resource at {$path}/{$id}.", ['error' => $response->error]);
+                throw new ApiException(
+                    "Failed to find resource at {$path}/{$id}.",
+                    self::buildResponseErrorContext($response)
+                );
             }
             return null;
         }
@@ -145,7 +148,10 @@ abstract class AbstractModel
 
         if (!$response->isSuccessful()) {
             if ($throwOnError) {
-                throw new ApiException("Failed to list resources at {$path}.", ['error' => $response->error]);
+                throw new ApiException(
+                    "Failed to list resources at {$path}.",
+                    self::buildResponseErrorContext($response)
+                );
             }
             return [];
         }
@@ -192,10 +198,13 @@ abstract class AbstractModel
         $response = $client->post($path, $payload);
 
         if (!$response->isSuccessful()) {
-            throw new ApiException("Failed to create resource at {$path}.", [
-                'error' => $response->error,
-                'serialized_obj' => $payload,
-            ]);
+            throw new ApiException(
+                "Failed to create resource at {$path}.",
+                array_merge(
+                    self::buildResponseErrorContext($response),
+                    ['serialized_obj' => $payload]
+                )
+            );
         }
 
         if (isset($response->data['errors'])) {
@@ -231,10 +240,13 @@ abstract class AbstractModel
         $response = $client->put("{$path}/{$id}", $payload);
 
         if (!$response->isSuccessful()) {
-            throw new ApiException("Failed to update resource at {$path}/{$id}.", [
-                'error' => $response->error,
-                'serialized_obj' => $payload,
-            ]);
+            throw new ApiException(
+                "Failed to update resource at {$path}/{$id}.",
+                array_merge(
+                    self::buildResponseErrorContext($response),
+                    ['serialized_obj' => $payload]
+                )
+            );
         }
 
         if (isset($response->data['errors'])) {
@@ -257,6 +269,46 @@ abstract class AbstractModel
     }
 
     /**
+     * @param array<string,mixed>|null $data
+     * @return static|null
+     * @throws ApiException
+     */
+    public static function patch(string $id, ?array $data, ApiClientInterface $client): ?static
+    {
+        $path = static::getResourcePath();
+        $payload = $data ?? [];
+
+        $response = $client->patch("{$path}/{$id}", $payload);
+
+        if (!$response->isSuccessful()) {
+            throw new ApiException(
+                "Failed to patch resource at {$path}/{$id}.",
+                array_merge(
+                    self::buildResponseErrorContext($response),
+                    ['serialized_obj' => $payload]
+                )
+            );
+        }
+
+        if (isset($response->data['errors'])) {
+            throw new ApiException("API validation error at {$path}/{$id}.", [
+                'errors' => $response->data['errors'],
+                'serialized_obj' => $payload,
+            ]);
+        }
+
+        if (empty($response->data)) {
+            return null;
+        }
+
+        $dtoClass = static::getDtoClass();
+        /** @var object $dto */
+        $dto = $dtoClass::fromArray($response->data);
+
+        return static::newInstance($dto, $client);
+    }
+
+    /**
      * @throws ApiException
      */
     public static function delete(string $id, ApiClientInterface $client): bool
@@ -265,7 +317,10 @@ abstract class AbstractModel
         $response = $client->post("{$path}/{$id}/archive", []);
 
         if (!$response->isSuccessful()) {
-            throw new ApiException("Failed to delete resource at {$path}/{$id}.", ['error' => $response->error]);
+            throw new ApiException(
+                "Failed to delete resource at {$path}/{$id}.",
+                self::buildResponseErrorContext($response)
+            );
         }
 
         return true;
@@ -281,7 +336,10 @@ abstract class AbstractModel
 
         if (!$response->isSuccessful()) {
             if ($throwOnError) {
-                throw new ApiException("Failed to find resource at {$url}.", ['error' => $response->error]);
+                throw new ApiException(
+                    "Failed to find resource at {$url}.",
+                    self::buildResponseErrorContext($response)
+                );
             }
             return null;
         }
@@ -306,7 +364,7 @@ abstract class AbstractModel
      */
     public static function queryOneByQueryString(string $query, ApiClientInterface $client, bool $throwOnError = false): ?static
     {
-        // garante que começa com '?'
+      
         if ($query !== '' && $query[0] !== '?') {
             $query = '?' . $query;
         }
@@ -317,7 +375,10 @@ abstract class AbstractModel
 
         if (!$response->isSuccessful()) {
             if ($throwOnError) {
-                throw new ApiException("Failed to query resources at {$path}{$query}.", ['error' => $response->error]);
+                throw new ApiException(
+                    "Failed to query resources at {$path}{$query}.",
+                    self::buildResponseErrorContext($response)
+                );
             }
             return null;
         }
@@ -355,7 +416,10 @@ abstract class AbstractModel
 
         if (!$response->isSuccessful()) {
             if ($throwOnError) {
-                throw new ApiException("Failed to query resources at {$path}{$query}.", ['error' => $response->error]);
+                throw new ApiException(
+                    "Failed to query resources at {$path}{$query}.",
+                    self::buildResponseErrorContext($response)
+                );
             }
             return [];
         }
@@ -406,5 +470,17 @@ abstract class AbstractModel
         /** @var array<string,mixed> $data */
         $data = is_array($response->data) ? $response->data : [];
         return $data;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private static function buildResponseErrorContext($response): array
+    {
+        return [
+            'error' => $response->error,
+            'status_code' => $response->statusCode,
+            'response_data' => $response->data,
+        ];
     }
 }
