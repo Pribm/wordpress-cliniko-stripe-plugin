@@ -104,7 +104,11 @@ function handlePaymentAndFormSubmission(stripe) {
         stripeErrorElement.textContent = "An unexpected error occurred. Please try again.";
       }
     } finally {
-      jQuery.LoadingOverlay("hide");
+      if (typeof window.hidePaymentLoader === "function") {
+        window.hidePaymentLoader();
+      } else {
+        jQuery.LoadingOverlay("hide");
+      }
     }
   });
 }
@@ -123,7 +127,11 @@ async function initStripe() {
     handlePaymentAndFormSubmission(stripe);
   } catch (err) {
     console.error("Stripe init error:", err);
-    jQuery.LoadingOverlay("hide");
+    if (typeof window.hidePaymentLoader === "function") {
+      window.hidePaymentLoader();
+    } else {
+      jQuery.LoadingOverlay("hide");
+    }
 
     const fallbackError = document.createElement("div");
     fallbackError.style.color = "#c62828";

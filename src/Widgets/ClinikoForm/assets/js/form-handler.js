@@ -10,6 +10,9 @@ let isClinikoForm;
 let formType = "multi";
 let isHeadless = false;
 let progressEl;
+let paymentLoaderProgress = null;
+let paymentLoaderHeadline = "";
+let paymentLoaderDetail = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
@@ -2446,17 +2449,60 @@ function getPaymentLoaderHeadline(code = "", fallback = "") {
   return byCode[code] || fallback;
 }
 
+function resetPaymentLoaderState() {
+  paymentLoaderProgress = null;
+  paymentLoaderHeadline = "";
+  paymentLoaderDetail = "";
+}
+
+function hidePaymentLoader() {
+  resetPaymentLoaderState();
+  try {
+    jQuery.LoadingOverlay("hide");
+  } catch (_) {}
+}
+
 function updatePaymentLoader(headline, detail, progress = null) {
   const title = document.getElementById("es-payment-loader-title");
   const body = document.getElementById("es-payment-loader-detail");
   const fill = document.getElementById("es-payment-loader-fill");
   const value = document.getElementById("es-payment-loader-value");
   const progressEl = document.getElementById("es-payment-loader-progress");
-  if (title && headline) title.textContent = headline;
-  if (body && detail) body.textContent = detail;
+  const previousProgress =
+    typeof paymentLoaderProgress === "number" && Number.isFinite(paymentLoaderProgress)
+      ? paymentLoaderProgress
+      : null;
+
+  let safeProgress = previousProgress;
+  let shouldKeepExistingText = false;
 
   if (typeof progress === "number" && Number.isFinite(progress)) {
-    const safeProgress = Math.max(0, Math.min(100, progress));
+    const incomingProgress = Math.max(0, Math.min(100, progress));
+    shouldKeepExistingText =
+      previousProgress !== null && incomingProgress < previousProgress;
+    safeProgress =
+      previousProgress !== null
+        ? Math.max(previousProgress, incomingProgress)
+        : incomingProgress;
+    paymentLoaderProgress = safeProgress;
+  }
+
+  const nextHeadline = shouldKeepExistingText
+    ? paymentLoaderHeadline || headline
+    : headline || paymentLoaderHeadline;
+  const nextDetail = shouldKeepExistingText
+    ? paymentLoaderDetail || detail
+    : detail || paymentLoaderDetail;
+
+  if (!shouldKeepExistingText) {
+    if (headline) paymentLoaderHeadline = headline;
+    if (detail) paymentLoaderDetail = detail;
+  }
+
+  if (title && nextHeadline) title.textContent = nextHeadline;
+  if (body && nextDetail) body.textContent = nextDetail;
+
+  if (typeof safeProgress === "number" && Number.isFinite(safeProgress)) {
     if (fill) {
       fill.style.width = `${safeProgress}%`;
     }
@@ -2855,7 +2901,7 @@ async function submitBookingForm(
     if (errorEl) errorEl.textContent = message;
     else showToast(message, "error");
   } finally {
-    try { jQuery.LoadingOverlay("hide"); } catch (_) {}
+    hidePaymentLoader();
   }
 }
 
@@ -2898,6 +2944,14 @@ function showPaymentLoader() {
   const trackColor = "#d9dde3";
   const outlineColor = "#c7ccd3";
   const borderRadius = styles.borderRadius || "10px";
+  const initialHeadline =
+    paymentLoaderHeadline || "Processing your secure payment...";
+  const initialDetail =
+    paymentLoaderDetail || "Please wait while we confirm your appointment with the clinic.";
+  const initialProgress =
+    typeof paymentLoaderProgress === "number" && Number.isFinite(paymentLoaderProgress)
+      ? Math.max(0, Math.min(100, paymentLoaderProgress))
+      : 10;
 
   jQuery.LoadingOverlay("show", {
     image: "",
@@ -2923,22 +2977,22 @@ function showPaymentLoader() {
             : ""
         }
         <div id="es-payment-loader-title" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
-          Processing your secure payment...
+          ${initialHeadline}
         </div>
         <div id="es-payment-loader-detail" style="font-size: 14px; color: ${mutedText};">
-          Please wait while we confirm your appointment with the clinic.
+          ${initialDetail}
         </div>
         <div style="width: min(340px, 82vw); margin-top: 18px;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 12px; color: ${mutedText};">
             <span>Booking progress</span>
-            <span id="es-payment-loader-value">0%</span>
+            <span id="es-payment-loader-value">${Math.round(initialProgress)}%</span>
           </div>
           <div
             id="es-payment-loader-progress"
             role="progressbar"
             aria-valuemin="0"
             aria-valuemax="100"
-            aria-valuenow="0"
+            aria-valuenow="${Math.round(initialProgress)}"
             style="
               width: 100%;
               height: 10px;
@@ -2951,7 +3005,7 @@ function showPaymentLoader() {
             <div
               id="es-payment-loader-fill"
               style="
-                width: 0%;
+                width: ${initialProgress}%;
                 height: 100%;
                 background: ${colorPrimary};
                 border-radius: ${borderRadius};
@@ -2965,9 +3019,9 @@ function showPaymentLoader() {
   });
 
   updatePaymentLoader(
-    "Processing your secure payment...",
-    "Please wait while we confirm your appointment with the clinic.",
-    10
+    initialHeadline,
+    initialDetail,
+    initialProgress
   );
 
   if (!document.getElementById("pulse-logo-style")) {
@@ -2989,6 +3043,8 @@ function showPaymentLoader() {
 
 window.showPaymentLoader = showPaymentLoader;
 window.updatePaymentLoader = updatePaymentLoader;
+window.resetPaymentLoaderState = resetPaymentLoaderState;
+window.hidePaymentLoader = hidePaymentLoader;
 
 function setupSignatureCanvas() {
   const canvas = document.getElementById("signature-pad");
