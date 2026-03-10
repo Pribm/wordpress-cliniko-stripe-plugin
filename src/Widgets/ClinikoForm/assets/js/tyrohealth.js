@@ -26,6 +26,17 @@
 
   function showLoader() {
     try {
+      if (typeof window.showPaymentLoader === "function") {
+        window.showPaymentLoader();
+        if (typeof window.updatePaymentLoader === "function") {
+          window.updatePaymentLoader(
+            "Preparing your payment...",
+            "Securing your booking details before checkout.",
+            10
+          );
+        }
+        return;
+      }
       if (window.jQuery?.LoadingOverlay) window.jQuery.LoadingOverlay("show");
     } catch (_) {}
   }
@@ -156,10 +167,27 @@
     return s.startsWith("$") ? s : `$${s}`;
   }
 
-  async function postJson(url, payload) {
+  function buildRequestHeaders(attemptToken = "") {
+    const headers = { "Content-Type": "application/json" };
+    const requestToken = String(window.TyroHealthData?.request_token || "").trim();
+    const attempt = String(attemptToken || "").trim();
+
+    if (requestToken) {
+      headers["X-ES-Request-Token"] = requestToken;
+    }
+
+    if (attempt) {
+      headers["X-ES-Attempt-Token"] = attempt;
+    }
+
+    return headers;
+  }
+
+  async function postJson(url, payload, attemptToken = "") {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      headers: buildRequestHeaders(attemptToken),
       body: JSON.stringify(payload || {}),
     });
     const text = await res.text();
@@ -174,6 +202,7 @@
   // Short-lived SDK token config
   let configured = false;
   let cachedToken = null;
+  let cachedAttempt = null;
 
   async function getSdkToken() {
     if (cachedToken) return cachedToken;
@@ -202,17 +231,58 @@
     log("SDK configured.");
   }
 
-  async function fetchPricedTransaction() {
-    const url = window.TyroHealthData.create_invoice_url;
-    const moduleId = window.TyroHealthData.moduleId;
-    if (!url) throw new Error("TyroHealthData.create_invoice_url missing.");
-    if (!moduleId) throw new Error("TyroHealthData.moduleId missing.");
+  function buildAttemptPayload() {
+    const formElement = document.getElementById("prepayment-form");
+    const headlessPayload =
+      (window.formHandlerData?.is_headless || !formElement) &&
+      typeof normalizeHeadlessPayload === "function" &&
+      typeof getHeadlessPayload === "function"
+        ? normalizeHeadlessPayload(getHeadlessPayload())
+        : null;
 
-    const resp = await postJson(url, { moduleId });
-    if (!resp?.success || !resp?.data) {
-      throw new Error(resp?.message || "Failed to price Tyro transaction.");
+    const parsed =
+      headlessPayload ||
+      (typeof parseFormToStructuredBody === "function"
+        ? parseFormToStructuredBody(formElement)
+        : null);
+
+    if (!parsed) {
+      throw new Error("Could not read form payload.");
     }
-    return resp.data; // { chargeAmount, invoiceReference, providerNumber? }
+
+    const content =
+      typeof normalizeContentForSubmission === "function"
+        ? normalizeContentForSubmission(parsed?.content || {})
+        : parsed?.content || {};
+    const patient =
+      typeof normalizePatientForSubmission === "function"
+        ? normalizePatientForSubmission(parsed?.patient || {})
+        : parsed?.patient || {};
+
+    return {
+      gateway: "tyrohealth",
+      moduleId: String(window.formHandlerData?.module_id || ""),
+      patient_form_template_id: String(
+        window.formHandlerData?.patient_form_template_id || ""
+      ),
+      patient,
+      content,
+    };
+  }
+
+  async function createBookingAttempt() {
+    if (cachedAttempt?.attempt?.id) return cachedAttempt;
+
+    const url = window.TyroHealthData.attempt_preflight_url;
+    if (!url) throw new Error("TyroHealthData.attempt_preflight_url missing.");
+
+    const resp = await postJson(url, buildAttemptPayload());
+    if (!resp?.ok || !resp?.attempt?.id || !resp?.attempt?.token || !resp?.payment) {
+      throw new Error(resp?.message || "Failed to prepare booking attempt.");
+    }
+
+    cachedAttempt = resp;
+    return cachedAttempt;
   }
 
   let running = false;
@@ -233,9 +303,12 @@
         );
       }
 
-      const priced = await fetchPricedTransaction();
-      const chargeAmount = normalizeChargeAmount(priced.chargeAmount);
-      const invoiceReference = priced.invoiceReference;
+      const attempt = await createBookingAttempt();
+      const chargeAmount = normalizeChargeAmount(
+        ((attempt?.payment?.amount || 0) / 100).toFixed(2)
+      );
+      const invoiceReference =
+        attempt?.payment?.invoice_reference || attempt?.payment?.invoiceReference;
 
       if (!chargeAmount) throw new Error("Priced chargeAmount missing.");
       if (!invoiceReference) throw new Error("Priced invoiceReference missing.");
@@ -246,7 +319,9 @@
         chargeAmount,
         invoiceReference,
         patient,
-        ...(priced.providerNumber ? { providerNumber: priced.providerNumber } : {}),
+        ...(window.TyroHealthData.providerNumber
+          ? { providerNumber: window.TyroHealthData.providerNumber }
+          : {}),
       };
 
       hideLoader(); // SDK handles UI
@@ -273,7 +348,12 @@
                 transactionId: txId,
                 invoiceReference,
               },
-              ensureErrorEl()
+              ensureErrorEl(),
+              false,
+              {
+                attemptId: attempt?.attempt?.id || "",
+                attemptToken: attempt?.attempt?.token || "",
+              }
             );
           } catch (e) {
             err("Post-success booking failed:", e);

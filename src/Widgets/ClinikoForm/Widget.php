@@ -9,6 +9,7 @@ if (!defined('ABSPATH'))
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 use App\Model\AppointmentType;
+use App\Service\PublicRequestGuard;
 use Elementor\Widget_Base;
 
 class Widget extends Widget_Base
@@ -169,6 +170,8 @@ class Widget extends Widget_Base
 
   public function render()
   {
+    $asset_version = defined('WP_CLINIKO_PLUGIN_VERSION') ? WP_CLINIKO_PLUGIN_VERSION : null;
+
     wp_enqueue_style(
       'font-awesome-5',
       'https://use.fontawesome.com/releases/v5.15.4/css/all.css',
@@ -214,7 +217,7 @@ class Widget extends Widget_Base
       'cliniko-stripe-style',
       plugin_dir_url(__FILE__) . 'assets/css/cliniko-stripe.css',
       [],
-      null
+      $asset_version
     );
 
     $sections = [];
@@ -233,7 +236,7 @@ class Widget extends Widget_Base
       'helpers-js',
       plugin_dir_url(__FILE__) . 'assets/js/helpers.js',
       [],
-      null,
+      $asset_version,
       []
     );
 
@@ -241,7 +244,7 @@ class Widget extends Widget_Base
       'form-handler-js',
       plugin_dir_url(__FILE__) . 'assets/js/form-handler.js',
       [],
-      null,
+      $asset_version,
       []
     );
 
@@ -251,11 +254,12 @@ class Widget extends Widget_Base
         'save-on-exit',
         plugin_dir_url(__FILE__) . 'assets/js/save-on-exit.js',
         ['jquery', 'form-handler-js'],
-        null,
+        $asset_version,
         []
       );
     }
 
+    $requestToken = PublicRequestGuard::issueRequestToken();
     $appointment_source = $settings['appointment_source'] ?? '';
     if ($appointment_source === 'custom_form' && $settings['enable_payment'] === 'yes') {
 
@@ -275,7 +279,7 @@ class Widget extends Widget_Base
           'cliniko-stripe-js',
           plugin_dir_url(__FILE__) . 'assets/js/stripe.js',
           ["jquery"],
-          null,
+          $asset_version,
           []
         );
       } elseif ($gateway === 'tyrohealth') {
@@ -291,7 +295,7 @@ class Widget extends Widget_Base
           'cliniko-tyrohealth-js',
           plugin_dir_url(__FILE__) . 'assets/js/tyrohealth.js',
           ['jquery', 'medipass-transaction-sdk'],
-          null,
+          $asset_version,
           ['strategy' => 'defer']
         );
 
@@ -306,11 +310,13 @@ class Widget extends Widget_Base
           'appId' => $tyroAppId,
           'appVersion' => $tyroAppVersion,
           'providerNumber' => Credentials::getTyroProviderNumber(),
+          'request_token' => $requestToken,
           // short-lived token endpoint (your server uses Business Admin key)
           'sdk_token_url' => get_site_url() . '/wp-json/v1/tyrohealth/sdk-token',
           'create_invoice_url' => get_site_url() . '/wp-json/v1/tyrohealth/invoice',
-          // Tyro-specific charge endpoint (processes booking + scheduling)
-          'confirm_booking_url' => get_site_url() . '/wp-json/v1/tyrohealth/charge',
+          'attempt_preflight_url' => get_site_url() . '/wp-json/v2/booking-attempts/preflight',
+          'attempt_confirm_url' => get_site_url() . '/wp-json/v2/booking-attempts/confirm-tyro',
+          'attempt_finalize_url' => get_site_url() . '/wp-json/v2/booking-attempts/finalize',
           'moduleId' => esc_attr($settings['module_id'] ?? ''),
           'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect'] ?? ''),
           // optional: choose default THOP method in JS ("new-payment-card" or "mobile")
@@ -375,6 +381,12 @@ class Widget extends Widget_Base
         'patient_form_template_id' => $form_template_id,
         // 'booking_url' => get_site_url() . '/wp-json/v1/book-cliniko',
         'payment_url' => get_site_url() . '/wp-json/v1/payments/charge',
+        'booking_attempt_preflight_url' => get_site_url() . '/wp-json/v2/booking-attempts/preflight',
+        'booking_attempt_charge_stripe_url' => get_site_url() . '/wp-json/v2/booking-attempts/charge-stripe',
+        'booking_attempt_confirm_tyro_url' => get_site_url() . '/wp-json/v2/booking-attempts/confirm-tyro',
+        'booking_attempt_finalize_url' => get_site_url() . '/wp-json/v2/booking-attempts/finalize',
+        'booking_attempt_status_url' => get_site_url() . '/wp-json/v2/booking-attempts/status',
+        'request_token' => $requestToken,
         'available_times_url' => get_site_url() . '/wp-json/v1/available-times',
         'next_available_times_url' => get_site_url() . '/wp-json/v1/next-available-times',
         'practitioners_url' => get_site_url() . '/wp-json/v1/practitioners',

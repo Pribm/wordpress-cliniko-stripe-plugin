@@ -132,12 +132,17 @@ function initHeadlessCalendarHelpers() {
     return url.toString();
   };
 
-  const fetchJson = async (url) => {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    });
+const fetchJson = async (url) => {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      ...(formHandlerData?.request_token
+        ? { "X-ES-Request-Token": String(formHandlerData.request_token).trim() }
+        : {}),
+    },
+    credentials: "same-origin",
+  });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.success === false) {
       throw new Error(data?.message || "Request failed.");
@@ -701,12 +706,17 @@ async function initAvailableTimesPicker() {
     calendarPrevBtn.disabled = currentMonthKey <= thisMonthKey;
   }
 
-  async function fetchJson(url, fallbackMessage) {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    });
+async function fetchJson(url, fallbackMessage) {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      ...(formHandlerData?.request_token
+        ? { "X-ES-Request-Token": String(formHandlerData.request_token).trim() }
+        : {}),
+    },
+    credentials: "same-origin",
+  });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.success === false) {
       throw new Error(data?.message || fallbackMessage || "Request failed.");
@@ -2325,8 +2335,205 @@ function mountForm() {
  * @param {string|{gateway:'stripe', token:string}|{gateway:'tyrohealth', transactionId:string, invoiceReference?:string}|null} paymentArg
  * @param {HTMLElement|null} errorEl
  * @param {boolean} isClinikoIframe
- * @param {{ patientBookedTime?: string|Date }} opts
+ * @param {{ patientBookedTime?: string|Date, attemptId?: string, attemptToken?: string }} opts
  */
+function buildRequestHeaders(attemptToken = "") {
+  const headers = { "Content-Type": "application/json" };
+  const requestToken = String(formHandlerData?.request_token || "").trim();
+  const attempt = String(attemptToken || "").trim();
+
+  if (requestToken) {
+    headers["X-ES-Request-Token"] = requestToken;
+  }
+
+  if (attempt) {
+    headers["X-ES-Attempt-Token"] = attempt;
+  }
+
+  return headers;
+}
+
+async function postJsonExpectJson(url, payload, attemptToken = "") {
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: buildRequestHeaders(attemptToken),
+    body: JSON.stringify(payload || {}),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  return { response, result };
+}
+
+async function getJsonExpectJson(url, attemptToken = "") {
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "same-origin",
+    headers: buildRequestHeaders(attemptToken),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  return { response, result };
+}
+
+function colorWithAlpha(color, alpha) {
+  const value = String(color || "").trim();
+  if (!value) {
+    return `rgba(0, 115, 230, ${alpha})`;
+  }
+
+  if (value.startsWith("#")) {
+    let hex = value.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split("").map((char) => char + char).join("");
+    }
+
+    if (hex.length === 6) {
+      const parsed = Number.parseInt(hex, 16);
+      if (!Number.isNaN(parsed)) {
+        const r = (parsed >> 16) & 255;
+        const g = (parsed >> 8) & 255;
+        const b = parsed & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+    }
+  }
+
+  const rgbMatch = value.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(",").map((part) => part.trim());
+    if (parts.length >= 3) {
+      return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
+    }
+  }
+
+  return value;
+}
+
+function getPaymentLoaderProgress(code = "", fallback = null) {
+  const byCode = {
+    preflighted: 18,
+    payment_verified: 52,
+    making_appointment: 76,
+    linking_form: 92,
+    completed: 100,
+    failed: 100,
+    cleaned: 100,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(byCode, code)) {
+    return byCode[code];
+  }
+
+  if (typeof fallback === "number" && Number.isFinite(fallback)) {
+    return Math.max(0, Math.min(100, fallback));
+  }
+
+  return null;
+}
+
+function getPaymentLoaderHeadline(code = "", fallback = "") {
+  const byCode = {
+    preflighted: "Validated with Cliniko...",
+    payment_verified: "Payment confirmed...",
+    making_appointment: "Making your appointment...",
+    linking_form: "Sending your form to the doctor...",
+    completed: "Appointment confirmed.",
+    failed: "We could not complete your booking.",
+    cleaned: "Booking cancelled.",
+  };
+
+  return byCode[code] || fallback;
+}
+
+function updatePaymentLoader(headline, detail, progress = null) {
+  const title = document.getElementById("es-payment-loader-title");
+  const body = document.getElementById("es-payment-loader-detail");
+  const fill = document.getElementById("es-payment-loader-fill");
+  const value = document.getElementById("es-payment-loader-value");
+  const progressEl = document.getElementById("es-payment-loader-progress");
+  if (title && headline) title.textContent = headline;
+  if (body && detail) body.textContent = detail;
+
+  if (typeof progress === "number" && Number.isFinite(progress)) {
+    const safeProgress = Math.max(0, Math.min(100, progress));
+    if (fill) {
+      fill.style.width = `${safeProgress}%`;
+    }
+    if (value) {
+      value.textContent = `${Math.round(safeProgress)}%`;
+    }
+    if (progressEl) {
+      progressEl.setAttribute("aria-valuenow", String(Math.round(safeProgress)));
+    }
+  }
+}
+
+function updatePaymentLoaderFromAttempt(attempt) {
+  const progressCode = String(attempt?.progress?.code || attempt?.status || "").trim();
+  const message = String(attempt?.progress?.message || "").trim();
+  updatePaymentLoader(
+    getPaymentLoaderHeadline(progressCode, "Processing your booking..."),
+    message || "Please wait while we finish your booking.",
+    getPaymentLoaderProgress(progressCode)
+  );
+}
+
+function buildAttemptStatusUrl(attemptId) {
+  const rawUrl = String(formHandlerData?.booking_attempt_status_url || "").trim();
+  if (!rawUrl || !attemptId) {
+    return "";
+  }
+
+  const url = new URL(rawUrl, window.location.origin);
+  url.searchParams.set("attempt_id", attemptId);
+  return url.toString();
+}
+
+function startAttemptStatusPolling(attemptId, attemptToken, onUpdate) {
+  const statusUrl = buildAttemptStatusUrl(attemptId);
+  if (!statusUrl || !attemptToken || typeof onUpdate !== "function") {
+    return () => {};
+  }
+
+  let stopped = false;
+  let timerId = null;
+
+  const poll = async () => {
+    if (stopped) {
+      return;
+    }
+
+    try {
+      const { response, result } = await getJsonExpectJson(statusUrl, attemptToken);
+      if (response.ok && result?.ok && result?.attempt) {
+        onUpdate(result.attempt);
+
+        const status = String(result.attempt?.status || "").trim();
+        if (["completed", "failed", "cleaned"].includes(status)) {
+          stopped = true;
+          return;
+        }
+      }
+    } catch (_) {
+      // Keep polling while finalize is in-flight.
+    }
+
+    if (!stopped) {
+      timerId = window.setTimeout(poll, 500);
+    }
+  };
+
+  poll();
+
+  return () => {
+    stopped = true;
+    if (timerId !== null) {
+      window.clearTimeout(timerId);
+    }
+  };
+}
+
 async function submitBookingForm(
   paymentArg = null,
   errorEl = null,
@@ -2435,89 +2642,216 @@ async function submitBookingForm(
     invoiceReference: payment.gateway === "tyrohealth" ? (payment.invoiceReference || null) : null,
   };
 
-  // --- choose endpoint ---
-  // IMPORTANT:
-  // - Stripe flow should hit your Stripe charge endpoint (formHandlerData.payment_url)
-  // - TyroHealth flow should NOT hit Stripe charge endpoint; it should hit your booking/queue endpoint
-  // - Cliniko iframe flow always uses cliniko_embeded_form_sync_patient_form_url
-  const submitURL = (() => {
-    if (isClinikoIframe) return formHandlerData.cliniko_embeded_form_sync_patient_form_url;
-
-    if (payment.gateway === "tyrohealth") {
-      // This should be your existing queue endpoint (send-patient-form), not payment_url
-      return (
-        window.TyroHealthData?.confirm_booking_url ||
-        formHandlerData.cliniko_embeded_form_sync_patient_form_url
-      );
-    }
-
-    // Default: Stripe payment endpoint
-    return formHandlerData.payment_url;
-  })();
-
   try {
-    const response = await fetch(submitURL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    if (isClinikoIframe) {
+      const { response, result } = await postJsonExpectJson(
+        formHandlerData.cliniko_embeded_form_sync_patient_form_url,
+        payload
+      );
 
-    const result = await response.json().catch(() => ({}));
+      if (response.status === 202 && result?.success) {
+        showToast("We’re processing your form now…", "success");
+        window.formIsSubmitting = true;
 
-    const okForCliniko =
-      isClinikoIframe && response.status === 202 && result?.success;
+        const redirectBase = formHandlerData.redirect_url;
+        const queryParams = new URLSearchParams({
+          patient_name:
+            patient?.first_name && patient?.last_name
+              ? `${patient.first_name} ${patient.last_name}`
+              : "",
+          email: patient?.email ?? "",
+          ref: "iframe",
+          status: "scheduling_queued",
+          receipt: "",
+        });
 
-    // ✅ Stripe: your endpoint seems to respond {status:"success"}
-    // ✅ Tyro: your booking queue endpoint responds {success:true, ...} and/or 202
-    const okForStripe =
-      !isClinikoIframe &&
-      payment.gateway === "stripe" &&
-      result?.status === "success";
+        window.location.href = `${redirectBase}?${queryParams.toString()}`;
+        return;
+      }
 
-  const okForTyro =
-    !isClinikoIframe &&
-    payment.gateway === "tyrohealth" &&
-    (
-      result?.success === true ||
-      result?.status === "success" ||
-      response.status === 202
-    );
-
-    if (okForCliniko || okForStripe || okForTyro) {
-      // message
-      showToast("We’re scheduling your appointment now…", "success");
-      window.formIsSubmitting = true;
-
-      const redirectBase = formHandlerData.redirect_url;
-
-      const ref =
-        result?.payment?.id ||
-        (payment.gateway === "tyrohealth"
-          ? payment.transactionId || "tyro"
-          : payment.gateway === "stripe"
-          ? "stripe"
-          : "free");
-
-      const queryParams = new URLSearchParams({
-        patient_name:
-          patient?.first_name && patient?.last_name
-            ? `${patient.first_name} ${patient.last_name}`
-            : "",
-        email: patient?.email ?? "",
-        ref: ref ?? "free",
-        status: "scheduling_queued",
-        receipt: result?.payment?.receipt_url ?? "",
-      });
-
-      window.location.href = `${redirectBase}?${queryParams.toString()}`;
+      handleChargeErrors(result, errorEl);
       return;
     }
 
-    // otherwise
-    handleChargeErrors(result, errorEl);
+    const providedAttemptId = String(opts?.attemptId || "").trim();
+    let attemptToken = String(opts?.attemptToken || "").trim();
+    let attemptId = providedAttemptId;
+    let paymentResult = {};
+    let paymentRequired = false;
+
+    if (!providedAttemptId) {
+      updatePaymentLoader(
+        "Validating your details...",
+        "Checking your form and appointment details with Cliniko.",
+        getPaymentLoaderProgress("preflighted")
+      );
+
+      const { response: preflightResponse, result: preflightResult } = await postJsonExpectJson(
+        formHandlerData.booking_attempt_preflight_url,
+        {
+          ...payload,
+          gateway: payment.gateway || null,
+        }
+      );
+
+      if (!preflightResponse.ok || !preflightResult?.ok) {
+        handleChargeErrors(preflightResult, errorEl);
+        return;
+      }
+
+      attemptId = String(preflightResult?.attempt?.id || "");
+      attemptToken = String(preflightResult?.attempt?.token || "");
+      if (!attemptId) {
+        handleChargeErrors(
+          { message: "Could not create booking attempt." },
+          errorEl
+        );
+        return;
+      }
+      if (!attemptToken) {
+        handleChargeErrors(
+          { message: "Could not secure booking attempt." },
+          errorEl
+        );
+        return;
+      }
+
+      paymentResult = preflightResult?.payment || {};
+      paymentRequired = !!paymentResult?.required;
+    } else {
+      if (!attemptToken) {
+        handleChargeErrors(
+          { message: "Missing secure booking attempt token." },
+          errorEl
+        );
+        return;
+      }
+      paymentRequired = payment.gateway === "stripe" || payment.gateway === "tyrohealth";
+    }
+
+    if (paymentRequired && payment.gateway === "stripe") {
+      updatePaymentLoader(
+        "Processing your secure payment...",
+        "Please wait while we confirm payment.",
+        38
+      );
+
+      const { response: chargeResponse, result: chargeResult } = await postJsonExpectJson(
+        formHandlerData.booking_attempt_charge_stripe_url,
+        {
+          attempt_id: attemptId,
+          attempt_token: attemptToken,
+          stripeToken: payment.token || null,
+        },
+        attemptToken
+      );
+
+      if (!chargeResponse.ok || !chargeResult?.ok) {
+        handleChargeErrors(chargeResult, errorEl);
+        return;
+      }
+
+      paymentResult = chargeResult?.payment || paymentResult;
+    }
+
+    if (paymentRequired && payment.gateway === "tyrohealth") {
+      updatePaymentLoader(
+        "Confirming your payment...",
+        "Verifying your Tyro Health transaction on the server.",
+        38
+      );
+
+      const { response: tyroResponse, result: tyroResult } = await postJsonExpectJson(
+        formHandlerData.booking_attempt_confirm_tyro_url,
+        {
+          attempt_id: attemptId,
+          attempt_token: attemptToken,
+          transactionId: payment.transactionId || null,
+        },
+        attemptToken
+      );
+
+      if (!tyroResponse.ok || !tyroResult?.ok) {
+        handleChargeErrors(tyroResult, errorEl);
+        return;
+      }
+
+      paymentResult = tyroResult?.payment || paymentResult;
+    }
+
+    updatePaymentLoader(
+      "Making your appointment...",
+      "Sending your form to the doctor and attaching it to your booking.",
+      getPaymentLoaderProgress("making_appointment")
+    );
+
+    const stopAttemptStatusPolling = startAttemptStatusPolling(
+      attemptId,
+      attemptToken,
+      updatePaymentLoaderFromAttempt
+    );
+
+    let finalizeResponse;
+    let finalizeResult;
+    try {
+      ({ response: finalizeResponse, result: finalizeResult } = await postJsonExpectJson(
+        formHandlerData.booking_attempt_finalize_url,
+        {
+          attempt_id: attemptId,
+          attempt_token: attemptToken,
+        },
+        attemptToken
+      ));
+    } finally {
+      stopAttemptStatusPolling();
+    }
+
+    if (!finalizeResponse.ok || !finalizeResult?.ok) {
+      updatePaymentLoader(
+        "We could not complete your booking.",
+        finalizeResult?.detail || finalizeResult?.message || "Unexpected booking error.",
+        100
+      );
+      handleChargeErrors(finalizeResult, errorEl);
+      return;
+    }
+
+    updatePaymentLoader(
+      "Appointment confirmed.",
+      "Your appointment and form have been confirmed.",
+      100
+    );
+
+    showToast("Your appointment has been confirmed.", "success");
+    window.formIsSubmitting = true;
+
+    const redirectBase = formHandlerData.redirect_url;
+    const ref =
+      paymentResult?.reference ||
+      (payment.gateway === "tyrohealth"
+        ? payment.transactionId || "tyro"
+        : payment.gateway === "stripe"
+        ? "stripe"
+        : "free");
+
+    const queryParams = new URLSearchParams({
+      patient_name:
+        patient?.first_name && patient?.last_name
+          ? `${patient.first_name} ${patient.last_name}`
+          : "",
+      email: patient?.email ?? "",
+      ref: ref ?? "free",
+      status: "booking_confirmed",
+      receipt: paymentResult?.receipt_url ?? "",
+      attempt_id: attemptId,
+    });
+
+    window.location.href = `${redirectBase}?${queryParams.toString()}`;
+    return;
   } catch (err) {
     console.error("Request failed", err);
     const message = "Unexpected error. Please try again.";
+    updatePaymentLoader("We could not complete your booking.", message, 100);
     if (errorEl) errorEl.textContent = message;
     else showToast(message, "error");
   } finally {
@@ -2558,6 +2892,12 @@ function handleChargeErrors(result, errorEl) {
 function showPaymentLoader() {
   const styles = formHandlerData.appearance?.variables || {};
   const logo = formHandlerData.logo_url;
+  const colorPrimary = styles.colorPrimary || formHandlerData?.btn_bg || "#0073e6";
+  const colorText = styles.colorText || "#333";
+  const mutedText = colorWithAlpha(colorText, 0.72);
+  const trackColor = "#d9dde3";
+  const outlineColor = "#c7ccd3";
+  const borderRadius = styles.borderRadius || "10px";
 
   jQuery.LoadingOverlay("show", {
     image: "",
@@ -2575,22 +2915,60 @@ function showPaymentLoader() {
         text-align: center;
         padding: 32px;
         font-family: ${styles.fontFamily || "sans-serif"};
-        color: ${styles.colorText || "#333"};
+        color: ${colorText};
       ">
         ${
           logo
             ? `<img src="${logo}" alt="Logo" style="max-height: 60px; margin-bottom: 20px;" class="pulse-logo" />`
             : ""
         }
-        <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
+        <div id="es-payment-loader-title" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
           Processing your secure payment...
         </div>
-        <div style="font-size: 14px; color: #666;">
+        <div id="es-payment-loader-detail" style="font-size: 14px; color: ${mutedText};">
           Please wait while we confirm your appointment with the clinic.
+        </div>
+        <div style="width: min(340px, 82vw); margin-top: 18px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 12px; color: ${mutedText};">
+            <span>Booking progress</span>
+            <span id="es-payment-loader-value">0%</span>
+          </div>
+          <div
+            id="es-payment-loader-progress"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            style="
+              width: 100%;
+              height: 10px;
+              overflow: hidden;
+              background: ${trackColor};
+              border-radius: ${borderRadius};
+              box-shadow: inset 0 0 0 1px ${outlineColor};
+            "
+          >
+            <div
+              id="es-payment-loader-fill"
+              style="
+                width: 0%;
+                height: 100%;
+                background: ${colorPrimary};
+                border-radius: ${borderRadius};
+                transition: width 240ms ease;
+              "
+            ></div>
+          </div>
         </div>
       </div>
     `),
   });
+
+  updatePaymentLoader(
+    "Processing your secure payment...",
+    "Please wait while we confirm your appointment with the clinic.",
+    10
+  );
 
   if (!document.getElementById("pulse-logo-style")) {
     const style = document.createElement("style");
@@ -2608,6 +2986,9 @@ function showPaymentLoader() {
     document.head.appendChild(style);
   }
 }
+
+window.showPaymentLoader = showPaymentLoader;
+window.updatePaymentLoader = updatePaymentLoader;
 
 function setupSignatureCanvas() {
   const canvas = document.getElementById("signature-pad");

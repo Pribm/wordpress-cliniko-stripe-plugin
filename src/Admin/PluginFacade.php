@@ -8,6 +8,7 @@ use App\Admin\Modules\ElementorTemplateSync;
 use App\Admin\Modules\PatientForms;
 use App\Admin\Modules\Settings;
 use App\Admin\Modules\Tools;
+use App\Workers\BookingAttemptCleanupWorker;
 use App\Workers\ClinikoPatientFormWorker;
 use App\Workers\ClinikoSchedulingWorker;
 
@@ -37,6 +38,7 @@ class PluginFacade
     {
 
         add_action('init', function () {
+            BookingAttemptCleanupWorker::register();
             ClinikoSchedulingWorker::register();
             ClinikoPatientFormWorker::register();
         });

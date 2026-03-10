@@ -68,6 +68,12 @@ class CachedClientDecorator implements ApiClientInterface
         return $this->client->put($url, $data);
     }
 
+    public function patch(string $url, array $data): ClientResponse
+    {
+        $this->invalidate($url);
+        return $this->client->patch($url, $data);
+    }
+
     /**
      * Persist value in transient storage.
      * ttl <= 0 means persistent cache (manual invalidation), stored with autoload disabled.

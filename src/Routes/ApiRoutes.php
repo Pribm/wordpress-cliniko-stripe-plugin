@@ -1,7 +1,9 @@
 <?php
 namespace App\Routes;
 
+use App\Controller\BookingAttemptController;
 use App\Controller\TyroController;
+use App\Service\PublicRequestGuard;
 
 if (!defined('ABSPATH'))
     exit;
@@ -18,8 +20,10 @@ class ApiRoutes
 
     public function register_routes()
     {
+        $bookingAttemptController = new BookingAttemptController();
+        $guard = new PublicRequestGuard();
 
-        // Rota para agendar no Cliniko após pagamento
+        // Legacy scheduling / payment routes
         $clinikoController = new ClinikoController();
         // register_rest_route('v1', '/book-cliniko', [
         //     'methods' => 'POST',
@@ -36,57 +40,88 @@ class ApiRoutes
         register_rest_route('v1', '/send-patient-form', [
             'methods' => 'POST',
             'callback' => [$clinikoController, 'createPatientForm'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$guard, 'allowPublicMutation'],
         ]);
 
         register_rest_route('v1', '/available-times', [
             'methods' => 'GET',
             'callback' => [$clinikoController, 'getAvailableTimes'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$guard, 'allowPublicRead'],
         ]);
 
         register_rest_route('v1', '/practitioners', [
             'methods' => 'GET',
             'callback' => [$clinikoController, 'getPractitioners'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$guard, 'allowPublicRead'],
         ]);
 
         register_rest_route('v1', '/appointment-calendar', [
             'methods' => 'GET',
             'callback' => [$clinikoController, 'getAppointmentCalendar'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$guard, 'allowPublicRead'],
         ]);
 
         register_rest_route('v1', '/next-available-times', [
             'methods' => 'GET',
             'callback' => [$clinikoController, 'getNextAvailableTimes'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$guard, 'allowPublicRead'],
         ]);
 
 
         register_rest_route('v1', '/payments/charge', [
             'methods' => 'POST',
             'callback' => [new \App\Controller\PaymentController(), 'charge'],
-            'permission_callback' => '__return_true', 
+            'permission_callback' => [$guard, 'allowPublicMutation'],
         ]);
 
         // TyroHealth SDK token (short-lived) used by frontend Partner SDK
         register_rest_route('v1', '/tyrohealth/sdk-token', [
             'methods' => 'POST',
             'callback' => [new \App\Controller\TyroController(), 'sdkToken'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$guard, 'allowSdkToken'],
         ]);
 
         register_rest_route('v1', '/tyrohealth/charge', [
             'methods' => 'POST',
             'callback' => [TyroController::class, 'charge'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [$guard, 'allowPublicMutation'],
         ]);
 
       register_rest_route('v1', '/tyrohealth/invoice', [
       'methods' => 'POST',
       'callback' => [TyroController::class, 'createInvoice'],
-      'permission_callback' => '__return_true', // TODO: protect with nonce/auth
+      'permission_callback' => [$guard, 'allowPublicMutation'],
     ]);
+
+        // New attempt-based booking flow
+        register_rest_route('v2', '/booking-attempts/preflight', [
+            'methods' => 'POST',
+            'callback' => [$bookingAttemptController, 'preflight'],
+            'permission_callback' => [$guard, 'allowPublicMutation'],
+        ]);
+
+        register_rest_route('v2', '/booking-attempts/charge-stripe', [
+            'methods' => 'POST',
+            'callback' => [$bookingAttemptController, 'chargeStripe'],
+            'permission_callback' => [$guard, 'allowAttemptMutation'],
+        ]);
+
+        register_rest_route('v2', '/booking-attempts/confirm-tyro', [
+            'methods' => 'POST',
+            'callback' => [$bookingAttemptController, 'confirmTyro'],
+            'permission_callback' => [$guard, 'allowAttemptMutation'],
+        ]);
+
+        register_rest_route('v2', '/booking-attempts/finalize', [
+            'methods' => 'POST',
+            'callback' => [$bookingAttemptController, 'finalize'],
+            'permission_callback' => [$guard, 'allowAttemptMutation'],
+        ]);
+
+        register_rest_route('v2', '/booking-attempts/status', [
+            'methods' => 'GET',
+            'callback' => [$bookingAttemptController, 'status'],
+            'permission_callback' => [$guard, 'allowAttemptMutation'],
+        ]);
     }
 }

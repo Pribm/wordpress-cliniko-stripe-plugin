@@ -610,6 +610,38 @@ namespace {
         assert_same('requested_by_customer', $refund['reason'], 'Refund reason mismatch');
     }
 
+    function test_worker_patient_form_failure_is_not_reported_as_success(): void
+    {
+        $GLOBALS['__patient_form_should_fail'] = true;
+
+        $args = [
+            'moduleId' => '123',
+            'patient_form_template_id' => '999',
+            'payment_reference' => null,
+            'amount' => 0,
+            'currency' => 'aud',
+            'appointment_label' => 'Consult',
+            'patient' => [
+                'first_name' => 'John',
+                'last_name' => 'Doe',
+                'email' => 'john@example.com',
+                'practitioner_id' => 'practitioner_1',
+                'appointment_start' => '2026-02-20T03:00:00Z',
+            ],
+            'content' => [
+                'sections' => [],
+            ],
+        ];
+
+        ClinikoSchedulingWorker::handle($args);
+
+        assert_same(0, count(NotificationService::$successCalls), 'Patient form failure must not send success notification');
+        assert_same(1, count(NotificationService::$failureCalls), 'Patient form failure should send one failure notification');
+        assert_same(0, count(StripeService::$refunds), 'Free flow should not create refunds');
+        assert_same(1, count(IndividualAppointment::$createdPayloads), 'Appointment may already exist when form attach fails');
+        assert_same(1, count(PatientForm::$createdDtos), 'Patient form creation should have been attempted');
+    }
+
     function test_worker_mutex_prevents_duplicate_processing_for_same_lock_source(): void
     {
         $args = [
@@ -657,6 +689,7 @@ namespace {
     $tests = [
         'worker_free_success_path_sends_success_notification' => 'test_worker_free_success_path_sends_success_notification',
         'worker_paid_failure_triggers_refund_and_failure_notification' => 'test_worker_paid_failure_triggers_refund_and_failure_notification',
+        'worker_patient_form_failure_is_not_reported_as_success' => 'test_worker_patient_form_failure_is_not_reported_as_success',
         'worker_mutex_prevents_duplicate_processing_for_same_lock_source' => 'test_worker_mutex_prevents_duplicate_processing_for_same_lock_source',
     ];
 

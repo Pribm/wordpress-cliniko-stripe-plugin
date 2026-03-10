@@ -9,6 +9,7 @@ class CreatePatientFormDTO
     public bool $completed = false;
 
     public ?string $name = null;
+    /** @deprecated Cliniko patient-form linkage should use attendee_id. */
     public ?string $appointment_id = null;
 
     public bool $email_to_patient_on_completion = false;
@@ -32,10 +33,6 @@ class CreatePatientFormDTO
 
         if (!empty($this->attendee_id)) {
             $payload['attendee_id'] = $this->attendee_id;
-        }
-
-        if (!empty($this->appointment_id)) {
-            $payload['appointment_id'] = $this->appointment_id;
         }
 
         return $payload;

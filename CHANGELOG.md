@@ -1,3 +1,22 @@
+## [1.6.0] - 2026-03-10
+### Added
+- Backend-owned booking-attempt flow with dedicated preflight, payment confirmation, finalize, and status endpoints.
+- Draft patient-form creation during preflight, plus abandoned-attempt cleanup for orphan Cliniko records.
+- Public request and attempt token guards for booking reads/writes, with same-origin checks and rate limiting.
+- Live Cliniko integration coverage for the new booking-attempt flow and new request-guard/booking-attempt test coverage.
+
+### Changed
+- Custom-form Stripe and Tyro flows now preflight, verify payment, and finalize booking through the booking-attempt pipeline instead of relying on the legacy async scheduling path.
+- Widget/frontend assets now use the plugin release version for cache busting.
+- Headless/custom-form feedback now polls booking status and surfaces staged progress during booking completion.
+- Headless/test-shell support now mirrors the new booking-attempt contract and request-token protected read endpoints.
+
+### Fixed
+- Patient-form attach failures no longer report success when the appointment exists but the Cliniko form was not linked.
+- Optional free-text answers are normalized before Cliniko submission so empty values do not trigger Cliniko validation failures.
+- Conditional hidden answers are cleared from headless submission state to prevent stale payload data.
+- Preflight error responses now expose structured Cliniko validation details without dumping raw HTML error pages to the frontend.
+
 ## [1.5.4] - 2026-02-13
 ### Changed
 - Calendar month/day availability summary now always comes directly from Cliniko API (backend summary transient path removed).

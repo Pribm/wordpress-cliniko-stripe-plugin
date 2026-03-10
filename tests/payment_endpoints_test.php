@@ -258,6 +258,14 @@ final class FakeApiClient implements ApiClientInterface
     {
         return new ClientResponse(null, 'Not implemented in tests');
     }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    public function patch(string $url, array $data): ClientResponse
+    {
+        return new ClientResponse(null, 'Not implemented in tests');
+    }
 }
 
 if (!function_exists('cliniko_client')) {
