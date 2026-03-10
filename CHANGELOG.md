@@ -1,3 +1,8 @@
+## [1.6.2] - 2026-03-10
+### Fixed
+- Custom-form payment progress now stays monotonic while the booking-attempt status polling catches up with payment and finalize updates.
+- Stripe and Tyro payment overlays now reuse and reset shared loader state correctly, avoiding backward progress jumps during checkout.
+
 ## [1.6.1] - 2026-03-10
 ### Fixed
 - Cleaned up PHPStan/GrumPHP issues across DTOs, request guarding, Cliniko workers, and booking helpers so the repository passes the current pre-commit static-analysis hook again.

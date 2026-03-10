@@ -42,6 +42,10 @@
   }
   function hideLoader() {
     try {
+      if (typeof window.hidePaymentLoader === "function") {
+        window.hidePaymentLoader();
+        return;
+      }
       if (window.jQuery?.LoadingOverlay) window.jQuery.LoadingOverlay("hide");
     } catch (_) {}
   }
