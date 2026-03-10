@@ -221,19 +221,15 @@ class PublicRequestGuard
      */
     private function readHeader(WP_REST_Request $request, string $key)
     {
-        if (method_exists($request, 'get_header')) {
-            $value = $request->get_header($key);
-            if ($value !== null) {
-                return $value;
-            }
+        $value = $request->get_header($key);
+        if ($value !== null) {
+            return $value;
         }
 
-        if (method_exists($request, 'get_headers')) {
-            $headers = $request->get_headers();
-            foreach ($headers as $headerKey => $value) {
-                if (strcasecmp((string) $headerKey, $key) === 0) {
-                    return is_array($value) ? ($value[0] ?? null) : $value;
-                }
+        $headers = $request->get_headers();
+        foreach ($headers as $headerKey => $headerValue) {
+            if (strcasecmp((string) $headerKey, $key) === 0) {
+                return is_array($headerValue) ? $headerValue[0] : $headerValue;
             }
         }
 
@@ -250,7 +246,7 @@ class PublicRequestGuard
 
         if (is_string($ip) && strpos($ip, ',') !== false) {
             $parts = explode(',', $ip);
-            $ip = trim((string) ($parts[0] ?? 'unknown'));
+            $ip = trim($parts[0]);
         }
 
         $ua = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
@@ -299,7 +295,7 @@ class PublicRequestGuard
     private static function signPayload(array $payload): string
     {
         $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
-        if (!is_string($json) || $json === '') {
+        if (!is_string($json)) {
             return '';
         }
 

@@ -324,13 +324,8 @@ class ClinikoSchedulingWorker
                 $update = [
                     'status'     => 'succeeded',
                     'updated_at' => $now,
+                    'patient_form_id' => (string) $pf->getId(),
                 ];
-                if ($pf) {
-                    $update['patient_form_id'] = (string) $pf->getId();
-                }
-                if (!empty($patientFormError)) {
-                    $update['error_message'] = $patientFormError;
-                }
 
                 $wpdb->update($table, $update, ['payment_reference' => $paymentRef]);
             }

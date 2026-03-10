@@ -160,10 +160,7 @@ class Booking extends AbstractModel
         if (isset($data['attendees']) && is_array($data['attendees'])) {
             $items = $data['attendees'];
         }
-        // Fallback if your client returns a raw list
-        elseif (is_array($data) && array_is_list($data)) {
-            $items = $data;
-        } else {
+        else {
             $items = [];
         }
 

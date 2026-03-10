@@ -32,7 +32,7 @@ class ClinikoPatientFormWorker
      */
     public static function handle(array $args): void
     {
-        $payloadKey = $args['payload_key'] ?? null;
+        $payloadKey = $args['payload_key'];
         if (!$payloadKey) {
             error_log('[ClinikoPatientFormWorker] Missing payload_key.');
             return;
@@ -161,7 +161,9 @@ class ClinikoPatientFormWorker
                         'appointment_label' => 'Patient Form',
                     ],
                     [
-                        'first_name' => "{$stored['patient']['first_name']} {$stored['patient']['last_name']}" ?? 'Unknown',
+                        'first_name' => trim(
+                            (string) ($stored['patient']['first_name'] ?? '') . ' ' . (string) ($stored['patient']['last_name'] ?? '')
+                        ) ?: 'Unknown',
                         'email' => $stored['patient']['email'] ?? '',
                     ],
                     'PF-' . ($stored['patient']['first_name'] ?? uniqid()),

@@ -104,8 +104,8 @@ class AttendeeDTO
             ? new LinkedResource($data['links']['self']) : null;
     }
 
-    public static function fromArray(array $data): static
+    public static function fromArray(array $data): self
     {
-        return new static($data);
+        return new self($data);
     }
 }

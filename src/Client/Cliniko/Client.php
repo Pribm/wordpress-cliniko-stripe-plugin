@@ -181,7 +181,7 @@ class Client implements ApiClientInterface
                 $parts[] = $data['message'];
             } elseif (isset($data['errors'])) {
                 $encoded = json_encode($data['errors'], JSON_UNESCAPED_SLASHES);
-                if (is_string($encoded) && $encoded !== '') {
+                if (is_string($encoded)) {
                     $parts[] = $encoded;
                 }
             }
