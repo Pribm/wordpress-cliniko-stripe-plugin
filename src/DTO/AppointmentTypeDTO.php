@@ -4,7 +4,6 @@ namespace App\DTO;
 class AppointmentTypeDTO
 {
     public function __construct(
-        public ?string $id = null,
         public string $name,
         public string $description,
         public string $category,
@@ -21,13 +20,13 @@ class AppointmentTypeDTO
         public ?int $maxAttendees = null,
         public ?string $billableItemUrl = null,
         public ?string $practitionersUrl = null,
-         public ?string $billableItemsUrl = null
+        public ?string $billableItemsUrl = null,
+        public ?string $id = null
     ) {}
 
     public static function fromArray(array $data): self
     {
         return new self(
-            $data['id'] ?? null,
             $data['name'] ?? '',
             $data['description'] ?? '',
             $data['category'] ?? '',
@@ -45,6 +44,7 @@ class AppointmentTypeDTO
             $data['billable_item']['links']['self'] ?? null,
             $data['practitioners']['links']['self'] ?? null,
             $data['appointment_type_billable_items']['links']['self'] ?? null,
+            $data['id'] ?? null,
         );
     }
 }

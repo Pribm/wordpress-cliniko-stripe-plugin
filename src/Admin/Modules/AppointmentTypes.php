@@ -53,7 +53,7 @@ class AppointmentTypes
                     <?php else: ?>
                         <?php foreach ($modules as $id => $mod): ?>
                             <tr>
-                                <td><?php echo esc_html($id); ?></td>
+                                <td><?php echo esc_html((string) $id); ?></td>
                                 <td><?php echo esc_html($mod->getName()); ?></td>
                                 <td><?php echo esc_html((string) $mod->getDurationInMinutes()); ?></td>
                                 <td><?php echo esc_html((string) $mod->getBillableItemsFinalPrice()); ?></td>

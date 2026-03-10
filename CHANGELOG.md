@@ -1,3 +1,8 @@
+## [1.6.1] - 2026-03-10
+### Fixed
+- Cleaned up PHPStan/GrumPHP issues across DTOs, request guarding, Cliniko workers, and booking helpers so the repository passes the current pre-commit static-analysis hook again.
+- Tightened minor type handling in admin and Cliniko client code without changing booking behavior.
+
 ## [1.6.0] - 2026-03-10
 ### Added
 - Backend-owned booking-attempt flow with dedicated preflight, payment confirmation, finalize, and status endpoints.
