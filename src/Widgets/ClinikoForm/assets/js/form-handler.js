@@ -106,13 +106,18 @@ function initHeadlessCalendarHelpers() {
   if (!isHeadless) return;
 
   const endpoints = {
+    appointmentType: formHandlerData?.appointment_type_url,
+    patientFormTemplate: formHandlerData?.patient_form_template_url,
     practitioners: formHandlerData?.practitioners_url,
     calendar: formHandlerData?.appointment_calendar_url,
     availableTimes: formHandlerData?.available_times_url,
     nextAvailableTimes: formHandlerData?.next_available_times_url,
   };
 
-  const defaultAppointmentTypeId = formHandlerData?.module_id || "";
+  let currentAppointmentTypeId = String(formHandlerData?.module_id || "").trim();
+  let currentPatientFormTemplateId = String(
+    formHandlerData?.patient_form_template_id || ""
+  ).trim();
   const defaultPerPage = Math.min(
     100,
     Math.max(1, Number(formHandlerData?.available_times_per_page || 100))
@@ -153,6 +158,164 @@ const fetchJson = async (url) => {
     return data?.data ?? data ?? {};
   };
 
+  const cloneJson = (value, fallback = null) => {
+    if (value === undefined) return fallback;
+    if (value === null) return null;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return fallback;
+    }
+  };
+
+  const clearCalendarCache = () => {
+    cacheStore.values.clear();
+    cacheStore.pending.clear();
+  };
+
+  const mergePatientWithSkeleton = (targetPatient, patientSkeleton) => {
+    const base = patientSkeleton && typeof patientSkeleton === "object"
+      ? cloneJson(patientSkeleton, {})
+      : {};
+    const current = targetPatient && typeof targetPatient === "object"
+      ? cloneJson(targetPatient, {})
+      : {};
+    return { ...base, ...current };
+  };
+
+  const normalizeSectionsForSubmissionTemplate = (rawSections) => {
+    if (!Array.isArray(rawSections)) return [];
+    return rawSections
+      .map((section) => {
+        const sectionName = String(section?.name || "");
+        const sectionDescription = String(section?.description || "");
+        const rawQuestions = Array.isArray(section?.questions)
+          ? section.questions
+          : [];
+
+        const questions = rawQuestions
+          .map((q) => {
+            const type = String(q?.type || "text");
+            if (type === "signature") return null;
+
+            const out = {
+              name: String(q?.name || ""),
+              type,
+              required: !!q?.required,
+            };
+
+            const otherEnabled = !!q?.other?.enabled;
+            if (type === "checkboxes" || type === "radiobuttons") {
+              const answers = (Array.isArray(q?.answers) ? q.answers : [])
+                .map((opt) => ({ value: String(opt?.value || "") }))
+                .filter((opt) => opt.value !== "");
+
+              if (answers.length === 0 && !otherEnabled) {
+                return null;
+              }
+
+              out.answers = answers;
+              if (otherEnabled) {
+                out.other = { enabled: true, selected: false, value: "" };
+              }
+            } else {
+              out.answer = "";
+            }
+
+            return out;
+          })
+          .filter(Boolean);
+
+        if (!questions.length) return null;
+        return {
+          name: sectionName,
+          description: sectionDescription,
+          questions,
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const buildSubmissionTemplateFromSections = (sections) => {
+    const basePatient =
+      formHandlerData?.submission_template?.patient &&
+      typeof formHandlerData.submission_template.patient === "object"
+        ? cloneJson(formHandlerData.submission_template.patient, {})
+        : {
+            first_name: "",
+            last_name: "",
+            email: "",
+            phone: "",
+            medicare: "",
+            medicare_reference_number: "",
+            address_1: "",
+            address_2: "",
+            city: "",
+            state: "",
+            post_code: "",
+            country: "",
+            date_of_birth: "",
+            appointment_start: "",
+            practitioner_id: "",
+          };
+
+    return {
+      patient: basePatient,
+      content: {
+        sections: normalizeSectionsForSubmissionTemplate(sections),
+      },
+    };
+  };
+
+  const updateHeadlessScripts = (sections, submissionTemplate, templateId) => {
+    const root =
+      document.querySelector(".cliniko-form-headless[data-cliniko-headless='1']") ||
+      document.querySelector(".cliniko-form-headless");
+    if (root && templateId) {
+      root.setAttribute("data-form-template-id", String(templateId));
+    }
+
+    const templateNode =
+      root?.querySelector(".cliniko-form-template-json") ||
+      document.querySelector(".cliniko-form-template-json");
+    if (templateNode) {
+      templateNode.textContent = JSON.stringify(sections || []);
+    }
+
+    const submissionNode =
+      root?.querySelector(".cliniko-form-submission-template-json") ||
+      document.querySelector(".cliniko-form-submission-template-json");
+    if (submissionNode) {
+      submissionNode.textContent = JSON.stringify(submissionTemplate || {});
+    }
+  };
+
+  const updatePaymentSummary = (appointmentTypeData) => {
+    if (!appointmentTypeData || typeof appointmentTypeData !== "object") return false;
+
+    const nameEl = document.getElementById("summary-name");
+    if (nameEl) {
+      nameEl.textContent = String(appointmentTypeData.name || "");
+    }
+
+    const descriptionEl = document.getElementById("summary-description");
+    if (descriptionEl) {
+      descriptionEl.textContent = String(appointmentTypeData.description || "");
+    }
+
+    const priceEl = document.getElementById("summary-price");
+    if (priceEl) {
+      const cents = Number(appointmentTypeData.amount_cents);
+      if (Number.isFinite(cents) && cents >= 0) {
+        priceEl.textContent = (cents / 100).toFixed(2);
+      } else if (appointmentTypeData.amount !== undefined && appointmentTypeData.amount !== null) {
+        priceEl.textContent = String(appointmentTypeData.amount);
+      }
+    }
+
+    return true;
+  };
+
   const ensureHeadlessPayload = () => {
     if (typeof window.clinikoGetHeadlessPayload === "function") {
       return null;
@@ -186,6 +349,132 @@ const fetchJson = async (url) => {
     return true;
   };
 
+  const updateAppointmentType = async (
+    appointmentTypeId,
+    updatePaymentStep = true
+  ) => {
+    const id = String(appointmentTypeId || "").trim();
+    if (!id) {
+      throw new Error("appointmentTypeId is required.");
+    }
+
+    let appointmentTypeData = null;
+    if (endpoints.appointmentType) {
+      appointmentTypeData = await fetchJson(
+        buildUrl(endpoints.appointmentType, { appointment_type_id: id })
+      );
+    }
+
+    const previousId = currentAppointmentTypeId;
+    currentAppointmentTypeId = id;
+    formHandlerData.module_id = id;
+
+    if (
+      formHandlerData.submission_template &&
+      typeof formHandlerData.submission_template === "object"
+    ) {
+      formHandlerData.submission_template.moduleId = id;
+    }
+
+    const payload = ensureHeadlessPayload();
+    if (payload) {
+      payload.moduleId = id;
+      if (previousId !== id && payload.patient && typeof payload.patient === "object") {
+        payload.patient.practitioner_id = "";
+        payload.patient.appointment_start = "";
+      }
+    }
+
+    clearCalendarCache();
+    if (previousId !== id) {
+      updateHeadlessPatient({ practitioner_id: "", appointment_start: "" });
+    }
+
+    if (typeof window.clinikoResetTyroAttempt === "function") {
+      window.clinikoResetTyroAttempt();
+    }
+
+    if (updatePaymentStep) {
+      updatePaymentSummary(appointmentTypeData);
+    }
+
+    let practitioners = [];
+    try {
+      practitioners = await fetchPractitioners({ appointmentTypeId: id });
+    } catch (_) {
+      practitioners = [];
+    }
+
+    return {
+      module_id: id,
+      appointment_type: appointmentTypeData,
+      practitioners: Array.isArray(practitioners) ? practitioners : [],
+      payment: appointmentTypeData
+        ? {
+            amount_cents: Number(appointmentTypeData.amount_cents || 0),
+            amount: String(appointmentTypeData.amount ?? ""),
+            currency: String(appointmentTypeData.currency || "aud"),
+            required: !!appointmentTypeData.payment_required,
+          }
+        : null,
+    };
+  };
+
+  const updateFormtemplate = async (templateId) => {
+    const id = String(templateId || "").trim();
+    if (!id) {
+      throw new Error("templateId is required.");
+    }
+    if (!endpoints.patientFormTemplate) {
+      throw new Error("Patient form template endpoint not configured.");
+    }
+
+    const templateData = await fetchJson(
+      buildUrl(endpoints.patientFormTemplate, {
+        patient_form_template_id: id,
+      })
+    );
+
+    const sections = Array.isArray(templateData?.sections)
+      ? cloneJson(templateData.sections, [])
+      : [];
+    const submissionTemplate =
+      templateData?.submission_template &&
+      typeof templateData.submission_template === "object"
+        ? cloneJson(templateData.submission_template, {})
+        : buildSubmissionTemplateFromSections(sections);
+
+    submissionTemplate.moduleId = String(formHandlerData?.module_id || currentAppointmentTypeId || "");
+    submissionTemplate.patient_form_template_id = id;
+
+    const previousTemplateId = currentPatientFormTemplateId;
+    currentPatientFormTemplateId = id;
+    formHandlerData.patient_form_template_id = id;
+    formHandlerData.sections = sections;
+    formHandlerData.submission_template = submissionTemplate;
+
+    updateHeadlessScripts(sections, submissionTemplate, id);
+
+    const payload = ensureHeadlessPayload();
+    if (payload) {
+      payload.patient_form_template_id = id;
+      payload.content = cloneJson(submissionTemplate.content, { sections: [] });
+      payload.patient = mergePatientWithSkeleton(
+        payload.patient,
+        submissionTemplate.patient
+      );
+    }
+
+    return {
+      patient_form_template_id: id,
+      name: String(templateData?.name || ""),
+      sections,
+      submission_template: submissionTemplate,
+      module_id: String(formHandlerData?.module_id || currentAppointmentTypeId || ""),
+      previous_patient_form_template_id: previousTemplateId,
+    };
+  };
+
   const getMonthKeyFromDate = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -216,7 +505,7 @@ const fetchJson = async (url) => {
   };
 
   const fetchPractitioners = async ({ appointmentTypeId } = {}) => {
-    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const id = appointmentTypeId || currentAppointmentTypeId;
     const cacheKey = `cliniko:practitioners:${id}`;
     const cached = readCalendarCacheValue(cacheStore, cacheKey);
     if (cached) {
@@ -233,7 +522,7 @@ const fetchJson = async (url) => {
   };
 
   const fetchCalendar = async ({ appointmentTypeId, practitionerId, monthKey } = {}) => {
-    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const id = appointmentTypeId || currentAppointmentTypeId;
     const practitioner = practitionerId || "";
     const month = monthKey || "";
     const cacheKey = `cliniko:calendar:${id}:${practitioner}:${month}`;
@@ -260,7 +549,7 @@ const fetchJson = async (url) => {
     monthKey,
     monthsAhead = 1,
   } = {}) => {
-    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const id = appointmentTypeId || currentAppointmentTypeId;
     const practitioner = practitionerId || "";
     let cursor = monthKey || getMonthKeyFromDate(new Date());
 
@@ -298,7 +587,7 @@ const fetchJson = async (url) => {
     perPage,
     page,
   } = {}) => {
-    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const id = appointmentTypeId || currentAppointmentTypeId;
     const practitioner = practitionerId || "";
     const fromDate = from || "";
     const toDate = to || "";
@@ -379,7 +668,7 @@ const fetchJson = async (url) => {
     includeUnavailable = true,
     refreshPractitioners = false,
   } = {}) => {
-    const id = appointmentTypeId || defaultAppointmentTypeId;
+    const id = appointmentTypeId || currentAppointmentTypeId;
     if (!id) throw new Error("Appointment type not configured.");
     if (!endpoints.nextAvailableTimes) {
       throw new Error("Next available times endpoint not configured.");
@@ -496,6 +785,9 @@ const fetchJson = async (url) => {
     fetchAllTimesForDate,
     fetchNextAvailableTimes,
     updateHeadlessPatient,
+    updateFormtemplate,
+    updateFormTemplate: updateFormtemplate,
+    updateAppointmentType,
   };
 }
 
