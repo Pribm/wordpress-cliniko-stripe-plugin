@@ -55,6 +55,18 @@ class ApiRoutes
             'permission_callback' => [$guard, 'allowPublicRead'],
         ]);
 
+        register_rest_route('v1', '/appointment-type', [
+            'methods' => 'GET',
+            'callback' => [$clinikoController, 'getAppointmentTypeDetails'],
+            'permission_callback' => [$guard, 'allowPublicRead'],
+        ]);
+
+        register_rest_route('v1', '/patient-form-template', [
+            'methods' => 'GET',
+            'callback' => [$clinikoController, 'getPatientFormTemplate'],
+            'permission_callback' => [$guard, 'allowPublicRead'],
+        ]);
+
         register_rest_route('v1', '/appointment-calendar', [
             'methods' => 'GET',
             'callback' => [$clinikoController, 'getAppointmentCalendar'],

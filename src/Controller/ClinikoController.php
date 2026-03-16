@@ -4,6 +4,7 @@ namespace App\Controller;
 use App\Infra\JobDispatcher;
 use App\Model\AppointmentType;
 use App\Model\AvailableTimes;
+use App\Model\PatientFormTemplate;
 use App\Service\ClinikoService;
 use App\Service\PatientFormPayloadSanitizer;
 use App\Validator\PatientFormValidator;
@@ -72,6 +73,103 @@ class ClinikoController
                 'status' => 'queued',
             ],
         ], 202);
+    }
+
+    public function getAppointmentTypeDetails(WP_REST_Request $request): WP_REST_Response
+    {
+        $appointmentTypeId = sanitize_text_field((string) (
+            $this->requestParam($request, 'appointment_type_id')
+            ?? $this->requestParam($request, 'module_id')
+            ?? $this->requestParam($request, 'moduleId')
+        ));
+        $refreshParam = strtolower(trim((string) $this->requestParam($request, 'refresh')));
+        $forceRefresh = in_array($refreshParam, ['1', 'true', 'yes'], true);
+
+        if (empty($appointmentTypeId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Missing required field: appointment_type_id.',
+            ], 422);
+        }
+
+        if (!preg_match('/^\d+$/', $appointmentTypeId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Invalid appointment type ID. Expected a numeric Cliniko ID.',
+            ], 422);
+        }
+
+        $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(!$forceRefresh));
+        if (!$appointmentType) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Appointment type not found.',
+            ], 404);
+        }
+
+        $priceCents = (int) $appointmentType->getBillableItemsFinalPrice();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'appointment_type_id' => (string) $appointmentType->getId(),
+                'name' => (string) $appointmentType->getName(),
+                'description' => (string) $appointmentType->getDescription(),
+                'duration_in_minutes' => (int) $appointmentType->getDurationInMinutes(),
+                'amount_cents' => $priceCents,
+                'amount' => number_format($priceCents / 100, 2, '.', ''),
+                'currency' => 'aud',
+                'payment_required' => $priceCents > 0,
+            ],
+        ], 200);
+    }
+
+    public function getPatientFormTemplate(WP_REST_Request $request): WP_REST_Response
+    {
+        $templateId = sanitize_text_field((string) (
+            $this->requestParam($request, 'patient_form_template_id')
+            ?? $this->requestParam($request, 'template_id')
+            ?? $this->requestParam($request, 'id')
+        ));
+        $refreshParam = strtolower(trim((string) $this->requestParam($request, 'refresh')));
+        $forceRefresh = in_array($refreshParam, ['1', 'true', 'yes'], true);
+
+        if (empty($templateId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Missing required field: patient_form_template_id.',
+            ], 422);
+        }
+
+        if (!preg_match('/^\d+$/', $templateId)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Invalid patient form template ID. Expected a numeric Cliniko ID.',
+            ], 422);
+        }
+
+        $template = PatientFormTemplate::find($templateId, cliniko_client(!$forceRefresh));
+        if (!$template) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Patient form template not found.',
+            ], 404);
+        }
+
+        $sections = $this->normalizeTemplateSections($template->getSections());
+        $submissionTemplate = $this->buildSubmissionTemplate($sections);
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'patient_form_template_id' => (string) $template->getId(),
+                'name' => (string) $template->getName(),
+                'email_to_patient_on_completion' => (bool) $template->isEmailToPatientOnCompletion(),
+                'restricted_to_practitioner' => (bool) $template->isRestrictedToPractitioner(),
+                'sections' => $sections,
+                'submission_template' => $submissionTemplate,
+            ],
+        ], 200);
     }
 
     public function getAvailableTimes(WP_REST_Request $request): WP_REST_Response
@@ -543,6 +641,194 @@ class ClinikoController
         $response->header('Expires', '0');
 
         return $response;
+    }
+
+    /**
+     * @param mixed $sections
+     * @return array<int,array<string,mixed>>
+     */
+    private function normalizeTemplateSections($sections): array
+    {
+        if (!is_array($sections)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($sections as $section) {
+            $sectionName = (string) ($this->readProp($section, 'name', '') ?? '');
+            $sectionDescription = (string) ($this->readProp($section, 'description', '') ?? '');
+            $rawQuestions = $this->readProp($section, 'questions', []);
+            if (!is_array($rawQuestions)) {
+                $rawQuestions = [];
+            }
+
+            $questions = [];
+            foreach ($rawQuestions as $question) {
+                $qType = (string) ($this->readProp($question, 'type', 'text') ?? 'text');
+                $qName = (string) ($this->readProp($question, 'name', '') ?? '');
+                $qRequired = (bool) $this->readProp($question, 'required', false);
+
+                $entry = [
+                    'name' => $qName,
+                    'type' => $qType,
+                    'required' => $qRequired,
+                ];
+
+                $rawAnswers = $this->readProp($question, 'answers', []);
+                if (is_array($rawAnswers)) {
+                    $answers = [];
+                    foreach ($rawAnswers as $answer) {
+                        $value = $this->readProp($answer, 'value', null);
+                        if ($value === null || $value === '') {
+                            continue;
+                        }
+                        $answers[] = ['value' => $value];
+                    }
+                    if (!empty($answers)) {
+                        $entry['answers'] = $answers;
+                    }
+                }
+
+                $rawOther = $this->readProp($question, 'other', null);
+                $otherEnabled = (bool) $this->readProp($rawOther, 'enabled', false);
+                if ($otherEnabled) {
+                    $entry['other'] = ['enabled' => true];
+                }
+
+                $questions[] = $entry;
+            }
+
+            $normalized[] = [
+                'name' => $sectionName,
+                'description' => $sectionDescription,
+                'questions' => $questions,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $sections
+     * @return array<string,mixed>
+     */
+    private function buildSubmissionTemplate(array $sections): array
+    {
+        $outputSections = [];
+
+        foreach ($sections as $section) {
+            $sectionName = (string) ($this->readProp($section, 'name', '') ?? '');
+            $sectionDescription = (string) ($this->readProp($section, 'description', '') ?? '');
+
+            $rawQuestions = $this->readProp($section, 'questions', []);
+            if (!is_array($rawQuestions)) {
+                $rawQuestions = [];
+            }
+
+            $questions = [];
+            foreach ($rawQuestions as $q) {
+                $type = (string) ($this->readProp($q, 'type', 'text') ?? 'text');
+                if ($type === 'signature') {
+                    continue;
+                }
+
+                $question = [
+                    'name' => (string) ($this->readProp($q, 'name', '') ?? ''),
+                    'type' => $type,
+                    'required' => (bool) $this->readProp($q, 'required', false),
+                ];
+
+                $rawAnswers = $this->readProp($q, 'answers', []);
+                if (!is_array($rawAnswers)) {
+                    $rawAnswers = [];
+                }
+
+                $rawOther = $this->readProp($q, 'other', null);
+                $otherEnabled = (bool) $this->readProp($rawOther, 'enabled', false);
+
+                if (in_array($type, ['checkboxes', 'radiobuttons'], true)) {
+                    $answers = [];
+                    foreach ($rawAnswers as $opt) {
+                        $value = $this->readProp($opt, 'value', null);
+                        if ($value === null || $value === '') {
+                            continue;
+                        }
+                        $answers[] = ['value' => $value];
+                    }
+
+                    if (count($answers) === 0 && !$otherEnabled) {
+                        continue;
+                    }
+
+                    $question['answers'] = $answers;
+                    if ($otherEnabled) {
+                        $question['other'] = ['enabled' => true, 'selected' => false, 'value' => ''];
+                    }
+                } else {
+                    $question['answer'] = '';
+                }
+
+                $questions[] = $question;
+            }
+
+            if (count($questions) === 0) {
+                continue;
+            }
+
+            $outputSections[] = [
+                'name' => $sectionName,
+                'description' => $sectionDescription,
+                'questions' => $questions,
+            ];
+        }
+
+        return [
+            'patient' => $this->buildPatientSkeleton(),
+            'content' => [
+                'sections' => $outputSections,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function buildPatientSkeleton(): array
+    {
+        return [
+            'first_name' => '',
+            'last_name' => '',
+            'email' => '',
+            'phone' => '',
+            'medicare' => '',
+            'medicare_reference_number' => '',
+            'address_1' => '',
+            'address_2' => '',
+            'city' => '',
+            'state' => '',
+            'post_code' => '',
+            'country' => '',
+            'date_of_birth' => '',
+            'appointment_start' => '',
+            'practitioner_id' => '',
+        ];
+    }
+
+    /**
+     * @param mixed $source
+     * @param mixed $default
+     * @return mixed
+     */
+    private function readProp($source, string $key, $default = null)
+    {
+        if (is_array($source)) {
+            return array_key_exists($key, $source) ? $source[$key] : $default;
+        }
+        if (is_object($source) && isset($source->{$key})) {
+            return $source->{$key};
+        }
+        return $default;
     }
 
     /**

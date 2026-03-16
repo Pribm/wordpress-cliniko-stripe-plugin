@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.6.2`
+- Current plugin version: `1.6.3`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,9 +14,12 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.6.2
-- Fixed the custom-form payment loader so booking progress only moves forward during payment, finalize, and status polling.
-- Reused the latest loader state across Stripe and Tyro overlay refreshes so the widget does not visually jump backward mid-checkout.
+## What Is New in 1.6.3
+- Added headless runtime helpers `updateFormtemplate(templateId)`/`updateFormTemplate(templateId)` and `updateAppointmentType(appointmentTypeId, updatePaymentStep = true)` for safe on-the-fly form and appointment swaps.
+- Added dynamic read endpoints for headless mode:
+  - `GET /wp-json/v1/appointment-type`
+  - `GET /wp-json/v1/patient-form-template`
+- Added `window.clinikoResetTyroAttempt()` for Tyro flows that need a clean attempt/payment context after dynamic appointment switches.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
@@ -103,6 +106,9 @@ Headless calendar (build your own UI):
 - Helper: `window.ClinikoHeadlessCalendar` (available only in headless mode).
 - Defaults: if you omit `appointmentTypeId`, it falls back to `formHandlerData.module_id`.
 - Date format: use `YYYY-MM-DD` for `dateKey`, `from`, and `to`.
+- Dynamic updates:
+  - `updateFormtemplate(templateId)` loads a new patient form template from backend, updates `formHandlerData.sections`, and returns the fresh template object.
+  - `updateAppointmentType(appointmentTypeId, updatePaymentStep = true)` loads appointment-type details, updates `formHandlerData.module_id`, refreshes payment summary values, and returns the fresh appointment object.
 
 How to submit:
 1. Build a payload with `patient` and `content` from your UI.
@@ -212,10 +218,15 @@ Content schema notes:
 - `signature` questions are not allowed in payloads.
 
 ## Headless API Reference
-These are the REST endpoints the headless helpers call. They are registered under the WordPress REST API and are publicly accessible by default.
+These are the REST endpoints the headless helpers call. They are registered under the WordPress REST API and protected by the request-token guard.
 
 Base path:
 `/wp-json/v1`
+
+Auth:
+- Send the request token as query `request_token=<token>` or header `X-ES-Request-Token: <token>`.
+- In widget/headless flows, use `formHandlerData.request_token` (already localized by the widget render).
+- Booking-attempt mutation routes (`/wp-json/v2/booking-attempts/*`) also require the attempt token via `attempt_token` or `X-ES-Attempt-Token`.
 
 Response conventions:
 - Cliniko data endpoints return `{ success: true, data: ... }` on success.
@@ -248,6 +259,44 @@ Example response:
   }
 }
 ```
+
+### GET /appointment-type
+Returns appointment type details and computed payment amount.
+
+Query params:
+- `appointment_type_id` (required). Aliases: `module_id`, `moduleId`.
+- `refresh` (optional). `1|true|yes` bypasses cached Cliniko response.
+
+Example request:
+`GET /wp-json/v1/appointment-type?appointment_type_id=123`
+
+Returns:
+- `success` boolean
+- `data.appointment_type_id` string
+- `data.name` string
+- `data.description` string
+- `data.duration_in_minutes` integer
+- `data.amount_cents` integer
+- `data.amount` string (decimal)
+- `data.currency` string
+- `data.payment_required` boolean
+
+### GET /patient-form-template
+Returns a patient form template (sections) plus a submission-ready skeleton.
+
+Query params:
+- `patient_form_template_id` (required). Aliases: `template_id`, `id`.
+- `refresh` (optional). `1|true|yes` bypasses cached Cliniko response.
+
+Example request:
+`GET /wp-json/v1/patient-form-template?patient_form_template_id=999`
+
+Returns:
+- `success` boolean
+- `data.patient_form_template_id` string
+- `data.name` string
+- `data.sections` array
+- `data.submission_template` object
 
 ### GET /appointment-calendar
 Returns an HTML calendar grid (plus labels) for a given appointment type and optional practitioner.

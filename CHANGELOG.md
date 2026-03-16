@@ -1,3 +1,15 @@
+## [1.6.3] - 2026-03-16
+### Added
+- Headless runtime helpers `updateFormtemplate(templateId)`/`updateFormTemplate(templateId)` and `updateAppointmentType(appointmentTypeId, updatePaymentStep = true)` to swap Cliniko form/template context without reloading the page.
+- New guarded read endpoints for dynamic headless updates:
+  - `GET /wp-json/v1/appointment-type`
+  - `GET /wp-json/v1/patient-form-template`
+- `window.clinikoResetTyroAttempt()` to safely reset Tyro attempt state when appointment/payment context changes at runtime.
+
+### Changed
+- Widget localization now exposes `appointment_type_url` and `patient_form_template_url` so headless helpers can fetch fresh backend data directly.
+- Headless docs now include dynamic-update helpers and request-token guarded API usage guidance.
+
 ## [1.6.2] - 2026-03-10
 ### Fixed
 - Custom-form payment progress now stays monotonic while the booking-attempt status polling catches up with payment and finalize updates.

@@ -207,6 +207,12 @@
   let configured = false;
   let cachedToken = null;
   let cachedAttempt = null;
+  let cachedAttemptModuleId = "";
+
+  window.clinikoResetTyroAttempt = function clinikoResetTyroAttempt() {
+    cachedAttempt = null;
+    cachedAttemptModuleId = "";
+  };
 
   async function getSdkToken() {
     if (cachedToken) return cachedToken;
@@ -275,7 +281,14 @@
   }
 
   async function createBookingAttempt() {
-    if (cachedAttempt?.attempt?.id) return cachedAttempt;
+    const activeModuleId = String(window.formHandlerData?.module_id || "").trim();
+    if (
+      cachedAttempt?.attempt?.id &&
+      cachedAttemptModuleId !== "" &&
+      cachedAttemptModuleId === activeModuleId
+    ) {
+      return cachedAttempt;
+    }
 
     const url = window.TyroHealthData.attempt_preflight_url;
     if (!url) throw new Error("TyroHealthData.attempt_preflight_url missing.");
@@ -286,6 +299,7 @@
     }
 
     cachedAttempt = resp;
+    cachedAttemptModuleId = activeModuleId;
     return cachedAttempt;
   }
 
