@@ -12,14 +12,20 @@ class PublicRequestGuard
 {
     public const REQUEST_TOKEN_HEADER = 'x-es-request-token';
     public const ATTEMPT_TOKEN_HEADER = 'x-es-attempt-token';
+    public const PATIENT_ACCESS_TOKEN_HEADER = 'x-es-patient-access-token';
 
     private const REQUEST_TOKEN_TTL = 172800;
 
     private BookingAttemptStore $store;
+    private PatientAccessTokenService $patientAccessTokens;
 
-    public function __construct(?BookingAttemptStore $store = null)
+    public function __construct(
+        ?BookingAttemptStore $store = null,
+        ?PatientAccessTokenService $patientAccessTokens = null
+    )
     {
         $this->store = $store ?: new BookingAttemptStore();
+        $this->patientAccessTokens = $patientAccessTokens ?: new PatientAccessTokenService();
     }
 
     public static function issueRequestToken(): string
@@ -108,6 +114,54 @@ class PublicRequestGuard
     public function allowPublicRead(WP_REST_Request $request)
     {
         return $this->authorize($request, 'public-read', 180, 600, false);
+    }
+
+    /**
+     * Stateless patient-history link request route.
+     *
+     * @return bool|mixed
+     */
+    public function allowPatientAccessRequest(WP_REST_Request $request)
+    {
+        if (!$this->isSameOriginOrMissing($request)) {
+            return $this->deny('Forbidden origin.');
+        }
+
+        $requestToken = trim((string) $this->readRequestValue(
+            $request,
+            ['request_token'],
+            [self::REQUEST_TOKEN_HEADER]
+        ));
+
+        if (!self::validateRequestToken($requestToken)) {
+            return $this->deny('Invalid or expired booking token. Reload the page and try again.');
+        }
+
+        return true;
+    }
+
+    /**
+     * Stateless patient-history access routes.
+     *
+     * @return bool|mixed
+     */
+    public function allowPatientAccessRead(WP_REST_Request $request)
+    {
+        if (!$this->isSameOriginOrMissing($request)) {
+            return $this->deny('Forbidden origin.');
+        }
+
+        $token = trim((string) $this->readRequestValue(
+            $request,
+            ['patient_access_token', 'access_token'],
+            [self::PATIENT_ACCESS_TOKEN_HEADER]
+        ));
+
+        if ($token === '' || $this->patientAccessTokens->validate($token) === null) {
+            return $this->deny('Invalid or expired patient access token.');
+        }
+
+        return true;
     }
 
     /**

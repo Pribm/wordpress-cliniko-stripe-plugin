@@ -165,6 +165,217 @@ $embedStepIndex    = $patientStepIndex + 1;
 $totalSteps        = $numSectionSteps + 1 + ($showTimeStep ? 1 : 0) + ($hasEmbedStep ? 1 : 0);
 $currentStep       = 1; // your JS can update this as the user navigates
 
+$patientHistoryAccessEnabled =
+  ($settings['appointment_source'] ?? '') === 'custom_form'
+  && (($settings['enable_patient_history_access'] ?? '') === 'yes');
+
+$patientHistoryAccessPlacementMode = (string) ($settings['patient_history_access_placement_mode'] ?? 'first_question');
+if (!in_array($patientHistoryAccessPlacementMode, ['first_question', 'before_specific_question', 'after_specific_question'], true)) {
+  $patientHistoryAccessPlacementMode = 'first_question';
+}
+
+$patientHistoryAccessAnchorQuestion = trim((string) ($settings['patient_history_access_anchor_question'] ?? ''));
+
+$normalizePatientHistoryAnchor = static function (string $value): string {
+  $clean = wp_strip_all_tags($value);
+  $clean = preg_replace('/\s+/', ' ', trim($clean));
+  return strtolower((string) $clean);
+};
+
+$patientHistoryMatchesAnchor = static function (
+  string $sectionName,
+  string $questionName,
+  string $anchorKey
+) use ($normalizePatientHistoryAnchor): bool {
+  if ($anchorKey === '') {
+    return false;
+  }
+
+  $questionKey = $normalizePatientHistoryAnchor($questionName);
+  $sectionKey = $normalizePatientHistoryAnchor($sectionName);
+
+  if ($questionKey === '') {
+    return false;
+  }
+
+  if ($anchorKey === $questionKey) {
+    return true;
+  }
+
+  if ($sectionKey === '') {
+    return false;
+  }
+
+  foreach (['::', '>', '/'] as $separator) {
+    if ($anchorKey === $sectionKey . $separator . $questionKey) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+$patientHistoryResolvedMode = 'first_question';
+$patientHistoryResolvedSection = '';
+$patientHistoryResolvedQuestion = '';
+$patientHistoryAnchorKey = $normalizePatientHistoryAnchor($patientHistoryAccessAnchorQuestion);
+
+if (
+  $patientHistoryAccessEnabled
+  && $patientHistoryAccessPlacementMode !== 'first_question'
+  && $patientHistoryAnchorKey !== ''
+) {
+  foreach ($sections as $sectionCandidate) {
+    $sectionNameCandidate = (string) ($sectionCandidate->name ?? '');
+    foreach (($sectionCandidate->questions ?? []) as $questionCandidate) {
+      $questionNameCandidate = (string) ($questionCandidate->name ?? '');
+      if (!$patientHistoryMatchesAnchor($sectionNameCandidate, $questionNameCandidate, $patientHistoryAnchorKey)) {
+        continue;
+      }
+
+      $patientHistoryResolvedMode = $patientHistoryAccessPlacementMode;
+      $patientHistoryResolvedSection = $normalizePatientHistoryAnchor($sectionNameCandidate);
+      $patientHistoryResolvedQuestion = $normalizePatientHistoryAnchor($questionNameCandidate);
+      break 2;
+    }
+  }
+}
+
+$patientHistoryAccessRendered = false;
+$renderPatientHistoryAccessPanel = static function (): void {
+  ?>
+  <div class="inputGroup es-patient-history-access-slot" data-es-patient-history-access-slot>
+    <div class="es-patient-history-access" data-es-patient-history-access>
+      <div class="es-patient-history-access__header">
+        <h4 class="es-patient-history-access__title">Booked with us before?</h4>
+        <p class="es-patient-history-access__helper" id="es-patient-history-helper">
+          We can load the details from your most recent completed booking.
+        </p>
+      </div>
+
+      <div class="es-patient-history-access__question-actions" id="es-patient-history-question-actions">
+        <button
+          type="button"
+          class="multi-form-button next-button es-patient-history-access__choice"
+          id="es-patient-history-yes"
+        >
+          Yes
+        </button>
+        <button
+          type="button"
+          class="multi-form-button prev-button es-patient-history-access__choice es-patient-history-access__choice--secondary"
+          id="es-patient-history-no"
+        >
+          No
+        </button>
+      </div>
+
+      <div class="es-patient-history-access__input-row is-hidden" id="es-patient-history-email-row">
+        <label class="es-patient-history-access__field" for="es-patient-history-email">
+          <span class="es-patient-history-access__field-label">Email address</span>
+          <input
+            type="email"
+            id="es-patient-history-email"
+            class="es-patient-history-access__field-input"
+            autocomplete="email"
+            placeholder="you@example.com"
+          />
+        </label>
+        <button
+          type="button"
+          class="multi-form-button next-button es-patient-history-access__request"
+          id="es-patient-history-request"
+        >
+          Email me a code
+        </button>
+      </div>
+
+      <div class="es-patient-history-access__input-row is-hidden" id="es-patient-history-code-row">
+        <label class="es-patient-history-access__field" for="es-patient-history-code">
+          <span class="es-patient-history-access__field-label">6-digit code</span>
+          <input
+            type="text"
+            id="es-patient-history-code"
+            class="es-patient-history-access__field-input"
+            inputmode="numeric"
+            maxlength="6"
+            autocomplete="one-time-code"
+            placeholder="123456"
+          />
+        </label>
+        <button
+          type="button"
+          class="multi-form-button next-button es-patient-history-access__request"
+          id="es-patient-history-verify"
+        >
+          Verify code
+        </button>
+      </div>
+
+      <div
+        class="es-patient-history-access__status is-hidden"
+        id="es-patient-history-status"
+        aria-live="polite"
+      ></div>
+
+      <div class="es-patient-history-access__results is-hidden" id="es-patient-history-results">
+        <div class="es-patient-history-access__loading is-hidden" id="es-patient-history-loading">
+          Loading your latest saved details...
+        </div>
+        <div class="es-patient-history-access__list" id="es-patient-history-list"></div>
+        <div class="es-patient-history-access__preview is-hidden" id="es-patient-history-preview"></div>
+      </div>
+    </div>
+  </div>
+  <?php
+};
+
+$renderPatientHistoryAccessForQuestion = static function (
+  string $placement,
+  string $sectionName,
+  string $questionName
+) use (
+  &$patientHistoryAccessRendered,
+  $patientHistoryAccessEnabled,
+  $patientHistoryResolvedMode,
+  $patientHistoryResolvedSection,
+  $patientHistoryResolvedQuestion,
+  $normalizePatientHistoryAnchor,
+  $renderPatientHistoryAccessPanel
+): void {
+  if (!$patientHistoryAccessEnabled || $patientHistoryAccessRendered) {
+    return;
+  }
+
+  if ($patientHistoryResolvedMode === 'first_question') {
+    if ($placement !== 'before_question') {
+      return;
+    }
+
+    $patientHistoryAccessRendered = true;
+    $renderPatientHistoryAccessPanel();
+    return;
+  }
+
+  $sectionKey = $normalizePatientHistoryAnchor($sectionName);
+  $questionKey = $normalizePatientHistoryAnchor($questionName);
+  $matchesResolvedQuestion =
+    $sectionKey === $patientHistoryResolvedSection
+    && $questionKey === $patientHistoryResolvedQuestion;
+
+  if (!$matchesResolvedQuestion) {
+    return;
+  }
+
+  if (
+    ($patientHistoryResolvedMode === 'before_specific_question' && $placement === 'before_question')
+    || ($patientHistoryResolvedMode === 'after_specific_question' && $placement === 'after_question')
+  ) {
+    $patientHistoryAccessRendered = true;
+    $renderPatientHistoryAccessPanel();
+  }
+};
+
 ?>
 <!-- 🧠 Inject CSS Variables -->
 <?php if (!$is_unstyled_form): ?>
@@ -276,11 +487,14 @@ $currentStep       = 1; // your JS can update this as the user navigates
 
         <?php foreach ($section->questions as $question): ?>
           <?php
+          $section_name = (string) ($section->name ?? '');
+          $question_name = (string) ($question->name ?? '');
           $input_name  = esc_attr($question->name);
           $required    = !empty($question->required) ? 'required' : '';
           $is_required = !empty($question->required);
           $qid         = substr(md5($input_name), 0, 8);
           ?>
+          <?php $renderPatientHistoryAccessForQuestion('before_question', $section_name, $question_name); ?>
           <div class="inputGroup">
             <h4 class="question-title">
               <?= esc_html($question->name) ?> <?php if ($is_required): ?><span class="req">*</span><?php endif; ?>
@@ -375,6 +589,7 @@ $currentStep       = 1; // your JS can update this as the user navigates
                 <input type="text" name="<?= $input_name ?>" <?= $required ?>>
             <?php endswitch; ?>
           </div>
+          <?php $renderPatientHistoryAccessForQuestion('after_question', $section_name, $question_name); ?>
         <?php endforeach; ?>
       </div>
     <?php endforeach; ?>

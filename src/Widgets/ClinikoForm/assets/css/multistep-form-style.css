@@ -776,6 +776,303 @@
   color: var(--form-label);
 }
 
+.es-patient-history-access-slot .es-patient-history-access {
+  margin: 0;
+}
+
+.cliniko-form.es-patient-history-gate-active .es-patient-history-step-gated {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.cliniko-form.es-patient-history-gate-active .es-patient-history-step-gated > :not(.es-patient-history-access-slot) {
+  display: none !important;
+}
+
+.cliniko-form.es-patient-history-gate-active .es-patient-history-access-slot {
+  margin: 0 auto;
+}
+
+.es-patient-history-access {
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(94, 177, 146, 0.08), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.05);
+}
+
+.es-patient-history-access__title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.es-patient-history-access__helper {
+  margin: 0;
+  color: #475467;
+  font-size: 14px;
+}
+
+.es-patient-history-access__question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.es-patient-history-access__choice {
+  min-width: 120px;
+}
+
+.es-patient-history-access__choice--secondary {
+  background: transparent;
+}
+
+.es-patient-history-access__input-row {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.es-patient-history-access__field {
+  display: grid;
+  gap: 6px;
+}
+
+.es-patient-history-access__field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #344054;
+}
+
+.es-patient-history-access__field-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(31, 44, 59, 0.14);
+  border-radius: 12px;
+  background: #fff;
+  color: #101828;
+}
+
+.es-patient-history-access__field-input:focus {
+  outline: none;
+  border-color: var(--btn-bg, #5EB192);
+  box-shadow: 0 0 0 3px rgba(94, 177, 146, 0.14);
+}
+
+.es-patient-history-access__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.es-patient-history-access__request {
+  min-width: 220px;
+}
+
+.es-patient-history-access__status {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #344054;
+  background: rgba(16, 24, 40, 0.04);
+  border: 1px solid transparent;
+}
+
+.es-patient-history-access__status.is-hidden {
+  display: none !important;
+}
+
+.es-patient-history-access__status.is-info {
+  background: rgba(16, 24, 40, 0.04);
+  border-color: rgba(16, 24, 40, 0.06);
+}
+
+.es-patient-history-access__status.is-loading {
+  background: rgba(94, 177, 146, 0.10);
+  border-color: rgba(94, 177, 146, 0.18);
+  color: #1f4c3b;
+}
+
+.es-patient-history-access__status.is-success {
+  background: rgba(18, 183, 106, 0.10);
+  border-color: rgba(18, 183, 106, 0.22);
+  color: #065f46;
+}
+
+.es-patient-history-access__status.is-error {
+  background: rgba(217, 45, 32, 0.08);
+  border-color: rgba(217, 45, 32, 0.18);
+  color: #b42318;
+}
+
+.es-patient-history-access__results {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.es-patient-history-access__results.is-hidden,
+.es-patient-history-access__loading.is-hidden,
+.es-patient-history-access__preview.is-hidden,
+.es-patient-history-access__list.is-hidden {
+  display: none !important;
+}
+
+.es-patient-history-access__loading {
+  font-size: 14px;
+  color: #475467;
+}
+
+.es-patient-history-access__list {
+  display: grid;
+  gap: 10px;
+}
+
+.es-patient-history-access__item {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(31, 44, 59, 0.14);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.es-patient-history-access__item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.es-patient-history-access__item-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.es-patient-history-access__item-meta {
+  margin: 0;
+  color: #475467;
+  font-size: 14px;
+}
+
+.es-patient-history-access__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(94, 177, 146, 0.14);
+  color: #1f4c3b;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.es-patient-history-access__item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.es-patient-history-access__item-btn {
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 44, 59, 0.14);
+  background: #fff;
+  color: #1f2c3b;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.es-patient-history-access__item-btn:hover {
+  border-color: var(--btn-bg, #5EB192);
+  color: var(--btn-bg, #5EB192);
+}
+
+.es-patient-history-access__preview {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed rgba(31, 44, 59, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.es-patient-history-access__preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.es-patient-history-access__back {
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 44, 59, 0.14);
+  background: #fff;
+  color: #1f2c3b;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.es-patient-history-access__back:hover {
+  border-color: var(--btn-bg, #5EB192);
+  color: var(--btn-bg, #5EB192);
+}
+
+.es-patient-history-access__preview-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.es-patient-history-access__preview-block {
+  display: grid;
+  gap: 8px;
+}
+
+.es-patient-history-access__preview-row {
+  display: grid;
+  gap: 4px;
+}
+
+.es-patient-history-access__preview-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #667085;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.es-patient-history-access__preview-value {
+  font-size: 14px;
+  color: #101828;
+  word-break: break-word;
+}
+
+.es-patient-history-access__empty {
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #475467;
+}
+
+@media (min-width: 768px) {
+  .es-patient-history-access__input-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+
 /* Column span utilities */
 .col-span-1  { grid-column: span 1; }
 .col-span-2  { grid-column: span 2; }

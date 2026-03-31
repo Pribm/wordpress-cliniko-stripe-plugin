@@ -78,6 +78,60 @@ function register_content_controls($widget)
         'condition' => ['show_back_button' => 'yes'],
     ]);
 
+    $widget->add_control('enable_patient_history_access', [
+        'label' => 'Enable Returning Patient Access',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'no',
+        'separator' => 'before',
+        'condition' => ['appointment_source' => 'custom_form'],
+        'description' => 'Shows a secure "retrieve my past appointments" entry point that emails the patient a short-lived access link.',
+    ]);
+
+    $widget->add_control('patient_history_access_placement_mode', [
+        'label' => 'Returning Patient Access Placement',
+        'type' => Controls_Manager::SELECT,
+        'default' => 'first_question',
+        'options' => [
+            'first_question' => 'Before First Question',
+            'before_specific_question' => 'Before Specific Question',
+            'after_specific_question' => 'After Specific Question',
+        ],
+        'condition' => [
+            'appointment_source' => 'custom_form',
+            'enable_patient_history_access' => 'yes',
+        ],
+        'description' => 'Defaults to the first questionnaire block. Use a specific question anchor if you want to place it deeper in the form.',
+    ]);
+
+    $widget->add_control('patient_history_access_anchor_question', [
+        'label' => 'Question Anchor',
+        'type' => Controls_Manager::TEXT,
+        'placeholder' => 'Section Name :: Question Name',
+        'condition' => [
+            'appointment_source' => 'custom_form',
+            'enable_patient_history_access' => 'yes',
+            'patient_history_access_placement_mode!' => 'first_question',
+        ],
+        'description' => 'Use the exact question label, or "Section Name :: Question Name" to disambiguate duplicates. If blank or unmatched, the CTA falls back to the first question.',
+    ]);
+
+    $widget->add_control('patient_history_access_limit', [
+        'label' => 'Past Appointments Limit',
+        'type' => Controls_Manager::NUMBER,
+        'min' => 1,
+        'max' => 10,
+        'step' => 1,
+        'default' => 5,
+        'condition' => [
+            'appointment_source' => 'custom_form',
+            'enable_patient_history_access' => 'yes',
+        ],
+        'description' => 'Maximum number of past appointments to load from Cliniko for the secure retrieval panel.',
+    ]);
+
     $widget->end_controls_section();
 
     // ===============================
