@@ -13,6 +13,13 @@ let progressEl;
 let paymentLoaderProgress = null;
 let paymentLoaderHeadline = "";
 let paymentLoaderDetail = "";
+let patientHistoryAccessToken = "";
+let patientHistoryChallengeToken = "";
+let patientHistoryStandaloneActive = false;
+let patientHistoryHandoffListenerBound = false;
+let patientHistoryRequestStatusStop = null;
+let patientHistoryAttentionTitle = "";
+const patientHistoryTabId = `esph_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 
 document.addEventListener("DOMContentLoaded", () => {
   isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
@@ -31,6 +38,14 @@ document.addEventListener("DOMContentLoaded", () => {
     window.currentStep = 0;
     initHeadlessCalendarHelpers();
     initHeadlessPaymentWatcher();
+  }
+
+  initPatientHistoryAccess();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    clearPatientHistoryAttention();
   }
 });
 
@@ -814,6 +829,1880 @@ function initHeadlessPaymentWatcher() {
   observer.observe(paymentForm, { attributes: true, attributeFilter: ["style", "class"] });
 
   window.addEventListener("load", () => maybeInit());
+}
+
+function getPatientHistoryAccessConfig() {
+  return formHandlerData?.patient_history_access || {};
+}
+
+function isPatientHistoryAccessEnabled() {
+  return !!getPatientHistoryAccessConfig()?.enabled;
+}
+
+function getPatientHistoryHashKey() {
+  const configured = String(getPatientHistoryAccessConfig()?.hash_key || "").trim();
+  return configured || "es_patient_access_token";
+}
+
+function getPatientHistoryQueryKey() {
+  const configured = String(getPatientHistoryAccessConfig()?.query_key || "").trim();
+  return configured || "patient_access_token";
+}
+
+function getPatientHistoryHandoffStorageKey() {
+  return "es_patient_access_handoff";
+}
+
+function getPatientHistoryHandoffAckStorageKey() {
+  return "es_patient_access_handoff_ack";
+}
+
+function escapeFieldNameForSelector(value) {
+  if (window.CSS && typeof window.CSS.escape === "function") {
+    return window.CSS.escape(String(value || ""));
+  }
+
+  return String(value || "").replace(/"/g, '\\"');
+}
+
+function normalizePatientHistoryValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean).join(", ");
+  }
+
+  return String(value || "").trim();
+}
+
+function readPatientHistoryBootstrapFromLocation() {
+  const queryKey = getPatientHistoryQueryKey();
+  const hashKey = getPatientHistoryHashKey();
+  const url = new URL(window.location.href);
+  let requestId = String(url.searchParams.get("request_id") || "").trim();
+
+  let token = String(
+    url.searchParams.get(queryKey) || url.searchParams.get("access_token") || ""
+  ).trim();
+  let nextHash = String(url.hash || "");
+
+  if (!token) {
+    const hash = nextHash.replace(/^#/, "");
+    if (hash) {
+      const params = new URLSearchParams(hash);
+      token = String(
+        params.get(queryKey) || params.get(hashKey) || params.get("access_token") || ""
+      ).trim();
+      if (!requestId) {
+        requestId = String(params.get("request_id") || "").trim();
+      }
+
+      if (token) {
+        params.delete(queryKey);
+        params.delete(hashKey);
+        params.delete("access_token");
+        params.delete("request_id");
+        const hashString = params.toString();
+        nextHash = hashString ? `#${hashString}` : "";
+      }
+    }
+  }
+
+  if (!token && !requestId) {
+    return { token: "", requestId: "" };
+  }
+
+  url.searchParams.delete(queryKey);
+  url.searchParams.delete("access_token");
+  url.searchParams.delete("request_id");
+
+  const nextUrl = `${url.pathname}${url.search}${nextHash}`;
+  window.history.replaceState(null, document.title, nextUrl);
+
+  return { token, requestId };
+}
+
+function readPatientHistoryTokenFromLocation() {
+  return readPatientHistoryBootstrapFromLocation().token;
+}
+
+function getPatientHistoryToken() {
+  return String(patientHistoryAccessToken || "").trim();
+}
+
+function setPatientHistoryToken(token) {
+  patientHistoryAccessToken = String(token || "").trim();
+  if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+    window.ClinikoPatientHistoryAccess.state.token = patientHistoryAccessToken;
+  }
+  return patientHistoryAccessToken;
+}
+
+function getPatientHistoryChallengeToken() {
+  return String(patientHistoryChallengeToken || "").trim();
+}
+
+function setPatientHistoryChallengeToken(token) {
+  patientHistoryChallengeToken = String(token || "").trim();
+  if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+    window.ClinikoPatientHistoryAccess.state.challengeToken = patientHistoryChallengeToken;
+  }
+  return patientHistoryChallengeToken;
+}
+
+function getPatientHistoryReturnUrl() {
+  const configured = String(getPatientHistoryAccessConfig()?.return_url || "").trim();
+  return configured || `${window.location.origin}${window.location.pathname}${window.location.search}`;
+}
+
+function createPatientHistoryRequestId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return `espr_${window.crypto.randomUUID().replace(/-/g, "")}`;
+  }
+
+  return `espr_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+}
+
+function getPatientHistoryRequestStatusUrl(requestId) {
+  const base = String(getPatientHistoryAccessConfig()?.request_status_url || "").trim();
+  const normalizedRequestId = String(requestId || "").trim();
+  if (!base || !normalizedRequestId) {
+    return "";
+  }
+
+  const url = new URL(base, window.location.origin);
+  url.searchParams.set("request_id", normalizedRequestId);
+  return url.toString();
+}
+
+function getPatientHistoryRequestCompleteUrl() {
+  return String(getPatientHistoryAccessConfig()?.request_complete_url || "").trim();
+}
+
+function clearPatientHistoryAttention() {
+  if (patientHistoryAttentionTitle) {
+    document.title = patientHistoryAttentionTitle;
+    patientHistoryAttentionTitle = "";
+  }
+}
+
+function requestPatientHistoryAttention(message = "Your saved details are ready.") {
+  try {
+    window.focus();
+  } catch (_) {
+  }
+
+  if (!document.hidden) {
+    return;
+  }
+
+  if (!patientHistoryAttentionTitle) {
+    patientHistoryAttentionTitle = document.title;
+  }
+  document.title = `Ready to continue | ${patientHistoryAttentionTitle}`;
+
+  if (!("Notification" in window) || Notification.permission !== "granted") {
+    return;
+  }
+
+  try {
+    const notice = new Notification("Booking ready", {
+      body: String(message || "Your saved details are ready."),
+      tag: "es-patient-history-ready",
+      renotify: true,
+    });
+
+    window.setTimeout(() => {
+      try {
+        notice.close();
+      } catch (_) {
+      }
+    }, 8000);
+  } catch (_) {
+  }
+}
+
+function publishPatientHistoryHandoff(token, requestId = "") {
+  const normalizedToken = String(token || "").trim();
+  if (!normalizedToken) return;
+
+  try {
+    const payload = JSON.stringify({
+      token: normalizedToken,
+      requestId: String(requestId || "").trim(),
+      senderId: patientHistoryTabId,
+      ts: Date.now(),
+    });
+
+    window.localStorage.setItem(
+      getPatientHistoryHandoffStorageKey(),
+      payload
+    );
+
+    window.setTimeout(() => {
+      try {
+        if (window.localStorage.getItem(getPatientHistoryHandoffStorageKey()) === payload) {
+          window.localStorage.removeItem(getPatientHistoryHandoffStorageKey());
+        }
+      } catch (_) {
+      }
+    }, 2000);
+  } catch (_) {
+  }
+}
+
+function publishPatientHistoryHandoffAck(requestId, senderId) {
+  const normalizedRequestId = String(requestId || "").trim();
+  const normalizedSenderId = String(senderId || "").trim();
+  if (!normalizedRequestId || !normalizedSenderId) return;
+
+  try {
+    const payload = JSON.stringify({
+      requestId: normalizedRequestId,
+      senderId: normalizedSenderId,
+      receiverId: patientHistoryTabId,
+      ts: Date.now(),
+    });
+
+    window.localStorage.setItem(
+      getPatientHistoryHandoffAckStorageKey(),
+      payload
+    );
+
+    window.setTimeout(() => {
+      try {
+        if (window.localStorage.getItem(getPatientHistoryHandoffAckStorageKey()) === payload) {
+          window.localStorage.removeItem(getPatientHistoryHandoffAckStorageKey());
+        }
+      } catch (_) {
+      }
+    }, 2000);
+  } catch (_) {
+  }
+}
+
+function parsePatientHistoryHandoffPayload(rawValue) {
+  if (!rawValue) return null;
+
+  try {
+    const parsed = JSON.parse(String(rawValue || ""));
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const token = String(parsed.token || "").trim();
+    const requestId = String(parsed.requestId || "").trim();
+    const senderId = String(parsed.senderId || "").trim();
+    const ts = Number(parsed.ts || 0);
+
+    if (!token || !senderId || !Number.isFinite(ts)) {
+      return null;
+    }
+
+    return { token, requestId, senderId, ts };
+  } catch (_) {
+    return null;
+  }
+}
+
+function parsePatientHistoryHandoffAckPayload(rawValue) {
+  if (!rawValue) return null;
+
+  try {
+    const parsed = JSON.parse(String(rawValue || ""));
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const requestId = String(parsed.requestId || "").trim();
+    const senderId = String(parsed.senderId || "").trim();
+    const receiverId = String(parsed.receiverId || "").trim();
+    const ts = Number(parsed.ts || 0);
+
+    if (!requestId || !senderId || !receiverId || !Number.isFinite(ts)) {
+      return null;
+    }
+
+    return { requestId, senderId, receiverId, ts };
+  } catch (_) {
+    return null;
+  }
+}
+
+function attemptPatientHistoryHandoff(token) {
+  const normalizedToken = String(token || "").trim();
+  if (!normalizedToken) {
+    return Promise.resolve({ acknowledged: false, requestId: "", source: "none" });
+  }
+
+  const requestId = `esph_req_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+  const timeoutMs = 900;
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let timerId = 0;
+
+    const finish = (result) => {
+      if (resolved) return;
+      resolved = true;
+      window.removeEventListener("storage", onStorageAck);
+      if (timerId) {
+        window.clearTimeout(timerId);
+      }
+      resolve(result);
+    };
+
+    const onStorageAck = (event) => {
+      if (event.storageArea !== window.localStorage) return;
+      if (event.key !== getPatientHistoryHandoffAckStorageKey() || !event.newValue) return;
+
+      const payload = parsePatientHistoryHandoffAckPayload(event.newValue);
+      if (!payload) return;
+      if (payload.senderId !== patientHistoryTabId) return;
+      if (payload.requestId !== requestId) return;
+
+      finish({
+        acknowledged: true,
+        requestId,
+        receiverId: payload.receiverId,
+        source: "storage",
+        ts: payload.ts,
+      });
+    };
+
+    window.addEventListener("storage", onStorageAck);
+    publishPatientHistoryHandoff(normalizedToken, requestId);
+
+    timerId = window.setTimeout(() => {
+      finish({
+        acknowledged: false,
+        requestId,
+        source: "timeout",
+        ts: Date.now(),
+      });
+    }, timeoutMs);
+  });
+}
+
+function stopPatientHistoryRequestStatusPolling() {
+  if (typeof patientHistoryRequestStatusStop === "function") {
+    patientHistoryRequestStatusStop();
+  }
+  patientHistoryRequestStatusStop = null;
+
+  if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+    window.ClinikoPatientHistoryAccess.state.pendingRequestId = "";
+  }
+}
+
+function startPatientHistoryRequestStatusPolling(requestId) {
+  const normalizedRequestId = String(requestId || "").trim();
+  if (!normalizedRequestId) {
+    stopPatientHistoryRequestStatusPolling();
+    return () => {};
+  }
+
+  stopPatientHistoryRequestStatusPolling();
+
+  if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+    window.ClinikoPatientHistoryAccess.state.pendingRequestId = normalizedRequestId;
+  }
+
+  const timeoutMs = Math.max(
+    30000,
+    Number(getPatientHistoryAccessConfig()?.token_ttl || 900) * 1000
+  );
+  const intervalMs = 1500;
+  const startedAt = Date.now();
+  let stopped = false;
+  let timerId = null;
+
+  const stop = () => {
+    stopped = true;
+    if (timerId !== null) {
+      window.clearTimeout(timerId);
+      timerId = null;
+    }
+  };
+
+  const onExpired = () => {
+    stopPatientHistoryRequestStatusPolling();
+    setPatientHistoryUiState({
+      loading: false,
+      showResults: false,
+      status: "The verification code expired. Request a new code to continue.",
+      tone: "error",
+    });
+    dispatchPatientHistoryEvent("es:patient-history:request-expired", {
+      requestId: normalizedRequestId,
+    });
+  };
+
+  const poll = async () => {
+    if (stopped) {
+      return;
+    }
+
+    try {
+      const { response, result } = await loadPatientHistoryRequestStatus(normalizedRequestId);
+      const ok = !!response && response.ok && !!result?.ok;
+      const state = String(result?.state || "").trim();
+
+      if (ok && state === "completed") {
+        const accessToken = String(result?.access_token || "").trim();
+        stopPatientHistoryRequestStatusPolling();
+
+        if (accessToken) {
+          dispatchPatientHistoryEvent("es:patient-history:request-completed", {
+            requestId: normalizedRequestId,
+            accessToken,
+            response,
+            result,
+          });
+          handlePatientHistoryIncomingToken(accessToken, {
+            source: "request-status",
+            ts: Date.now(),
+          });
+          return;
+        }
+      }
+
+      if ((ok && state === "expired") || (response && response.status === 404)) {
+        onExpired();
+        return;
+      }
+    } catch (_) {
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      onExpired();
+      return;
+    }
+
+    if (!stopped) {
+      timerId = window.setTimeout(poll, intervalMs);
+    }
+  };
+
+  patientHistoryRequestStatusStop = stop;
+  void poll();
+  return stop;
+}
+
+async function attemptPatientHistoryResume(token, requestId = "") {
+  const normalizedToken = String(token || "").trim();
+  const normalizedRequestId = String(requestId || "").trim();
+  let completion = null;
+
+  if (normalizedToken && normalizedRequestId) {
+    try {
+      completion = await completePatientHistoryRequest(normalizedRequestId, normalizedToken);
+    } catch (_) {
+      completion = null;
+    }
+  }
+
+  const handoff = normalizedToken
+    ? await attemptPatientHistoryHandoff(normalizedToken)
+    : { acknowledged: false, requestId: "", source: "none" };
+
+  return {
+    ...(handoff && typeof handoff === "object" ? handoff : {}),
+    acknowledged: !!handoff?.acknowledged,
+    requestId: normalizedRequestId || String(handoff?.requestId || "").trim(),
+    serverCompleted: !!(
+      completion &&
+      completion.response &&
+      completion.response.ok &&
+      completion.result?.ok
+    ),
+    completionResult: completion?.result || null,
+  };
+}
+
+function handlePatientHistoryIncomingToken(token, options = {}) {
+  const normalizedToken = String(token || "").trim();
+  if (!normalizedToken) return false;
+
+  const source = String(options.source || "storage").trim() || "storage";
+  const timestamp = Number(options.ts || Date.now());
+  const attentionMessage = String(
+    options.message ||
+      "Your saved details are ready in the original booking tab."
+  ).trim();
+
+  stopPatientHistoryRequestStatusPolling();
+  setPatientHistoryToken(normalizedToken);
+  setPatientHistoryChallengeToken("");
+  setPatientHistoryCodeValue("");
+  requestPatientHistoryAttention(attentionMessage);
+
+  if (isHeadless) {
+    dispatchPatientHistoryEvent("es:patient-history:handoff", {
+      token: normalizedToken,
+      source,
+      ts: Number.isFinite(timestamp) ? timestamp : Date.now(),
+    });
+    return true;
+  }
+
+  setPatientHistoryStage("results");
+  openPatientHistoryStandalone();
+  setPatientHistoryUiState({
+    loading: true,
+    showResults: true,
+    status: "Opening your saved details...",
+    tone: "loading",
+  });
+  void refreshPatientHistoryLatest();
+  return true;
+}
+
+function bindPatientHistoryHandoffListener() {
+  if (patientHistoryHandoffListenerBound) return;
+  patientHistoryHandoffListenerBound = true;
+
+  window.addEventListener("storage", (event) => {
+    if (event.storageArea !== window.localStorage) return;
+    if (event.key !== getPatientHistoryHandoffStorageKey() || !event.newValue) return;
+
+    const payload = parsePatientHistoryHandoffPayload(event.newValue);
+    if (!payload || payload.senderId === patientHistoryTabId) return;
+
+    const handled = handlePatientHistoryIncomingToken(payload.token, {
+      source: "storage",
+      ts: payload.ts,
+    });
+
+    if (handled) {
+      publishPatientHistoryHandoffAck(payload.requestId, payload.senderId);
+    }
+
+    try {
+      if (window.localStorage.getItem(getPatientHistoryHandoffStorageKey()) === event.newValue) {
+        window.localStorage.removeItem(getPatientHistoryHandoffStorageKey());
+      }
+    } catch (_) {
+    }
+  });
+}
+
+function getPatientHistoryAppointmentTypeId() {
+  return String(
+    formHandlerData?.module_id ||
+      document.getElementById("prepayment-form")?.dataset?.appointmentTypeId ||
+      ""
+  ).trim();
+}
+
+const PATIENT_HISTORY_STAGE_META = {
+  prompt: {
+    helper: "If you already completed this appointment type, we can load your most recent saved details.",
+  },
+  email: {
+    helper: "Enter the same email address you used for your completed booking. We will email a 6-digit code.",
+  },
+  code: {
+    helper: "Enter the 6-digit code from your email to load your saved details.",
+  },
+  results: {
+    helper: "Review the most recent saved details for this booking type.",
+  },
+};
+
+function buildPatientHistoryPrefillUrl(bookingId) {
+  const template = String(getPatientHistoryAccessConfig()?.prefill_url_template || "").trim();
+  if (!template || !bookingId) return "";
+  return template.replace("__BOOKING_ID__", encodeURIComponent(String(bookingId)));
+}
+
+function buildHistoryRequestPayload(email, requestId = "") {
+  const payload = {
+    email: String(email || "").trim(),
+    appointment_type_id: getPatientHistoryAppointmentTypeId(),
+    return_url: getPatientHistoryReturnUrl(),
+  };
+
+  const normalizedRequestId = String(requestId || "").trim();
+  if (normalizedRequestId) {
+    payload.request_id = normalizedRequestId;
+  }
+
+  return payload;
+}
+
+function buildHistoryVerifyPayload(email, code, challengeToken) {
+  return {
+    email: String(email || "").trim(),
+    code: String(code || "").trim(),
+    appointment_type_id: getPatientHistoryAppointmentTypeId(),
+    challenge_token: String(challengeToken || "").trim(),
+  };
+}
+
+function buildPatientHistoryPreviewAnswer(question) {
+  const type = String(question?.type || "");
+  if (type === "checkboxes" || type === "radiobuttons") {
+    const answers = Array.isArray(question?.answers) ? question.answers : [];
+    const selected = answers
+      .filter((answer) => !!answer?.selected)
+      .map((answer) => String(answer?.value || "").trim())
+      .filter(Boolean);
+
+    if (question?.other?.selected) {
+      const otherValue = String(question?.other?.value || "").trim();
+      if (otherValue) {
+        selected.push(otherValue);
+      }
+    }
+
+    if (selected.length === 0) {
+      if (Array.isArray(question?.answer)) {
+        question.answer.forEach((item) => {
+          const value = String(item || "").trim();
+          if (value) {
+            selected.push(value);
+          }
+        });
+      } else {
+        const fallback = String(question?.answer || "").trim();
+        if (fallback) {
+          selected.push(fallback);
+        }
+      }
+    }
+
+    return selected.join(", ");
+  }
+
+  return normalizePatientHistoryValue(question?.answer || "");
+}
+
+function buildPatientHistoryHeaders(patientAccessToken = "", includeRequestToken = true) {
+  const headers = { "Content-Type": "application/json" };
+  const requestToken = String(formHandlerData?.request_token || "").trim();
+  const accessToken = String(patientAccessToken || "").trim();
+
+  if (includeRequestToken && requestToken) {
+    headers["X-ES-Request-Token"] = requestToken;
+  }
+
+  if (accessToken) {
+    headers["X-ES-Patient-Access-Token"] = accessToken;
+  }
+
+  return headers;
+}
+
+function getPatientHistoryUi() {
+  return {
+    root: document.querySelector("[data-es-patient-history-access]"),
+    helperEl: document.getElementById("es-patient-history-helper"),
+    questionActions: document.getElementById("es-patient-history-question-actions"),
+    yesBtn: document.getElementById("es-patient-history-yes"),
+    noBtn: document.getElementById("es-patient-history-no"),
+    emailRow: document.getElementById("es-patient-history-email-row"),
+    emailInput: document.getElementById("es-patient-history-email"),
+    requestBtn: document.getElementById("es-patient-history-request"),
+    codeRow: document.getElementById("es-patient-history-code-row"),
+    codeInput: document.getElementById("es-patient-history-code"),
+    verifyBtn: document.getElementById("es-patient-history-verify"),
+    resultsEl: document.getElementById("es-patient-history-results"),
+    loadingEl: document.getElementById("es-patient-history-loading"),
+    statusEl: document.getElementById("es-patient-history-status"),
+  };
+}
+
+function getStepIndexForElement(element) {
+  if (!element || !steps || typeof steps.length !== "number") return -1;
+  return Array.from(steps).findIndex((step) => step === element);
+}
+
+function getPatientHistoryAccessSlot() {
+  return document.querySelector("[data-es-patient-history-access-slot]");
+}
+
+function showPatientHistoryAccessSlot() {
+  const slot = getPatientHistoryAccessSlot();
+  if (slot) {
+    setHidden(slot, false);
+  }
+}
+
+function dismissPatientHistoryAccessSlot() {
+  const slot = getPatientHistoryAccessSlot();
+  if (slot) {
+    setHidden(slot, true);
+  }
+}
+
+function getPatientHistoryGateStep() {
+  return getPatientHistoryAccessSlot()?.closest(".form-step") || null;
+}
+
+function getPatientHistoryGateStepIndex() {
+  return getStepIndexForElement(getPatientHistoryGateStep());
+}
+
+function getPatientHistoryContinueStepIndex(mode = "use") {
+  if (mode === "update") {
+    return 0;
+  }
+
+  if (!isHeadless && shouldUseCalendarTimes()) {
+    const calendarStep = document
+      .querySelector("[data-appointment-selection]")
+      ?.closest(".form-step");
+    const calendarStepIndex = getStepIndexForElement(calendarStep);
+    if (calendarStepIndex >= 0) {
+      return calendarStepIndex;
+    }
+  }
+
+  const patientStep = document.querySelector(".patient-grid")?.closest(".form-step");
+  const patientStepIndex = getStepIndexForElement(patientStep);
+  if (patientStepIndex >= 0) {
+    return patientStepIndex;
+  }
+
+  return 0;
+}
+
+function syncPatientHistoryStandaloneUi() {
+  if (isHeadless) return;
+
+  const form = document.getElementById("prepayment-form");
+  const gateStep = getPatientHistoryGateStep();
+
+  if (!form || !gateStep) {
+    patientHistoryStandaloneActive = false;
+    return;
+  }
+
+  form.classList.toggle(
+    "es-patient-history-gate-active",
+    !!patientHistoryStandaloneActive
+  );
+
+  Array.from(steps || []).forEach((step) => {
+    step.classList.toggle(
+      "es-patient-history-step-gated",
+      !!patientHistoryStandaloneActive && step === gateStep
+    );
+  });
+
+  if (!patientHistoryStandaloneActive) {
+    return;
+  }
+
+  Array.from(steps || []).forEach((step) => {
+    setHidden(step, step !== gateStep);
+  });
+
+  setHidden(prevBtn, true);
+  setHidden(nextBtn, true);
+  if (progressEl) {
+    setHidden(progressEl, true);
+  }
+}
+
+function openPatientHistoryStandalone() {
+  if (isHeadless || !isPatientHistoryAccessEnabled()) return false;
+
+  const gateStepIndex = getPatientHistoryGateStepIndex();
+  if (gateStepIndex < 0) return false;
+
+  showPatientHistoryAccessSlot();
+  patientHistoryStandaloneActive = true;
+  window.currentStep = gateStepIndex;
+  if (typeof showStep === "function") {
+    showStep(gateStepIndex);
+  } else {
+    syncPatientHistoryStandaloneUi();
+  }
+  return true;
+}
+
+function closePatientHistoryStandalone(targetStep = 0) {
+  patientHistoryStandaloneActive = false;
+
+  const maxStepIndex = Math.max(0, (steps?.length || 1) - 1);
+  const nextStepIndex = Math.max(0, Math.min(Number(targetStep || 0), maxStepIndex));
+  window.currentStep = nextStepIndex;
+
+  if (typeof showStep === "function") {
+    showStep(nextStepIndex);
+  } else {
+    syncPatientHistoryStandaloneUi();
+  }
+
+  if (isSingleStep() && steps?.[nextStepIndex]) {
+    window.setTimeout(() => {
+      steps[nextStepIndex]?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+  }
+
+  return nextStepIndex;
+}
+
+function getPatientHistoryEmailValue() {
+  const ui = getPatientHistoryUi();
+  const direct = String(ui.emailInput?.value || "").trim();
+  if (direct) return direct;
+  return String(getPatientEmailFromForm() || "").trim();
+}
+
+function setPatientHistoryEmailValue(value) {
+  const ui = getPatientHistoryUi();
+  const normalized = String(value || "").trim();
+  if (ui.emailInput) {
+    ui.emailInput.value = normalized;
+  }
+  if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+    window.ClinikoPatientHistoryAccess.state.email = normalized;
+  }
+}
+
+function getPatientHistoryCodeValue() {
+  const ui = getPatientHistoryUi();
+  return String(ui.codeInput?.value || "").replace(/\D+/g, "").trim();
+}
+
+function setPatientHistoryCodeValue(value) {
+  const ui = getPatientHistoryUi();
+  if (ui.codeInput) {
+    ui.codeInput.value = String(value || "").replace(/\D+/g, "").slice(0, 6);
+  }
+}
+
+function setPatientHistoryStage(stage = "prompt") {
+  const ui = getPatientHistoryUi();
+  const showPrompt = stage === "prompt";
+  const showEmail = stage === "email";
+  const showCode = stage === "code";
+  const showResults = stage === "results";
+  const stageMeta = PATIENT_HISTORY_STAGE_META[stage] || PATIENT_HISTORY_STAGE_META.prompt;
+
+  if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+    window.ClinikoPatientHistoryAccess.state.stage = stage;
+  }
+
+  if (ui.root) {
+    ui.root.dataset.stage = stage;
+  }
+
+  if (ui.helperEl) {
+    ui.helperEl.textContent = stageMeta.helper || "";
+  }
+
+  if (ui.questionActions) {
+    ui.questionActions.classList.toggle("is-hidden", !showPrompt);
+  }
+
+  if (ui.emailRow) {
+    ui.emailRow.classList.toggle("is-hidden", !showEmail);
+  }
+
+  if (ui.codeRow) {
+    ui.codeRow.classList.toggle("is-hidden", !showCode);
+  }
+
+  if (ui.resultsEl) {
+    ui.resultsEl.classList.toggle("is-hidden", !showResults);
+  }
+
+  if (stage === "email" && ui.emailInput) {
+    window.requestAnimationFrame(() => ui.emailInput?.focus?.());
+  }
+
+  if (stage === "code" && ui.codeInput) {
+    window.requestAnimationFrame(() => ui.codeInput?.focus?.());
+  }
+}
+
+function setPatientHistoryUiState({
+  loading = false,
+  status = "",
+  showResults = false,
+  tone = "",
+} = {}) {
+  const ui = getPatientHistoryUi();
+  const toneClass = loading
+    ? "is-loading"
+    : tone === "error"
+      ? "is-error"
+      : tone === "success"
+        ? "is-success"
+        : "is-info";
+
+  if (ui.statusEl) {
+    ui.statusEl.textContent = status || "";
+    ui.statusEl.classList.toggle("is-hidden", !status);
+    ui.statusEl.classList.remove("is-info", "is-loading", "is-success", "is-error");
+    if (status) {
+      ui.statusEl.classList.add(toneClass);
+    }
+  }
+
+  if (ui.resultsEl) {
+    ui.resultsEl.classList.toggle("is-hidden", !showResults);
+  }
+
+  if (ui.loadingEl) {
+    ui.loadingEl.classList.toggle("is-hidden", !loading);
+  }
+
+  if (ui.root) {
+    ui.root.classList.toggle("is-loading", !!loading);
+  }
+}
+
+function clearPatientHistoryPreview() {
+  const listEl = document.getElementById("es-patient-history-list");
+  const previewEl = document.getElementById("es-patient-history-preview");
+  if (listEl) {
+    listEl.classList.remove("is-hidden");
+  }
+  if (!previewEl) return;
+  previewEl.innerHTML = "";
+  previewEl.classList.add("is-hidden");
+}
+
+function showPatientHistoryPreviewOnly() {
+  const listEl = document.getElementById("es-patient-history-list");
+  const previewEl = document.getElementById("es-patient-history-preview");
+  if (listEl) {
+    listEl.classList.add("is-hidden");
+  }
+  if (previewEl) {
+    previewEl.classList.remove("is-hidden");
+  }
+}
+
+function renderPatientHistoryEmpty(message) {
+  const listEl = document.getElementById("es-patient-history-list");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  if (!message) return;
+
+  const empty = document.createElement("div");
+  empty.className = "es-patient-history-access__empty";
+  empty.textContent = message;
+  listEl.appendChild(empty);
+}
+
+async function requestPatientHistoryLink(email, requestId = "") {
+  const requestUrl = String(getPatientHistoryAccessConfig()?.request_url || "").trim();
+  if (!requestUrl) {
+    throw new Error("Patient history request endpoint is not configured.");
+  }
+
+  return postJsonExpectJson(requestUrl, buildHistoryRequestPayload(email, requestId));
+}
+
+async function requestPatientHistoryLinkWithResume(email, requestId = "") {
+  const normalizedRequestId = String(requestId || createPatientHistoryRequestId()).trim();
+  const output = await requestPatientHistoryLink(email, normalizedRequestId);
+  const response = output?.response || null;
+  const result = output?.result || {};
+  const requestAccepted = !!(response && response.ok && result?.ok);
+  const resolvedRequestId = String(result?.request_id || normalizedRequestId || "").trim();
+
+  stopPatientHistoryRequestStatusPolling();
+  if (requestAccepted && resolvedRequestId) {
+    startPatientHistoryRequestStatusPolling(resolvedRequestId);
+  }
+
+  return {
+    response,
+    result,
+    requestAccepted,
+    requestId: resolvedRequestId,
+  };
+}
+
+async function requestPatientHistoryCode(email, requestId = "") {
+  return requestPatientHistoryLink(email, requestId);
+}
+
+async function verifyPatientHistoryCode(email, code, challengeToken = "") {
+  const verifyUrl = String(getPatientHistoryAccessConfig()?.verify_url || "").trim();
+  if (!verifyUrl) {
+    throw new Error("Patient history verify endpoint is not configured.");
+  }
+
+  return postJsonExpectJson(
+    verifyUrl,
+    buildHistoryVerifyPayload(email, code, challengeToken || getPatientHistoryChallengeToken())
+  );
+}
+
+async function loadPatientHistoryRequestStatus(requestId) {
+  const statusUrl = getPatientHistoryRequestStatusUrl(requestId);
+  if (!statusUrl) {
+    return { response: null, result: { ok: false, message: "Patient history request status endpoint is not configured." } };
+  }
+
+  return getJsonExpectJson(statusUrl);
+}
+
+async function completePatientHistoryRequest(requestId, token = "") {
+  const completeUrl = getPatientHistoryRequestCompleteUrl();
+  const normalizedRequestId = String(requestId || "").trim();
+  const accessToken = String(token || getPatientHistoryToken() || "").trim();
+  if (!completeUrl || !normalizedRequestId || !accessToken) {
+    return { response: null, result: { ok: false, message: "Missing patient access request details." } };
+  }
+
+  const response = await fetch(completeUrl, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...buildPatientHistoryHeaders(accessToken, false),
+    },
+    body: JSON.stringify({ request_id: normalizedRequestId }),
+  });
+  const result = await response.json().catch(() => ({}));
+  return { response, result };
+}
+
+async function loadPatientHistoryAppointments(token = "", limit = null) {
+  const appointmentsUrl = String(getPatientHistoryAccessConfig()?.appointments_url || "").trim();
+  const accessToken = String(token || getPatientHistoryToken() || "").trim();
+  if (!appointmentsUrl || !accessToken) {
+    return { response: null, result: { ok: false, message: "Missing patient access token." } };
+  }
+
+  const url = new URL(appointmentsUrl, window.location.origin);
+  const historyLimit = Number(limit || getPatientHistoryAccessConfig()?.limit || 5);
+  if (Number.isFinite(historyLimit) && historyLimit > 0) {
+    url.searchParams.set("limit", String(Math.max(1, Math.min(10, Math.round(historyLimit)))));
+  }
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "same-origin",
+    headers: buildPatientHistoryHeaders(accessToken, false),
+  });
+  const result = await response.json().catch(() => ({}));
+  return { response, result };
+}
+
+async function loadPatientHistoryLatest(token = "") {
+  const latestUrl = String(getPatientHistoryAccessConfig()?.latest_url || "").trim();
+  const accessToken = String(token || getPatientHistoryToken() || "").trim();
+  if (!latestUrl || !accessToken) {
+    return { response: null, result: { ok: false, message: "Missing patient access token." } };
+  }
+
+  const response = await fetch(latestUrl, {
+    method: "GET",
+    credentials: "same-origin",
+    headers: buildPatientHistoryHeaders(accessToken, false),
+  });
+  const result = await response.json().catch(() => ({}));
+  return { response, result };
+}
+
+async function loadPatientHistoryPrefill(bookingId, token = "") {
+  const url = buildPatientHistoryPrefillUrl(bookingId);
+  const accessToken = String(token || getPatientHistoryToken() || "").trim();
+  if (!url || !accessToken) {
+    return { response: null, result: { ok: false, message: "Missing patient access token." } };
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "same-origin",
+    headers: buildPatientHistoryHeaders(accessToken, false),
+  });
+  const result = await response.json().catch(() => ({}));
+  return { response, result };
+}
+
+function dispatchPatientHistoryEvent(name, detail) {
+  document.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+function setFormControlValue(input, value) {
+  if (!input) return;
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dispatchEvent(new Event("blur", { bubbles: true }));
+}
+
+function setCheckboxLikeValue(input, checked) {
+  if (!input) return;
+  input.checked = !!checked;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function applyPatientPrefillToForm(patient) {
+  const patientData = patient && typeof patient === "object" ? patient : {};
+
+  Object.entries(patientData).forEach(([key, value]) => {
+    const selector = `[name="patient[${escapeFieldNameForSelector(key)}]"]`;
+    const input = document.querySelector(selector);
+    if (!input) return;
+    setFormControlValue(input, normalizePatientHistoryValue(value));
+  });
+}
+
+function applyQuestionPrefillToForm(question) {
+  const name = String(question?.name || "").trim();
+  const type = String(question?.type || "").trim();
+  if (!name) return;
+
+  if (type === "checkboxes") {
+    const selectedValues = new Set();
+    const answers = Array.isArray(question?.answers) ? question.answers : [];
+    answers.forEach((answer) => {
+      if (answer?.selected) {
+        const value = String(answer?.value || "").trim();
+        if (value) selectedValues.add(value);
+      }
+    });
+
+    const fallbackAnswer = Array.isArray(question?.answer) ? question.answer : [];
+    fallbackAnswer.forEach((answer) => {
+      const value = String(answer || "").trim();
+      if (value) selectedValues.add(value);
+    });
+
+    document
+      .querySelectorAll(`[name="${escapeFieldNameForSelector(name)}[]"]`)
+      .forEach((input) => {
+        const value = String(input?.value || "");
+        const isOther = value === "__other__" || value === "other";
+        setCheckboxLikeValue(input, isOther ? !!question?.other?.selected : selectedValues.has(value));
+      });
+
+    const otherInput = document.querySelector(
+      `[name="${escapeFieldNameForSelector(`${name}_other`)}"]`
+    );
+    setFormControlValue(
+      otherInput,
+      question?.other?.selected ? normalizePatientHistoryValue(question?.other?.value || "") : ""
+    );
+    return;
+  }
+
+  if (type === "radiobuttons") {
+    let selectedValue = "";
+    const answers = Array.isArray(question?.answers) ? question.answers : [];
+    answers.forEach((answer) => {
+      if (!selectedValue && answer?.selected) {
+        selectedValue = String(answer?.value || "").trim();
+      }
+    });
+
+    if (!selectedValue && typeof question?.answer === "string") {
+      selectedValue = String(question.answer || "").trim();
+    }
+
+    document
+      .querySelectorAll(`[name="${escapeFieldNameForSelector(name)}"]`)
+      .forEach((input) => {
+        const value = String(input?.value || "");
+        const isOther = value === "__other__" || value === "other";
+        const checked = isOther ? !!question?.other?.selected : selectedValue !== "" && value === selectedValue;
+        setCheckboxLikeValue(input, checked);
+      });
+
+    const otherInput = document.querySelector(
+      `[name="${escapeFieldNameForSelector(`${name}_other`)}"]`
+    );
+    setFormControlValue(
+      otherInput,
+      question?.other?.selected ? normalizePatientHistoryValue(question?.other?.value || "") : ""
+    );
+    return;
+  }
+
+  const input = document.querySelector(`[name="${escapeFieldNameForSelector(name)}"]`);
+  if (!input) return;
+  setFormControlValue(input, normalizePatientHistoryValue(question?.answer || ""));
+}
+
+function applyContentPrefillToForm(content) {
+  const sections = Array.isArray(content?.sections) ? content.sections : [];
+  sections.forEach((section) => {
+    const questions = Array.isArray(section?.questions) ? section.questions : [];
+    questions.forEach((question) => applyQuestionPrefillToForm(question));
+  });
+}
+
+async function applyPatientHistoryPrefill(data, mode = "use") {
+  const payload = data?.prefill || null;
+  if (!payload || typeof payload !== "object") {
+    showToast("We could not load that previous form.", "error");
+    return false;
+  }
+
+  const currentModuleId = String(formHandlerData?.module_id || "").trim();
+  const historyModuleId = String(payload?.history?.appointment_type_id || "").trim();
+  const patient = payload?.patient && typeof payload.patient === "object" ? { ...payload.patient } : {};
+
+  if (historyModuleId && currentModuleId && historyModuleId !== currentModuleId) {
+    patient.practitioner_id = "";
+  }
+
+  patient.appointment_start = "";
+  patient.appointment_date = "";
+
+  if (isHeadless) {
+    if (
+      data?.latest_form?.patient_form_template_id &&
+      window.ClinikoHeadlessCalendar &&
+      typeof window.ClinikoHeadlessCalendar.updateFormtemplate === "function" &&
+      String(formHandlerData?.patient_form_template_id || "").trim() !==
+        String(data.latest_form.patient_form_template_id || "").trim()
+    ) {
+      try {
+        await window.ClinikoHeadlessCalendar.updateFormtemplate(
+          String(data.latest_form.patient_form_template_id || "").trim()
+        );
+      } catch (_) {
+      }
+    }
+
+    const headlessPayload = getHeadlessPayload();
+    if (headlessPayload && typeof headlessPayload === "object") {
+      headlessPayload.patient = {
+        ...(headlessPayload.patient && typeof headlessPayload.patient === "object"
+          ? headlessPayload.patient
+          : {}),
+        ...patient,
+      };
+      headlessPayload.content = {
+        sections: Array.isArray(payload?.content?.sections) ? payload.content.sections : [],
+      };
+    }
+  } else {
+    applyPatientPrefillToForm(patient);
+    applyContentPrefillToForm(payload?.content || {});
+  }
+
+  clearPatientHistoryPreview();
+  dispatchPatientHistoryEvent("es:patient-history:prefill-applied", {
+    mode,
+    payload,
+    raw: data,
+  });
+
+  const targetStepIndex = getPatientHistoryContinueStepIndex(mode);
+  const calendarStepIndex = getStepIndexForElement(
+    document.querySelector("[data-appointment-selection]")?.closest(".form-step")
+  );
+  const routesToCalendar = mode !== "update" && calendarStepIndex >= 0 && targetStepIndex === calendarStepIndex;
+
+  if (!isHeadless && typeof showStep === "function") {
+    dismissPatientHistoryAccessSlot();
+    closePatientHistoryStandalone(targetStepIndex);
+  }
+
+  const sameAppointmentType =
+    historyModuleId !== "" && currentModuleId !== "" && historyModuleId === currentModuleId;
+  showToast(
+    sameAppointmentType
+      ? mode === "update"
+        ? "Previous details loaded. Review and update anything you want."
+        : routesToCalendar
+          ? "Previous details loaded. Choose a new appointment time to continue."
+          : "Previous details loaded. Confirm your details and continue when ready."
+      : "Previous details loaded. This booking page uses a different appointment type, so please review everything before continuing.",
+    "success"
+  );
+  return true;
+}
+
+function formatPatientHistoryDateTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(parsed);
+  } catch (_) {
+    return parsed.toLocaleString();
+  }
+}
+
+function renderPatientHistoryPreview(data) {
+  const previewEl = document.getElementById("es-patient-history-preview");
+  if (!previewEl) return;
+
+  const prefill = data?.prefill || {};
+  const patient = prefill?.patient && typeof prefill.patient === "object" ? prefill.patient : {};
+  const sections = Array.isArray(prefill?.content?.sections) ? prefill.content.sections : [];
+  const appointment = data?.appointment || {};
+
+  previewEl.innerHTML = "";
+  showPatientHistoryPreviewOnly();
+
+  const head = document.createElement("div");
+  head.className = "es-patient-history-access__preview-head";
+
+  const title = document.createElement("h5");
+  title.className = "es-patient-history-access__preview-title";
+  title.textContent = "Your most recent saved details";
+
+  const useAnotherEmailBtn = document.createElement("button");
+  useAnotherEmailBtn.type = "button";
+  useAnotherEmailBtn.className = "es-patient-history-access__back";
+  useAnotherEmailBtn.textContent = "Use another email";
+  useAnotherEmailBtn.addEventListener("click", () => {
+    clearPatientHistoryPreview();
+    stopPatientHistoryRequestStatusPolling();
+    setPatientHistoryToken("");
+    setPatientHistoryChallengeToken("");
+    setPatientHistoryCodeValue("");
+    setPatientHistoryStage("email");
+    setPatientHistoryUiState({
+      loading: false,
+      showResults: false,
+      status: "",
+      tone: "info",
+    });
+  });
+
+  head.appendChild(title);
+  head.appendChild(useAnotherEmailBtn);
+  previewEl.appendChild(head);
+
+  const patientBlock = document.createElement("div");
+  patientBlock.className = "es-patient-history-access__preview-block";
+
+  [
+    ["Patient", `${patient?.first_name || ""} ${patient?.last_name || ""}`.trim()],
+    ["Email", patient?.email || ""],
+    ["Phone", patient?.phone || ""],
+    ["Appointment", appointment?.appointment_label || ""],
+    ["When", formatPatientHistoryDateTime(appointment?.starts_at || "")],
+  ].forEach(([label, value]) => {
+    if (!value) return;
+    const row = document.createElement("div");
+    row.className = "es-patient-history-access__preview-row";
+    const labelEl = document.createElement("div");
+    labelEl.className = "es-patient-history-access__preview-label";
+    labelEl.textContent = String(label);
+    const valueEl = document.createElement("div");
+    valueEl.className = "es-patient-history-access__preview-value";
+    valueEl.textContent = String(value);
+    row.appendChild(labelEl);
+    row.appendChild(valueEl);
+    patientBlock.appendChild(row);
+  });
+
+  previewEl.appendChild(patientBlock);
+
+  const answersBlock = document.createElement("div");
+  answersBlock.className = "es-patient-history-access__preview-block";
+
+  let answerCount = 0;
+  sections.forEach((section) => {
+    const questions = Array.isArray(section?.questions) ? section.questions : [];
+    questions.forEach((question) => {
+      const value = buildPatientHistoryPreviewAnswer(question);
+      if (!value) return;
+
+      answerCount += 1;
+      const row = document.createElement("div");
+      row.className = "es-patient-history-access__preview-row";
+      const labelEl = document.createElement("div");
+      labelEl.className = "es-patient-history-access__preview-label";
+      labelEl.textContent = String(section?.name || "Question");
+      const valueEl = document.createElement("div");
+      valueEl.className = "es-patient-history-access__preview-value";
+      const questionStrong = document.createElement("strong");
+      questionStrong.textContent = String(question?.name || "");
+      valueEl.appendChild(questionStrong);
+      valueEl.appendChild(document.createElement("br"));
+      valueEl.appendChild(document.createTextNode(String(value)));
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+      answersBlock.appendChild(row);
+    });
+  });
+
+  if (answerCount > 0) {
+    previewEl.appendChild(answersBlock);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "es-patient-history-access__empty";
+    empty.textContent =
+      "No reusable questionnaire answers were attached to this previous appointment, but we can still load your saved patient details.";
+    previewEl.appendChild(empty);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "es-patient-history-access__item-actions";
+
+  const useBtn = document.createElement("button");
+  useBtn.type = "button";
+  useBtn.className = "es-patient-history-access__item-btn";
+  useBtn.textContent = answerCount > 0 ? "Use previous form" : "Use saved details";
+  useBtn.addEventListener("click", async () => {
+    await applyPatientHistoryPrefill(data, "use");
+  });
+
+  const updateBtn = document.createElement("button");
+  updateBtn.type = "button";
+  updateBtn.className = "es-patient-history-access__item-btn";
+  updateBtn.textContent = "Load and update";
+  updateBtn.addEventListener("click", async () => {
+    await applyPatientHistoryPrefill(data, "update");
+  });
+
+  actions.appendChild(useBtn);
+  actions.appendChild(updateBtn);
+  previewEl.appendChild(actions);
+}
+
+function renderPatientHistoryAppointments(items) {
+  const listEl = document.getElementById("es-patient-history-list");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+  clearPatientHistoryPreview();
+
+  if (!Array.isArray(items) || items.length === 0) {
+    renderPatientHistoryEmpty("We could not find any past appointments for this verification code.");
+    return;
+  }
+
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "es-patient-history-access__item";
+
+    const head = document.createElement("div");
+    head.className = "es-patient-history-access__item-head";
+    const headInfo = document.createElement("div");
+    const headTitle = document.createElement("h5");
+    headTitle.className = "es-patient-history-access__item-title";
+    headTitle.textContent = String(item?.appointment_label || "Previous appointment");
+    const headMeta = document.createElement("p");
+    headMeta.className = "es-patient-history-access__item-meta";
+    headMeta.textContent = `${item?.starts_at || "Date unavailable"}${
+      item?.practitioner_name ? ` · ${item.practitioner_name}` : ""
+    }`;
+    headInfo.appendChild(headTitle);
+    headInfo.appendChild(headMeta);
+
+    const badge = document.createElement("span");
+    badge.className = "es-patient-history-access__badge";
+    badge.textContent = String(item?.status || "completed");
+
+    head.appendChild(headInfo);
+    head.appendChild(badge);
+
+    const meta = document.createElement("div");
+    meta.className = "es-patient-history-access__item-meta";
+    const knowsFormState = typeof item?.has_form === "boolean";
+    meta.textContent = knowsFormState
+      ? item?.has_form
+        ? `Attached forms: ${Number(item?.forms_count || 0)}`
+        : "No attached form was found for this appointment."
+      : "Review this previous booking to reuse its saved details or questionnaire.";
+
+    const actions = document.createElement("div");
+    actions.className = "es-patient-history-access__item-actions";
+
+    const reviewBtn = document.createElement("button");
+    reviewBtn.type = "button";
+    reviewBtn.className = "es-patient-history-access__item-btn";
+    reviewBtn.textContent = knowsFormState
+      ? item?.has_form
+        ? "Review previous form"
+        : "Load saved details"
+      : "Review previous details";
+    reviewBtn.addEventListener("click", async () => {
+      setPatientHistoryUiState({
+        loading: true,
+        showResults: true,
+        status: "Loading previous form details...",
+        tone: "loading",
+      });
+
+      const { response, result } = await loadPatientHistoryPrefill(
+        item?.booking_id || item?.appointment_id || ""
+      );
+      setPatientHistoryUiState({
+        loading: false,
+        showResults: true,
+        status:
+          response && response.ok && result?.ok
+            ? "Review the previous details below."
+            : result?.message || "We could not load that previous form.",
+        tone: response && response.ok && result?.ok ? "success" : "error",
+      });
+
+      if (!response || !response.ok || !result?.ok) {
+        clearPatientHistoryPreview();
+        return;
+      }
+
+      if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+        window.ClinikoPatientHistoryAccess.state.lastPrefill = result?.data || null;
+      }
+      dispatchPatientHistoryEvent("es:patient-history:prefill-loaded", {
+        bookingId: item?.booking_id || item?.appointment_id || "",
+        data: result?.data || null,
+      });
+      renderPatientHistoryPreview(result?.data || {});
+    });
+
+    actions.appendChild(reviewBtn);
+    card.appendChild(head);
+    card.appendChild(meta);
+    card.appendChild(actions);
+    listEl.appendChild(card);
+  });
+}
+
+async function refreshPatientHistoryLatest() {
+  const token = getPatientHistoryToken();
+  if (!token) return null;
+
+  setPatientHistoryStage("results");
+  setPatientHistoryUiState({
+    loading: true,
+    showResults: true,
+    status: "Loading your latest saved details...",
+    tone: "loading",
+  });
+
+  const { response, result } = await loadPatientHistoryLatest(token);
+  const ok = !!response && response.ok && !!result?.ok && !!result?.data;
+  const latestData = ok ? result.data : null;
+
+  if (window.ClinikoPatientHistoryAccess && window.ClinikoPatientHistoryAccess.state) {
+    window.ClinikoPatientHistoryAccess.state.appointments = [];
+    window.ClinikoPatientHistoryAccess.state.lastPrefill = latestData;
+  }
+
+  setPatientHistoryUiState({
+    loading: false,
+    showResults: true,
+    status: ok
+      ? "Review your most recent saved details."
+      : result?.message || "We could not load your saved details.",
+    tone: ok ? "success" : "error",
+  });
+
+  if (ok) {
+    renderPatientHistoryPreview(latestData);
+  } else {
+    clearPatientHistoryPreview();
+    renderPatientHistoryEmpty(result?.message || "No completed appointment was found for this verification code.");
+  }
+
+  dispatchPatientHistoryEvent("es:patient-history:loaded", {
+    ok,
+    appointments: [],
+    data: latestData,
+    response,
+    result,
+  });
+
+  dispatchPatientHistoryEvent("es:patient-history:prefill-loaded", {
+    ok,
+    bookingId: latestData?.appointment?.booking_id || "",
+    data: latestData,
+    response,
+    result,
+  });
+
+  return { response, result };
+}
+
+function bindPatientHistoryChoiceButtons() {
+  const ui = getPatientHistoryUi();
+
+  if (ui.yesBtn) {
+    ui.yesBtn.addEventListener("click", () => {
+      const seededEmail = getPatientHistoryEmailValue();
+      if (seededEmail) {
+        setPatientHistoryEmailValue(seededEmail);
+      }
+
+      if (getPatientHistoryToken()) {
+        setPatientHistoryStage("results");
+        void refreshPatientHistoryLatest();
+        return;
+      }
+
+      setPatientHistoryStage("email");
+      setPatientHistoryUiState({
+        status: "",
+        showResults: false,
+        tone: "info",
+      });
+    });
+  }
+
+  if (ui.noBtn) {
+    ui.noBtn.addEventListener("click", () => {
+      stopPatientHistoryRequestStatusPolling();
+      setPatientHistoryChallengeToken("");
+      setPatientHistoryCodeValue("");
+      clearPatientHistoryPreview();
+      renderPatientHistoryEmpty("");
+      setPatientHistoryStage("prompt");
+      setPatientHistoryUiState({
+        status: "",
+        showResults: false,
+        tone: "info",
+      });
+      dismissPatientHistoryAccessSlot();
+      closePatientHistoryStandalone(0);
+    });
+  }
+}
+
+function bindPatientHistoryRequestButton() {
+  const ui = getPatientHistoryUi();
+  const requestBtn = ui.requestBtn;
+  if (!requestBtn) return;
+
+  requestBtn.addEventListener("click", async () => {
+    const email = getPatientHistoryEmailValue();
+    if (!email) {
+      setPatientHistoryUiState({
+        status: "Please enter your email address first.",
+        showResults: false,
+        tone: "error",
+      });
+      showToast("Please enter your email address first.", "error");
+      return;
+    }
+
+    setPatientHistoryEmailValue(email);
+    requestBtn.disabled = true;
+    setPatientHistoryUiState({
+      status: "Sending verification code...",
+      showResults: false,
+      tone: "loading",
+    });
+
+    try {
+      const { response, result } = await requestPatientHistoryCode(email);
+      const requestAccepted = !!(response && response.ok && result?.ok);
+      const resolvedRequestId = String(result?.request_id || "").trim();
+      const challengeToken = String(result?.challenge_token || "").trim();
+      const message = String(
+        result?.message || (
+          requestAccepted
+            ? "If matching completed appointments exist for this booking type, we emailed a 6-digit code."
+            : "We could not send the verification code."
+        )
+      );
+
+      setPatientHistoryChallengeToken(challengeToken);
+      setPatientHistoryCodeValue("");
+
+      setPatientHistoryStage(requestAccepted ? "code" : "email");
+      setPatientHistoryUiState({
+        status: message,
+        showResults: false,
+        tone: requestAccepted ? "success" : "error",
+      });
+
+      showToast(message, requestAccepted ? "success" : "error");
+      dispatchPatientHistoryEvent("es:patient-history:request-sent", {
+        ok: requestAccepted,
+        accepted: requestAccepted,
+        requestId: resolvedRequestId,
+        response,
+        result,
+      });
+    } catch (error) {
+      const message = "We could not send the verification code.";
+      setPatientHistoryUiState({
+        status: message,
+        showResults: false,
+        tone: "error",
+      });
+      setPatientHistoryStage("email");
+      showToast(message, "error");
+    } finally {
+      requestBtn.disabled = false;
+    }
+  });
+}
+
+function bindPatientHistoryVerifyButton() {
+  const ui = getPatientHistoryUi();
+  const verifyBtn = ui.verifyBtn;
+  if (!verifyBtn) return;
+
+  verifyBtn.addEventListener("click", async () => {
+    const email = getPatientHistoryEmailValue();
+    const code = getPatientHistoryCodeValue();
+    const challengeToken = getPatientHistoryChallengeToken();
+
+    if (!email) {
+      setPatientHistoryStage("email");
+      setPatientHistoryUiState({
+        status: "Please enter your email address first.",
+        showResults: false,
+        tone: "error",
+      });
+      return;
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      setPatientHistoryUiState({
+        status: "Please enter the 6-digit code from your email.",
+        showResults: false,
+        tone: "error",
+      });
+      return;
+    }
+
+    verifyBtn.disabled = true;
+    setPatientHistoryUiState({
+      loading: true,
+      status: "Verifying code...",
+      showResults: false,
+      tone: "loading",
+    });
+
+    try {
+      const { response, result } = await verifyPatientHistoryCode(email, code, challengeToken);
+      const verified = !!(response && response.ok && result?.ok && result?.access_token);
+
+      if (!verified) {
+        setPatientHistoryStage("code");
+        setPatientHistoryUiState({
+          loading: false,
+          status: String(result?.message || "The verification code is invalid or has expired."),
+          showResults: false,
+          tone: "error",
+        });
+        return;
+      }
+
+      setPatientHistoryToken(String(result.access_token || ""));
+      setPatientHistoryChallengeToken("");
+      setPatientHistoryCodeValue("");
+      setPatientHistoryStage("results");
+      await refreshPatientHistoryLatest();
+    } catch (_) {
+      setPatientHistoryStage("code");
+      setPatientHistoryUiState({
+        loading: false,
+        status: "We could not verify the code. Please try again.",
+        showResults: false,
+        tone: "error",
+      });
+    } finally {
+      verifyBtn.disabled = false;
+    }
+  });
+}
+
+function continuePatientHistoryAccessBootstrap() {
+  if (getPatientHistoryToken()) {
+    if (isHeadless) {
+      return;
+    }
+
+    setPatientHistoryStage("results");
+    openPatientHistoryStandalone();
+    void refreshPatientHistoryLatest();
+    return;
+  }
+
+  if (isHeadless || !isPatientHistoryAccessEnabled()) {
+    return;
+  }
+
+  if (isPatientHistoryAccessEnabled()) {
+    setPatientHistoryStage("prompt");
+    setPatientHistoryEmailValue(getPatientEmailFromForm());
+    setPatientHistoryUiState({
+      status: "",
+      showResults: false,
+      tone: "info",
+    });
+    openPatientHistoryStandalone();
+  }
+}
+
+function initPatientHistoryAccess() {
+  const config = getPatientHistoryAccessConfig();
+  const locationBootstrap = readPatientHistoryBootstrapFromLocation();
+  const locationToken = String(locationBootstrap?.token || "").trim();
+
+  window.ClinikoPatientHistoryAccess = {
+    state: {
+      token: "",
+      challengeToken: "",
+      email: "",
+      stage: "prompt",
+      appointments: [],
+      lastPrefill: null,
+      pendingRequestId: "",
+    },
+    config,
+    getToken: () => getPatientHistoryToken(),
+    setToken: (token) => setPatientHistoryToken(token),
+    getChallengeToken: () => getPatientHistoryChallengeToken(),
+    setChallengeToken: (token) => setPatientHistoryChallengeToken(token),
+    requestCode: (email, requestId = "") => requestPatientHistoryCode(email, requestId),
+    requestLink: (email, requestId = "") => requestPatientHistoryCode(email, requestId),
+    verifyCode: (email, code, challengeToken = "") => {
+      if (challengeToken) setPatientHistoryChallengeToken(challengeToken);
+      return verifyPatientHistoryCode(email, code, challengeToken);
+    },
+    loadLatest: (token = "") => {
+      if (token) setPatientHistoryToken(token);
+      return refreshPatientHistoryLatest();
+    },
+    loadAppointments: (token = "") => {
+      if (token) setPatientHistoryToken(token);
+      return loadPatientHistoryAppointments();
+    },
+    loadPrefill: (bookingId, token = "") => {
+      if (token) setPatientHistoryToken(token);
+      return loadPatientHistoryPrefill(bookingId);
+    },
+    loadRequestStatus: (requestId) => loadPatientHistoryRequestStatus(requestId),
+    completeRequest: (requestId, token = "") => completePatientHistoryRequest(requestId, token),
+    startRequestPolling: (requestId) => startPatientHistoryRequestStatusPolling(requestId),
+    stopRequestPolling: () => stopPatientHistoryRequestStatusPolling(),
+    applyPrefill: (data, mode = "use") => applyPatientHistoryPrefill(data, mode),
+    clearToken: () => {
+      stopPatientHistoryRequestStatusPolling();
+      setPatientHistoryToken("");
+      setPatientHistoryChallengeToken("");
+      setPatientHistoryCodeValue("");
+    },
+  };
+
+  bindPatientHistoryChoiceButtons();
+  bindPatientHistoryRequestButton();
+  bindPatientHistoryVerifyButton();
+
+  if (locationToken) {
+    setPatientHistoryToken(locationToken);
+  }
+
+  window.__esPatientHistoryHandoffAttempt = null;
+  window.__esPatientHistoryHandoffResult = null;
+  continuePatientHistoryAccessBootstrap();
 }
 
 function getHeadlessPayload() {
@@ -2254,6 +4143,7 @@ function showStep(i) {
     } else {
       setHidden(nextBtn, false);
     }
+    syncPatientHistoryStandaloneUi();
     return;
   }
 
@@ -2271,6 +4161,7 @@ function showStep(i) {
 
   if (progressEl) setHidden(progressEl, false);
   updateIndicators(i);
+  syncPatientHistoryStandaloneUi();
 }
 
 function updateStepIndicator(index) {

@@ -3,6 +3,7 @@ namespace App\Routes;
 
 use App\Controller\BookingAttemptController;
 use App\Controller\TyroController;
+use App\Controller\PatientAccessController;
 use App\Service\PublicRequestGuard;
 
 if (!defined('ABSPATH'))
@@ -21,6 +22,7 @@ class ApiRoutes
     public function register_routes()
     {
         $bookingAttemptController = new BookingAttemptController();
+        $patientAccessController = new PatientAccessController();
         $guard = new PublicRequestGuard();
 
         // Legacy scheduling / payment routes
@@ -134,6 +136,48 @@ class ApiRoutes
             'methods' => 'GET',
             'callback' => [$bookingAttemptController, 'status'],
             'permission_callback' => [$guard, 'allowAttemptMutation'],
+        ]);
+
+        register_rest_route('v2', '/patient-access/request', [
+            'methods' => 'POST',
+            'callback' => [$patientAccessController, 'requestLink'],
+            'permission_callback' => [$guard, 'allowPatientAccessRequest'],
+        ]);
+
+        register_rest_route('v2', '/patient-access/verify', [
+            'methods' => 'POST',
+            'callback' => [$patientAccessController, 'verifyCode'],
+            'permission_callback' => [$guard, 'allowPatientAccessRequest'],
+        ]);
+
+        register_rest_route('v2', '/patient-access/request-status', [
+            'methods' => 'GET',
+            'callback' => [$patientAccessController, 'requestStatus'],
+            'permission_callback' => [$guard, 'allowPatientAccessRequest'],
+        ]);
+
+        register_rest_route('v2', '/patient-access/request-complete', [
+            'methods' => 'POST',
+            'callback' => [$patientAccessController, 'completeRequest'],
+            'permission_callback' => [$guard, 'allowPatientAccessRead'],
+        ]);
+
+        register_rest_route('v2', '/patient-access/appointments', [
+            'methods' => 'GET',
+            'callback' => [$patientAccessController, 'appointments'],
+            'permission_callback' => [$guard, 'allowPatientAccessRead'],
+        ]);
+
+        register_rest_route('v2', '/patient-access/appointments/(?P<booking_id>[\w-]+)/prefill', [
+            'methods' => 'GET',
+            'callback' => [$patientAccessController, 'prefill'],
+            'permission_callback' => [$guard, 'allowPatientAccessRead'],
+        ]);
+
+        register_rest_route('v2', '/patient-access/latest', [
+            'methods' => 'GET',
+            'callback' => [$patientAccessController, 'latest'],
+            'permission_callback' => [$guard, 'allowPatientAccessRead'],
         ]);
     }
 }

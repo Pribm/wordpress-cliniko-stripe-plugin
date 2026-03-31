@@ -1,3 +1,20 @@
+## [1.6.4] - 2026-04-01
+### Added
+- Secure returning-patient access for custom-form widgets, including emailed 6-digit verification codes and short-lived patient access tokens.
+- New patient-access routes under `v2`:
+  - `POST /wp-json/v2/patient-access/request`
+  - `POST /wp-json/v2/patient-access/verify`
+  - `GET /wp-json/v2/patient-access/request-status`
+  - `POST /wp-json/v2/patient-access/request-complete`
+  - `GET /wp-json/v2/patient-access/appointments`
+  - `GET /wp-json/v2/patient-access/appointments/{booking_id}/prefill`
+  - `GET /wp-json/v2/patient-access/latest`
+- Widget controls to enable returning-patient access, place it around a specific question, and limit how many completed appointments are offered for retrieval.
+
+### Changed
+- Custom-form frontend now supports a standalone returning-patient gate with verification, latest-prefill loading, and handoff into the live booking flow.
+- Public request guarding now separates patient-access request validation from patient-access read validation with dedicated token handling.
+
 ## [1.6.3] - 2026-03-16
 ### Added
 - Headless runtime helpers `updateFormtemplate(templateId)`/`updateFormTemplate(templateId)` and `updateAppointmentType(appointmentTypeId, updatePaymentStep = true)` to swap Cliniko form/template context without reloading the page.

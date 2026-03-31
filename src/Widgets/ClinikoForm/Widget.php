@@ -9,6 +9,7 @@ if (!defined('ABSPATH'))
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 use App\Model\AppointmentType;
+use App\Service\PatientAccessTokenService;
 use App\Service\PublicRequestGuard;
 use Elementor\Widget_Base;
 
@@ -362,6 +363,23 @@ class Widget extends Widget_Base
       "{$pad['top']}{$pad['unit']} {$pad['right']}{$pad['unit']} {$pad['bottom']}{$pad['unit']} {$pad['left']}{$pad['unit']}" :
       '12px 24px';
 
+    $patientHistoryAccessEnabled =
+      ($settings['appointment_source'] ?? '') === 'custom_form'
+      && (($settings['enable_patient_history_access'] ?? '') === 'yes');
+    $patientHistoryAccessPlacementMode = $settings['patient_history_access_placement_mode'] ?? 'first_question';
+    $patientHistoryAccessAnchorQuestion = trim((string) ($settings['patient_history_access_anchor_question'] ?? ''));
+    $patientHistoryAccessLimit = isset($settings['patient_history_access_limit'])
+      ? (int) $settings['patient_history_access_limit']
+      : 5;
+    $patientHistoryAccessLimit = max(1, min(10, $patientHistoryAccessLimit));
+    $patientHistoryReturnUrl = '';
+    if (function_exists('get_permalink')) {
+      $patientHistoryReturnUrl = (string) get_permalink();
+    }
+    if ($patientHistoryReturnUrl === '') {
+      $patientHistoryReturnUrl = (string) get_site_url();
+    }
+
     $submission_template = $this->build_submission_template($sections ?? []);
     $submission_template['moduleId'] = $settings['module_id'] ?? '';
     $submission_template['patient_form_template_id'] = $form_template_id ?? '';
@@ -405,6 +423,25 @@ class Widget extends Widget_Base
         // expose gateway selection for frontend handlers (keeps original casing if present)
         'custom_form_payment' => $settings['custom_form_payment'] ?? 'stripe',
         'appointment_time_selection' => $settings['appointment_time_selection'] ?? 'calendar',
+        'patient_history_access' => [
+          'enabled' => $patientHistoryAccessEnabled,
+          'position' => $patientHistoryAccessPlacementMode,
+          'placement_mode' => $patientHistoryAccessPlacementMode,
+          'anchor_question' => $patientHistoryAccessAnchorQuestion,
+          'limit' => $patientHistoryAccessLimit,
+          'return_url' => $patientHistoryReturnUrl,
+          'request_url' => get_site_url() . '/wp-json/v2/patient-access/request',
+          'request_status_url' => get_site_url() . '/wp-json/v2/patient-access/request-status',
+          'request_complete_url' => get_site_url() . '/wp-json/v2/patient-access/request-complete',
+          'latest_url' => get_site_url() . '/wp-json/v2/patient-access/latest',
+          'verify_url' => get_site_url() . '/wp-json/v2/patient-access/verify',
+          'appointments_url' => get_site_url() . '/wp-json/v2/patient-access/appointments',
+          'prefill_url_template' => get_site_url() . '/wp-json/v2/patient-access/appointments/__BOOKING_ID__/prefill',
+          'token_ttl' => (new PatientAccessTokenService())->ttl(),
+          'challenge_ttl' => (new PatientAccessTokenService())->challengeTtl(),
+          'query_key' => PatientAccessTokenService::QUERY_PARAM_KEY,
+          'hash_key' => PatientAccessTokenService::HASH_FRAGMENT_KEY,
+        ],
       ]
     );
 
