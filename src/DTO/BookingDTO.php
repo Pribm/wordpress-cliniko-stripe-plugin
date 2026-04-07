@@ -28,6 +28,8 @@ class BookingDTO
     public ?string $invoiceStatus;
     public ?string $treatmentNoteStatus;
     public ?string $patientName;
+    public ?string $appointmentTypeName;
+    public ?string $practitionerName;
     public ?string $telehealthUrl;
 
     public ?LinkedResource $appointmentType;
@@ -62,6 +64,8 @@ class BookingDTO
         $this->invoiceStatus = $data['invoice_status'] ?? null;
         $this->treatmentNoteStatus = $data['treatment_note_status'] ?? null;
         $this->patientName = $data['patient_name'] ?? null;
+        $this->appointmentTypeName = $data['appointment_type_name'] ?? null;
+        $this->practitionerName = $data['practitioner_name'] ?? null;
         $this->telehealthUrl = $data['telehealth_url'] ?? null;
 
         // Linked resources

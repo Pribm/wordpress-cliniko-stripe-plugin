@@ -83,6 +83,11 @@ class Attendee extends AbstractModel
         return $this->dto()->cancelledAt;
     }
 
+    public function getDeletedAt(): ?string
+    {
+        return $this->dto()->deletedAt;
+    }
+
     public function getCancellationReason(): ?string
     {
         return $this->dto()->cancellationReason;
