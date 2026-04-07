@@ -1,3 +1,18 @@
+## [1.6.5] - 2026-04-07
+### Added
+- Admin Debug screen with passive observability for plugin REST requests, outbound HTTP calls, Cliniko client usage, mail outcomes, and fatal errors.
+- Encrypted request-lookup cache for returning-patient access, keyed by email + appointment type and refreshed on reuse within the verification-code TTL window.
+
+### Changed
+- Returning-patient access emails now include both the 6-digit code and a secure magic-link option.
+- `POST /wp-json/v2/patient-access/request` now uses a narrower Cliniko lookup path for cold requests: patient by email, then latest matching booking by patient id + appointment type.
+- `GET /wp-json/v2/patient-access/latest` now reuses cached patient prefill data when available, reducing the number of follow-up Cliniko reads after code verification.
+- Returning-patient widget copy now reflects the new email behavior in the shipped custom-form frontend.
+
+### Fixed
+- Patient-access request failures now return explicit frontend errors when no patient record or no matching completed booking exists, instead of a generic success-style response.
+- Cliniko HTTP client now uses an explicit timeout for outbound requests.
+
 ## [1.6.4] - 2026-04-01
 ### Added
 - Secure returning-patient access for custom-form widgets, including emailed 6-digit verification codes and short-lived patient access tokens.

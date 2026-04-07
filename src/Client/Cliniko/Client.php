@@ -15,6 +15,7 @@ class Client implements ApiClientInterface
 
     private const FALLBACK_SHARD = 'au1';
     private const VALID_SHARD_PATTERN = '/\b\w{2}\d{1,2}\b/i';
+    private const DEFAULT_REQUEST_TIMEOUT = 15.0;
 
     private function __construct()
     {
@@ -47,9 +48,9 @@ class Client implements ApiClientInterface
     {
         $url = str_starts_with($endpointOrUrl, 'http') ? $endpointOrUrl : $this->baseUrl . ltrim($endpointOrUrl, '/');
 
-        $response = wp_remote_get($url, [
+        $response = wp_remote_get($url, $this->buildRequestArgs([
             'headers' => $this->getDefaultHeaders()
-        ]);
+        ]));
 
         return $this->buildClientResponse($response);
     }
@@ -58,14 +59,12 @@ class Client implements ApiClientInterface
     {
         $url = $this->baseUrl . ltrim($endpoint, '/');
 
-        $toCopy = json_encode($data);
-
-        $response = wp_remote_post($url, [
+        $response = wp_remote_post($url, $this->buildRequestArgs([
             'headers' => array_merge($this->getDefaultHeaders(), [
                 'Content-Type' => 'application/json'
             ]),
             'body' => json_encode($data)
-        ]);
+        ]));
 
         return $this->buildClientResponse($response);
     }
@@ -74,13 +73,13 @@ class Client implements ApiClientInterface
     {
         $url = $this->baseUrl . ltrim($endpoint, '/');
 
-        $response = wp_remote_request($url, [
+        $response = wp_remote_request($url, $this->buildRequestArgs([
             'method' => 'PUT',
             'headers' => array_merge($this->getDefaultHeaders(), [
                 'Content-Type' => 'application/json'
             ]),
             'body' => json_encode($data)
-        ]);
+        ]));
 
         return $this->buildClientResponse($response);
     }
@@ -89,13 +88,13 @@ class Client implements ApiClientInterface
     {
         $url = $this->baseUrl . ltrim($endpoint, '/');
 
-        $response = wp_remote_request($url, [
+        $response = wp_remote_request($url, $this->buildRequestArgs([
             'method' => 'PATCH',
             'headers' => array_merge($this->getDefaultHeaders(), [
                 'Content-Type' => 'application/json'
             ]),
             'body' => json_encode($data)
-        ]);
+        ]));
 
         return $this->buildClientResponse($response);
     }
@@ -104,10 +103,10 @@ class Client implements ApiClientInterface
     {
         $url = $this->baseUrl . ltrim($endpoint, '/');
 
-        $response = wp_remote_request($url, [
+        $response = wp_remote_request($url, $this->buildRequestArgs([
             'method' => 'DELETE',
             'headers' => $this->getDefaultHeaders(),
-        ]);
+        ]));
 
         if (is_wp_error($response)) {
             return new ClientResponse(null, $response->get_error_message());
@@ -135,6 +134,30 @@ class Client implements ApiClientInterface
             'Authorization' => $this->authHeader,
             'Accept' => 'application/json'
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $args
+     * @return array<string,mixed>
+     */
+    private function buildRequestArgs(array $args): array
+    {
+        $args['timeout'] = $this->requestTimeout();
+        return $args;
+    }
+
+    private function requestTimeout(): float
+    {
+        $timeout = self::DEFAULT_REQUEST_TIMEOUT;
+
+        if (function_exists('apply_filters')) {
+            $filtered = apply_filters('cliniko_http_timeout', $timeout);
+            if (is_numeric($filtered)) {
+                $timeout = (float) $filtered;
+            }
+        }
+
+        return max(1.0, $timeout);
     }
 
     /**

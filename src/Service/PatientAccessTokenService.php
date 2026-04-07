@@ -23,30 +23,14 @@ class PatientAccessTokenService
         array $latestContext = []
     ): string
     {
-        $normalizedEmail = $this->normalizeEmail($email);
-        $normalizedPatientIds = $this->normalizePatientIds($patientIds);
-        if ($normalizedEmail === '' || empty($normalizedPatientIds)) {
-            return '';
-        }
-
-        $payload = [
-            'sub' => $normalizedEmail,
-            'exp' => time() + self::ACCESS_TOKEN_TTL,
-            'iat' => time(),
-            'host' => $this->siteOrigin(),
-            'scope' => 'patient-access',
-            'appointment_type_id' => trim($appointmentTypeId),
-            'patient_ids' => $normalizedPatientIds,
-            'nonce' => $this->randomToken(10),
-            'latest_booking_id' => $this->normalizeId((string) ($latestContext['booking_id'] ?? '')),
-            'latest_patient_id' => $this->normalizeId((string) ($latestContext['patient_id'] ?? '')),
-            'latest_starts_at' => trim((string) ($latestContext['starts_at'] ?? '')),
-            'latest_appointment_label' => trim((string) ($latestContext['appointment_label'] ?? '')),
-            'latest_practitioner_id' => $this->normalizeId((string) ($latestContext['practitioner_id'] ?? '')),
-            'latest_practitioner_name' => trim((string) ($latestContext['practitioner_name'] ?? '')),
-        ];
-
-        return $this->encryptPayload($payload);
+        return $this->issueScopedPayload(
+            $email,
+            $appointmentTypeId,
+            $patientIds,
+            $latestContext,
+            'patient-access',
+            self::ACCESS_TOKEN_TTL
+        );
     }
 
     /**
@@ -61,40 +45,50 @@ class PatientAccessTokenService
         array $latestContext = []
     ): array
     {
-        $normalizedEmail = $this->normalizeEmail($email);
-        $normalizedPatientIds = $this->normalizePatientIds($patientIds);
-        if ($normalizedEmail === '' || empty($normalizedPatientIds)) {
-            return [
-                'challenge_token' => '',
-                'code' => '',
-                'expires_in' => self::CHALLENGE_TOKEN_TTL,
-            ];
-        }
-
         $code = $this->randomNumericCode();
-        $payload = [
-            'sub' => $normalizedEmail,
-            'code' => $code,
-            'exp' => time() + self::CHALLENGE_TOKEN_TTL,
-            'iat' => time(),
-            'host' => $this->siteOrigin(),
-            'scope' => 'patient-access-code',
-            'appointment_type_id' => trim($appointmentTypeId),
-            'patient_ids' => $normalizedPatientIds,
-            'nonce' => $this->randomToken(10),
-            'latest_booking_id' => $this->normalizeId((string) ($latestContext['booking_id'] ?? '')),
-            'latest_patient_id' => $this->normalizeId((string) ($latestContext['patient_id'] ?? '')),
-            'latest_starts_at' => trim((string) ($latestContext['starts_at'] ?? '')),
-            'latest_appointment_label' => trim((string) ($latestContext['appointment_label'] ?? '')),
-            'latest_practitioner_id' => $this->normalizeId((string) ($latestContext['practitioner_id'] ?? '')),
-            'latest_practitioner_name' => trim((string) ($latestContext['practitioner_name'] ?? '')),
-        ];
+        $token = $this->issueScopedPayload(
+            $email,
+            $appointmentTypeId,
+            $patientIds,
+            $latestContext,
+            'patient-access-code',
+            self::CHALLENGE_TOKEN_TTL,
+            [
+                'code' => $code,
+            ]
+        );
 
         return [
-            'challenge_token' => $this->encryptPayload($payload),
+            'challenge_token' => $token,
             'code' => $code,
             'expires_in' => self::CHALLENGE_TOKEN_TTL,
         ];
+    }
+
+    /**
+     * @param array<int|string,mixed> $patientIds
+     * @param array<string,mixed> $latestContext
+     * @param array<string,mixed> $patientPrefill
+     */
+    public function issueLookupCache(
+        string $email,
+        string $appointmentTypeId = '',
+        array $patientIds = [],
+        array $latestContext = [],
+        array $patientPrefill = [],
+        int $ttlSeconds = 0
+    ): string {
+        return $this->issueScopedPayload(
+            $email,
+            $appointmentTypeId,
+            $patientIds,
+            $latestContext,
+            'patient-access-lookup',
+            $ttlSeconds > 0 ? $ttlSeconds : self::CHALLENGE_TOKEN_TTL,
+            [
+                'patient_prefill' => $this->normalizePatientPrefill($patientPrefill),
+            ]
+        );
     }
 
     /**
@@ -123,6 +117,19 @@ class PatientAccessTokenService
         }
 
         return $this->normalizeValidatedPayload($payload, 'patient-access', false);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function validateLookupCache(string $token): ?array
+    {
+        $payload = $this->decryptPayload($token);
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        return $this->normalizeValidatedPayload($payload, 'patient-access-lookup', false);
     }
 
     public function ttl(): int
@@ -214,6 +221,9 @@ class PatientAccessTokenService
         $payload['latest_appointment_label'] = trim((string) ($payload['latest_appointment_label'] ?? ''));
         $payload['latest_practitioner_id'] = $this->normalizeId((string) ($payload['latest_practitioner_id'] ?? ''));
         $payload['latest_practitioner_name'] = trim((string) ($payload['latest_practitioner_name'] ?? ''));
+        $payload['patient_prefill'] = $this->normalizePatientPrefill(
+            is_array($payload['patient_prefill'] ?? null) ? $payload['patient_prefill'] : []
+        );
 
         if ($payload['sub'] === '' || empty($payload['patient_ids'])) {
             return null;
@@ -258,6 +268,22 @@ class PatientAccessTokenService
      */
     public function buildMagicLink(string $returnUrl, string $token, array $extraParams = []): string
     {
+        return $this->buildMagicLinkUrl($returnUrl, $token, $extraParams, false);
+    }
+
+    /**
+     * @param array<string,scalar|null> $extraParams
+     */
+    public function buildMagicHashLink(string $returnUrl, string $token, array $extraParams = []): string
+    {
+        return $this->buildMagicLinkUrl($returnUrl, $token, $extraParams, true);
+    }
+
+    /**
+     * @param array<string,scalar|null> $extraParams
+     */
+    private function buildMagicLinkUrl(string $returnUrl, string $token, array $extraParams, bool $useHash): string
+    {
         $base = $this->normalizeReturnUrl($returnUrl);
         if ($token === '') {
             return $base;
@@ -272,13 +298,22 @@ class PatientAccessTokenService
             ? $parts['path']
             : '/';
 
-        $params = [];
+        $queryParams = [];
         if (isset($parts['query']) && is_string($parts['query']) && $parts['query'] !== '') {
-            parse_str($parts['query'], $params);
+            parse_str($parts['query'], $queryParams);
         }
 
-        $params[self::QUERY_PARAM_KEY] = $token;
-        unset($params['access_token']);
+        unset($queryParams[self::QUERY_PARAM_KEY], $queryParams['access_token'], $queryParams['request_id']);
+
+        $params = [];
+        if (!$useHash) {
+            $params = $queryParams;
+            $params[self::QUERY_PARAM_KEY] = $token;
+            unset($params['access_token']);
+        } else {
+            $params[self::HASH_FRAGMENT_KEY] = $token;
+        }
+
         foreach ($extraParams as $key => $value) {
             $normalizedKey = trim((string) $key);
             if ($normalizedKey === '') {
@@ -293,9 +328,19 @@ class PatientAccessTokenService
             $params[$normalizedKey] = (string) $value;
         }
 
-        $query = http_build_query($params);
+        $query = http_build_query($queryParams);
+        $suffix = http_build_query($params);
 
-        return $this->siteOrigin() . $path . ($query !== '' ? '?' . $query : '');
+        if ($useHash) {
+            return $this->siteOrigin()
+                . $path
+                . ($query !== '' ? '?' . $query : '')
+                . ($suffix !== '' ? '#' . $suffix : '');
+        }
+
+        return $this->siteOrigin()
+            . $path
+            . ($suffix !== '' ? '?' . $suffix : '');
     }
 
     public function normalizeReturnUrl(string $returnUrl): string
@@ -366,6 +411,82 @@ class PatientAccessTokenService
         }
 
         return [$payloadJson, $signature];
+    }
+
+    /**
+     * @param array<int|string,mixed> $patientIds
+     * @param array<string,mixed> $latestContext
+     * @param array<string,mixed> $extraClaims
+     */
+    private function issueScopedPayload(
+        string $email,
+        string $appointmentTypeId,
+        array $patientIds,
+        array $latestContext,
+        string $scope,
+        int $ttlSeconds,
+        array $extraClaims = []
+    ): string {
+        $normalizedEmail = $this->normalizeEmail($email);
+        $normalizedPatientIds = $this->normalizePatientIds($patientIds);
+        if ($normalizedEmail === '' || empty($normalizedPatientIds)) {
+            return '';
+        }
+
+        $payload = array_merge(
+            [
+                'sub' => $normalizedEmail,
+                'exp' => time() + max(1, $ttlSeconds),
+                'iat' => time(),
+                'host' => $this->siteOrigin(),
+                'scope' => $scope,
+                'appointment_type_id' => trim($appointmentTypeId),
+                'patient_ids' => $normalizedPatientIds,
+                'nonce' => $this->randomToken(10),
+                'latest_booking_id' => $this->normalizeId((string) ($latestContext['booking_id'] ?? '')),
+                'latest_patient_id' => $this->normalizeId((string) ($latestContext['patient_id'] ?? '')),
+                'latest_starts_at' => trim((string) ($latestContext['starts_at'] ?? '')),
+                'latest_appointment_label' => trim((string) ($latestContext['appointment_label'] ?? '')),
+                'latest_practitioner_id' => $this->normalizeId((string) ($latestContext['practitioner_id'] ?? '')),
+                'latest_practitioner_name' => trim((string) ($latestContext['practitioner_name'] ?? '')),
+            ],
+            $extraClaims
+        );
+
+        return $this->encryptPayload($payload);
+    }
+
+    /**
+     * @param array<string,mixed> $patientPrefill
+     * @return array<string,string>
+     */
+    private function normalizePatientPrefill(array $patientPrefill): array
+    {
+        $allowedKeys = [
+            'first_name',
+            'last_name',
+            'email',
+            'phone',
+            'medicare',
+            'medicare_reference_number',
+            'address_1',
+            'address_2',
+            'city',
+            'state',
+            'post_code',
+            'country',
+            'date_of_birth',
+            'practitioner_id',
+            'appointment_start',
+            'appointment_date',
+        ];
+
+        $normalized = [];
+        foreach ($allowedKeys as $key) {
+            $normalized[$key] = trim((string) ($patientPrefill[$key] ?? ''));
+        }
+
+        return $normalized;
     }
 
     private function secret(): string

@@ -443,6 +443,45 @@ abstract class AbstractModel
         return $items;
     }
 
+    /**
+     * Hydrates a collection directly from a full Cliniko collection URL.
+     *
+     * @phpstan-return list<static>
+     * @throws ApiException
+     */
+    public static function queryManyByUrl(string $url, ApiClientInterface $client, bool $throwOnError = false): array
+    {
+        $response = $client->get(trim($url));
+
+        if (!$response->isSuccessful()) {
+            if ($throwOnError) {
+                throw new ApiException(
+                    "Failed to query resources at {$url}.",
+                    self::buildResponseErrorContext($response)
+                );
+            }
+            return [];
+        }
+
+        $listKey = static::getListKey();
+        $rows = $response->data[$listKey] ?? [];
+
+        if (!is_array($rows) || empty($rows)) {
+            return [];
+        }
+
+        $dtoClass = static::getDtoClass();
+        $items = [];
+
+        foreach ($rows as $row) {
+            /** @var object $dto */
+            $dto = $dtoClass::fromArray($row);
+            $items[] = static::newInstance($dto, $client);
+        }
+
+        return $items;
+    }
+
     // -----------------------------
     // Utilities
     // -----------------------------

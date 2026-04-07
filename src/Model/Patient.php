@@ -54,5 +54,65 @@ class Patient extends AbstractModel
         return $this->dto->email;
     }
 
+    public function getFirstName(): string
+    {
+        return (string) $this->dto->firstName;
+    }
+
+    public function getLastName(): string
+    {
+        return (string) $this->dto->lastName;
+    }
+
+    public function getPhone(): ?string
+    {
+        return $this->dto->phone;
+    }
+
+    public function getDateOfBirth(): ?string
+    {
+        return $this->dto->dateOfBirth;
+    }
+
+    public function getMedicare(): ?string
+    {
+        return $this->dto->medicare;
+    }
+
+    public function getMedicareReferenceNumber(): ?string
+    {
+        return $this->dto->medicareReferenceNumber;
+    }
+
+    public function getAddress1(): ?string
+    {
+        return $this->dto->address1;
+    }
+
+    public function getAddress2(): ?string
+    {
+        return $this->dto->address2;
+    }
+
+    public function getCity(): ?string
+    {
+        return $this->dto->city;
+    }
+
+    public function getState(): ?string
+    {
+        return $this->dto->state;
+    }
+
+    public function getPostCode(): ?string
+    {
+        return $this->dto->postCode;
+    }
+
+    public function getCountry(): ?string
+    {
+        return $this->dto->country;
+    }
+
 
 }

@@ -190,27 +190,36 @@ class NotificationService
         if ($type === 'error') {
             $headerColor = '#b91c1c';
             $bgColor = '#fee2e2';
+            $panelBorder = '#fecaca';
             $title = 'There was a problem with your request';
         } else {
             $headerColor = '#047857';
             $bgColor = '#ecfdf5';
+            $panelBorder = '#a7f3d0';
             $title = 'Your request was successful';
+        }
+
+        $content = trim($message);
+        if ($content === '') {
+            $content = '<p style="margin:0;">No additional details were provided.</p>';
         }
 
         return "
             <html>
-                <body style='{$baseStyles} background-color:#f9fafb; padding:40px 0;'>
-                    <table width='100%' cellspacing='0' cellpadding='0' style='max-width:600px;margin:auto;background-color:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);'>
+                <body style='{$baseStyles} background-color:#f3f4f6; padding:32px 16px;'>
+                    <table width='100%' cellspacing='0' cellpadding='0' style='max-width:640px;margin:auto;background-color:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 12px 32px rgba(15,23,42,0.10);'>
                         <tr>
-                            <td style='background-color:{$headerColor};color:#fff;padding:20px 24px;font-size:20px;font-weight:bold;text-align:center;'>
+                            <td style='background-color:{$headerColor};color:#fff;padding:24px 28px;font-size:22px;font-weight:700;text-align:center;'>
                                 {$title}
                             </td>
                         </tr>
                         <tr>
-                            <td style='padding:24px;background-color:{$bgColor};'>
+                            <td style='padding:28px 28px 18px;background-color:#ffffff;'>
                                 {$logo_html}
-                                <p style='margin-top:0;margin-bottom:16px;'>{$message}</p>
-                                <p style='margin-top:24px;font-size:14px;color:#555;'>Thank you,<br><strong>{$brand_name} Team</strong></p>
+                                <div style='background-color:{$bgColor};border:1px solid {$panelBorder};border-radius:16px;padding:22px 20px;color:#1f2937;'>
+                                    {$content}
+                                </div>
+                                <p style='margin:22px 0 0;font-size:14px;color:#4b5563;'>Thank you,<br><strong>{$brand_name} Team</strong></p>
                             </td>
                         </tr>
                     </table>

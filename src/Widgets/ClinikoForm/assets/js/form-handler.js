@@ -1394,10 +1394,10 @@ const PATIENT_HISTORY_STAGE_META = {
     helper: "If you already completed this appointment type, we can load your most recent saved details.",
   },
   email: {
-    helper: "Enter the same email address you used for your completed booking. We will email a 6-digit code.",
+    helper: "Enter the same email address you used for your completed booking. We will email a 6-digit code and a secure link.",
   },
   code: {
-    helper: "Enter the 6-digit code from your email to load your saved details.",
+    helper: "Enter the 6-digit code from your email, or use the secure link in that email to load your saved details.",
   },
   results: {
     helper: "Review the most recent saved details for this booking type.",
@@ -2491,7 +2491,7 @@ function bindPatientHistoryRequestButton() {
     setPatientHistoryEmailValue(email);
     requestBtn.disabled = true;
     setPatientHistoryUiState({
-      status: "Sending verification code...",
+      status: "Sending verification email...",
       showResults: false,
       tone: "loading",
     });
@@ -2504,8 +2504,8 @@ function bindPatientHistoryRequestButton() {
       const message = String(
         result?.message || (
           requestAccepted
-            ? "If matching completed appointments exist for this booking type, we emailed a 6-digit code."
-            : "We could not send the verification code."
+            ? "If matching completed appointments exist for this booking type, we emailed access instructions."
+            : "We could not send the verification email."
         )
       );
 
@@ -2528,7 +2528,7 @@ function bindPatientHistoryRequestButton() {
         result,
       });
     } catch (error) {
-      const message = "We could not send the verification code.";
+      const message = "We could not send the verification email.";
       setPatientHistoryUiState({
         status: message,
         showResults: false,

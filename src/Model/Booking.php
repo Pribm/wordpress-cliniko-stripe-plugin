@@ -47,6 +47,31 @@ class Booking extends AbstractModel
         return $this->dto->patientName;
     }
 
+    public function getAppointmentTypeName(): ?string
+    {
+        return $this->dto->appointmentTypeName;
+    }
+
+    public function getPractitionerName(): ?string
+    {
+        return $this->dto->practitionerName;
+    }
+
+    public function getAppointmentTypeId(): ?string
+    {
+        return $this->linkedResourceId($this->dto->appointmentType !== null ? $this->dto->appointmentType->url : '');
+    }
+
+    public function getPractitionerId(): ?string
+    {
+        return $this->linkedResourceId($this->dto->practitioner !== null ? $this->dto->practitioner->url : '');
+    }
+
+    public function getPatientId(): ?string
+    {
+        return $this->linkedResourceId($this->dto->patient !== null ? $this->dto->patient->url : '');
+    }
+
     public function getCreatedAt(): ?string
     {
         return $this->dto->createdAt;
@@ -194,5 +219,25 @@ class Booking extends AbstractModel
     public function didNotArrive(): bool
     {
         return (bool) $this->dto->didNotArrive;
+    }
+
+    private function linkedResourceId(string $url): ?string
+    {
+        $value = trim($url);
+        if ($value === '') {
+            return null;
+        }
+
+        $path = parse_url($value, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+
+        $segments = array_values(array_filter(explode('/', trim($path, '/'))));
+        if (empty($segments)) {
+            return null;
+        }
+
+        return (string) end($segments);
     }
 }

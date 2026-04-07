@@ -4,6 +4,7 @@ namespace App\Admin;
 
 use App\Admin\Modules\AppointmentTypes;
 use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Debug;
 use App\Admin\Modules\ElementorTemplateSync;
 use App\Admin\Modules\PatientForms;
 use App\Admin\Modules\Settings;
@@ -49,5 +50,6 @@ class PluginFacade
         AppointmentTypes::init();
         PatientForms::init();
         Tools::init();
+        Debug::init();
     }
 }
