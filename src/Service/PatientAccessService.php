@@ -1320,16 +1320,12 @@ class PatientAccessService
     {
         $dto = $booking->getDTO();
         $deletedAt = is_object($dto) && property_exists($dto, 'deletedAt') ? (string) ($dto->deletedAt ?? '') : '';
-        $startsAt = trim((string) ($booking->getStartsAt() ?? ''));
-        $startsAtTs = $startsAt !== '' ? strtotime($startsAt) : false;
 
         return !$booking->isArchived()
             && $deletedAt === ''
             && !$booking->wasCancelled()
             && !$booking->didNotArrive()
-            && $booking->getAppointmentTypeId() === $appointmentTypeId
-            && $startsAtTs !== false
-            && $startsAtTs <= time();
+            && $booking->getAppointmentTypeId() === $appointmentTypeId;
     }
 
     private function isEligibleAttendeeModel(Attendee $attendee): bool
@@ -1380,9 +1376,7 @@ class PatientAccessService
             }
         }
 
-        $startsAt = (string) ($bookingRow['starts_at'] ?? '');
-        $startsAtTs = $startsAt !== '' ? strtotime($startsAt) : false;
-        return $startsAtTs !== false && $startsAtTs <= time();
+        return true;
     }
 
     /**
