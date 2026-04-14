@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.6.5`
+- Current plugin version: `1.6.6`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,11 +14,9 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.6.5
-- Added an admin Debug screen for passive tracing of plugin REST requests, Cliniko/external HTTP timings, mail outcomes, and fatal errors.
-- Returning-patient access emails now send both a 6-digit verification code and a secure magic link.
-- Tightened patient-access error handling so missing patients and missing matching completed bookings return explicit frontend errors.
-- Reduced returning-patient lookup overhead by using a narrower Cliniko request path and an encrypted request-lookup cache tied to the verification-code TTL.
+## What Is New in 1.6.6
+- Returning-patient lookup now accepts the latest matching Cliniko booking without requiring it to have already started.
+- Patient-access request handling now uses the latest matching booking as the eligibility gate for returning patients.
 
 ## Core Features
 - Shard-aware Cliniko API integration.

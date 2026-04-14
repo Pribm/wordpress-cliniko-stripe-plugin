@@ -1,3 +1,10 @@
+## [1.6.6] - 2026-04-15
+### Changed
+- Returning-patient lookup now treats the latest matching Cliniko booking as eligible without requiring the appointment start time to be in the past.
+
+### Fixed
+- Patient-access request failures no longer depend on local timezone timing for future bookings when the latest matching booking should be selected.
+
 ## [1.6.5] - 2026-04-07
 ### Added
 - Admin Debug screen with passive observability for plugin REST requests, outbound HTTP calls, Cliniko client usage, mail outcomes, and fatal errors.
