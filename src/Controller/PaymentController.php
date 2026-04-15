@@ -4,6 +4,7 @@ namespace App\Controller;
 use App\Admin\Modules\Credentials;
 use App\Model\AppointmentType;
 use App\Service\PatientFormPayloadSanitizer;
+use App\Service\PatientSubmissionSanitizer;
 use App\Service\SchedulingDispatchService;
 use App\Service\StripeService;
 use App\Validator\AppointmentRequestValidator;
@@ -39,6 +40,7 @@ class PaymentController
 
         // Forwarded to the background worker (but stored server-side to keep action args tiny):
         $patient = is_array($body['patient'] ?? null) ? $body['patient'] : json_decode($body['patient'] ?? '[]', true);
+        $patient = PatientSubmissionSanitizer::sanitize(is_array($patient) ? $patient : []);
         $content = is_array($body['content'] ?? null) ? $body['content'] : json_decode($body['content'] ?? '[]', true);
         $content = PatientFormPayloadSanitizer::sanitizeContent($content);
         $signatureAttachmentId = $body['signature_attachment_id'] ?? null;

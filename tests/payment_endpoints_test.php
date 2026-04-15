@@ -301,8 +301,8 @@ function base_patient(): array
         'last_name' => 'Doe',
         'email' => 'john@example.com',
         'practitioner_id' => '1547537765724333824',
-        'medicare' => '1234 56789',
-        'medicare_reference_number' => '1',
+        'medicare' => '1234 56789 0',
+        'medicare_reference_number' => '0',
         'phone' => '0412345678',
     ];
 }
@@ -456,6 +456,13 @@ function test_payment_free_booking_queues_action_scheduler_job(): void
     assert_same('999', $args['patient_form_template_id'], 'Queued template id mismatch');
     assert_same(null, $args['payment_reference'], 'Free flow should enqueue null payment reference');
     assert_same(0, $args['amount'], 'Free flow amount should be 0');
+
+    $payloadKey = (string) ($args['payload_key'] ?? '');
+    assert_true($payloadKey !== '', 'Free flow should store a payload key');
+    $storedPayload = get_option($payloadKey);
+    assert_true(is_array($storedPayload), 'Free flow should store a payload record');
+    assert_same('1234 56789 0', $storedPayload['patient']['medicare'] ?? null, 'Medicare should be normalized to the formatted 10-digit value');
+    assert_same('0', $storedPayload['patient']['medicare_reference_number'] ?? null, 'Medicare reference should be normalized to 1 digit');
 
     assert_same(1, count($GLOBALS['__cliniko_client_calls']), 'Expected one cliniko_client call');
     assert_same(true, $GLOBALS['__cliniko_client_calls'][0]['withCache'], 'Payment flow should use cached client');

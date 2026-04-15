@@ -148,7 +148,7 @@ function base_payload(): array
             'email' => 'john@example.com',
             'practitioner_id' => '1547537765724333824',
             'appointment_start' => '2026-02-20T03:00:00Z',
-            'medicare' => '123456789',
+            'medicare' => '1234 56789 0',
             'medicare_reference_number' => '1',
             'phone' => '0412345678',
         ],

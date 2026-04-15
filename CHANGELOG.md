@@ -1,3 +1,11 @@
+## [1.6.7] - 2026-04-16
+### Changed
+- Custom-form appointment selection now sits after patient details, and returning-patient checkout now opens the shared calendar step before payment when calendar selection is enabled.
+- Medicare capture now keeps the 10-digit card formatted as `xxxx xxxxx x` while storing the IRN separately across the headless and widget flows.
+
+### Fixed
+- Returning-patient and booking payloads now preserve the same appointment-state contract when handing off between the retrieval widget and the shell calendar.
+
 ## [1.6.6] - 2026-04-15
 ### Changed
 - Returning-patient lookup now treats the latest matching Cliniko booking as eligible without requiring the appointment start time to be in the past.

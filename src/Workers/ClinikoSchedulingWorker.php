@@ -12,6 +12,7 @@ use App\Model\PatientFormTemplate;
 use App\Service\ClinikoService;
 use App\Service\StripeService;
 use App\Service\NotificationService;
+use App\Service\PatientSubmissionSanitizer;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -122,6 +123,8 @@ class ClinikoSchedulingWorker
                 error_log('[ClinikoSchedulingWorker] payload_key not found: ' . $payloadKey);
             }
         }
+
+        $patient = PatientSubmissionSanitizer::sanitize($patient);
 
         // ---------- Mutex ----------
         $lockSource = $isFree ? ($payloadKey ?? uniqid('free_', true)) : $paymentRef;

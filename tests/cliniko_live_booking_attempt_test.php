@@ -339,7 +339,7 @@ function build_booking_attempt_payload(
             'last_name' => 'Verifier',
             'email' => "cliniko-it+{$runId}@example.test",
             'phone' => '0412345678',
-            'medicare' => '123456789',
+            'medicare' => '1234 56789 0',
             'medicare_reference_number' => '1',
             'practitioner_id' => $practitionerId,
             'appointment_start' => $appointmentStart,

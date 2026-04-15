@@ -329,6 +329,18 @@ namespace App\Model {
 }
 
 namespace App\Service {
+    class PatientSubmissionSanitizer
+    {
+        /**
+         * @param array<string,mixed> $patient
+         * @return array<string,mixed>
+         */
+        public static function sanitize(array $patient): array
+        {
+            return $patient;
+        }
+    }
+
     class ClinikoService
     {
         /**

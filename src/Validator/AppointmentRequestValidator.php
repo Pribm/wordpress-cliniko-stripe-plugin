@@ -22,13 +22,13 @@ class AppointmentRequestValidator
     }
 
     /**
-     * Medicare number without reference number:
-     * - 9 digits total (often displayed as 4 + 5)
+     * Medicare must arrive as a 10-digit card number, optionally spaced as
+     * `1234 56789 0`.
      */
     private static function isValidMedicareNumber(string $value): bool
     {
-        $digits = preg_replace('/\D+/', '', $value);
-        return Validator::digit()->length(9, 9)->validate($digits);
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        return Validator::digit()->length(10, 10)->validate($digits);
     }
 
     private static function normalizeString($value): string
@@ -135,16 +135,18 @@ class AppointmentRequestValidator
             }
 
             // --- Medicare fields ---
-            if (!array_key_exists('medicare', $patient) || $patient['medicare'] === '' || $patient['medicare'] === null) {
+            $medicare = array_key_exists('medicare', $patient) ? (string) $patient['medicare'] : '';
+
+            if ($medicare === '') {
                 $errors[] = self::makeError('patient.medicare', 'Medicare', 'required', 'Medicare number is required.');
             } else {
-                $medicareValid = self::isValidMedicareNumber((string)$patient['medicare']);
+                $medicareValid = self::isValidMedicareNumber($medicare);
                 if (!$medicareValid) {
                     $errors[] = self::makeError(
                         'patient.medicare',
                         'Medicare',
                         'invalid',
-                        'Medicare must contain exactly 9 digits (reference number is separate).'
+                        'Medicare must be 10 digits in Cliniko format (e.g. 1234 56789 0).'
                     );
                 }
             }
@@ -160,13 +162,13 @@ class AppointmentRequestValidator
                 );
             } else {
                 $ref = (string)$patient['medicare_reference_number'];
-                $refValid = Validator::regex('/^[1-9]$/')->validate($ref);
+                $refValid = Validator::regex('/^\d$/')->validate($ref);
                 if (!$refValid) {
                     $errors[] = self::makeError(
                         'patient.medicare_reference_number',
                         'Medicare Reference Number',
                         'invalid',
-                        'Medicare reference number must be a single digit between 1 and 9.'
+                        'Medicare reference number must be a single digit between 0 and 9.'
                     );
                 }
             }
