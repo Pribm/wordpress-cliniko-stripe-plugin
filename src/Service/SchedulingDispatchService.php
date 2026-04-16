@@ -29,6 +29,7 @@ class SchedulingDispatchService
         string $appointmentLabel,
         int $delaySeconds = self::DEFAULT_DELAY_SECONDS
     ): array {
+        $patient = PatientSubmissionSanitizer::sanitize($patient);
         $payloadKey = $this->storePayload($patient, $content, $signatureAttachmentId, $paymentReference);
         $uniqueKey = $paymentReference ?: $payloadKey;
 

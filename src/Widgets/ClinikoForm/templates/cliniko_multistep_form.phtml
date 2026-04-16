@@ -782,8 +782,8 @@ $renderPatientHistoryAccessForQuestion = static function (
                 'inputmode'   => 'numeric',
                 'maxlength'   => '13',
                 'pattern'     => '\d{4}\s?\d{5}\s?\d',
-                'title'       => 'Enter 10 digits (e.g. 1234 56789 1)',
-                'placeholder' => '1234 56789 1',
+                'title'       => 'Enter 10 digits (e.g. 1234 56789 0)',
+                'placeholder' => '1234 56789 0',
               ];
             } elseif ($name === 'medicare_reference_number') {
               $attrs += [
@@ -791,7 +791,7 @@ $renderPatientHistoryAccessForQuestion = static function (
                 'maxlength'   => '1',
                 'pattern'     => '\d',
                 'title'       => 'Enter the 1-digit reference next to your name',
-                'placeholder' => '1',
+                'placeholder' => '0',
               ];
             }
 

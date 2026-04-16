@@ -3457,6 +3457,12 @@ function onlyDigits(value) {
   return String(value || "").replace(/\D+/g, "");
 }
 
+function formatMedicare10(value) {
+  const digits = onlyDigits(value).slice(0, 10);
+  const parts = [digits.slice(0, 4), digits.slice(4, 9), digits.slice(9, 10)].filter(Boolean);
+  return parts.join(" ");
+}
+
 function isValidYmdDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number);
@@ -3513,7 +3519,7 @@ function normalizePatientForSubmission(patientRaw) {
   ].forEach(copyTrim);
 
   if ("medicare" in patient) {
-    normalized.medicare = onlyDigits(patient.medicare).slice(0, 9);
+    normalized.medicare = formatMedicare10(patient.medicare);
   }
 
   if ("medicare_reference_number" in patient) {
@@ -4072,15 +4078,15 @@ function isCurrentStepValid() {
       continue;
     }
 
-    // Medicare number (9 digits, reference number is separate)
+    // Medicare number (10 digits, reference number is separate)
     if (field.name === "patient[medicare]") {
       const clean = value.replace(/\D/g, "");
-      if (clean.length !== 9) {
+      if (clean.length !== 10) {
         field.style.borderColor = "red";
         isValid = false;
         const msg = document.createElement("div");
         msg.className = "field-error";
-        msg.textContent = "Medicare number must contain exactly 9 digits.";
+        msg.textContent = "Medicare number must contain exactly 10 digits.";
         parent.appendChild(msg);
         continue;
       }
@@ -4088,16 +4094,16 @@ function isCurrentStepValid() {
       continue;
     }
 
-    // Medicare reference number (1 digit, 1–9)
+    // Medicare reference number (1 digit, 0–9)
     if (field.name === "patient[medicare_reference_number]") {
       const clean = value.replace(/\D/g, "");
-      if (!/^[1-9]$/.test(clean)) {
+      if (!/^\d$/.test(clean)) {
         field.style.borderColor = "red";
         isValid = false;
         const msg = document.createElement("div");
         msg.className = "field-error";
         msg.textContent =
-          "Medicare reference number must be a single digit between 1 and 9.";
+          "Medicare reference number must be a single digit between 0 and 9.";
         parent.appendChild(msg);
         continue;
       }

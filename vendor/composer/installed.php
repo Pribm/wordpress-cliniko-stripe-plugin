@@ -3,7 +3,7 @@
         'name' => 'monte/wp-easyscripts-payment-api',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'cabf432b4a9f05855e46a058c0d60b3d07792901',
+        'reference' => 'f1519cdb41729ff6e16b694ba2958a2ec4f7b6f3',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -40,7 +40,7 @@
         'monte/wp-easyscripts-payment-api' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'cabf432b4a9f05855e46a058c0d60b3d07792901',
+            'reference' => 'f1519cdb41729ff6e16b694ba2958a2ec4f7b6f3',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -137,8 +137,8 @@
             'dev_requirement' => false,
         ),
         'symfony/polyfill-mbstring' => array(
-            'pretty_version' => 'v1.35.0',
-            'version' => '1.35.0.0',
+            'pretty_version' => 'v1.36.0',
+            'version' => '1.36.0.0',
             'reference' => '6a21eb99c6973357967f6ce3708cd55a6bec6315',
             'type' => 'library',
             'install_path' => __DIR__ . '/../symfony/polyfill-mbstring',

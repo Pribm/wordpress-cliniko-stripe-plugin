@@ -36,16 +36,14 @@ class PatientSubmissionSanitizer
             $normalized[$key] = trim((string) ($patient[$key] ?? ''));
         }
 
-        if (array_key_exists('medicare', $patient)) {
-            $normalized['medicare'] = substr(self::onlyDigits($patient['medicare']), 0, 9);
-        }
-
-        if (array_key_exists('medicare_reference_number', $patient)) {
-            $normalized['medicare_reference_number'] = substr(
-                self::onlyDigits($patient['medicare_reference_number']),
-                0,
-                1
+        if (array_key_exists('medicare', $patient) || array_key_exists('medicare_reference_number', $patient)) {
+            [$medicare, $medicareReferenceNumber] = self::normalizeMedicareFields(
+                $patient['medicare'] ?? null,
+                $patient['medicare_reference_number'] ?? null
             );
+
+            $normalized['medicare'] = $medicare;
+            $normalized['medicare_reference_number'] = $medicareReferenceNumber;
         }
 
         if (array_key_exists('phone', $patient)) {
@@ -92,6 +90,49 @@ class PatientSubmissionSanitizer
     private static function onlyDigits($value): string
     {
         return preg_replace('/\D+/', '', (string) $value) ?? '';
+    }
+
+    /**
+     * Format a medicare card number as `xxxx xxxxx x`.
+     *
+     * @param string $digits
+     */
+    private static function formatMedicareNumber(string $digits): string
+    {
+        $compact = substr(self::onlyDigits($digits), 0, 10);
+        if ($compact === '') {
+            return '';
+        }
+
+        $parts = array_filter([
+            substr($compact, 0, 4),
+            substr($compact, 4, 5),
+            substr($compact, 9, 1),
+        ], static fn ($part) => $part !== '');
+
+        return implode(' ', $parts);
+    }
+
+    private static function normalizeMedicareFields($medicare, $referenceNumber): array
+    {
+        $medicareDigits = self::onlyDigits($medicare);
+        $referenceDigits = self::onlyDigits($referenceNumber);
+
+        if ($medicareDigits === '' && $referenceDigits === '') {
+            return ['', ''];
+        }
+
+        if (strlen($medicareDigits) >= 10) {
+            $combined = substr($medicareDigits, 0, 10);
+            return [self::formatMedicareNumber($combined), substr($referenceDigits, 0, 1)];
+        }
+
+        if (strlen($medicareDigits) === 9 && $referenceDigits !== '') {
+            $combined = substr($medicareDigits . $referenceDigits, 0, 10);
+            return [self::formatMedicareNumber($combined), substr($referenceDigits, 0, 1)];
+        }
+
+        return [self::formatMedicareNumber($medicareDigits), substr($referenceDigits, 0, 1)];
     }
 
     /**

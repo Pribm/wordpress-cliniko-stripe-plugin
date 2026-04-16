@@ -13,12 +13,12 @@ document.addEventListener("DOMContentLoaded", function () {
     IMask(postcodeInput, { mask: '0000' });
   }
 
-  // ➕ Medicare number (display as 1234 56789; 9 digits total)
+  // Medicare number (display as 1234 56789 0; 10 digits total)
   const medicareInput = document.querySelector('input[name="patient[medicare]"]');
   if (medicareInput) {
     IMask(medicareInput, {
-      // 9 digits shown as 4 + 5 with spaces
-      mask: '0000 00000'
+      // 10 digits shown as 4 + 5 + 1 with spaces
+      mask: '0000 00000 0'
     });
   }
 
@@ -28,16 +28,5 @@ document.addEventListener("DOMContentLoaded", function () {
     IMask(medicareRefInput, { mask: '0' });
   }
 
-  // Optional: normalize before submit (strip spaces from medicare)
-  // Adjust the selector to your actual form element if needed.
-  const form = document.querySelector('form');
-  if (form) {
-    form.addEventListener('submit', function () {
-      if (medicareInput) {
-        medicareInput.value = medicareInput.value.replace(/\s+/g, '');
-        // If you prefer to KEEP spaces as stored value, comment out the line above.
-      }
-      // The reference is already one digit; no changes required.
-    });
-  }
+  // Keep the formatted value intact; the backend sanitizer will normalize it.
 });
