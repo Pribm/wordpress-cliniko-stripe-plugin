@@ -7,6 +7,13 @@ use App\Model\AppointmentType;
 use Elementor\Controls_Manager;
 use Elementor\Repeater;
 
+if (!function_exists('cliniko_headless_option_field_types')) {
+    function cliniko_headless_option_field_types(): array
+    {
+        return ['select', 'radio', 'checkbox', 'checkboxes', 'multi_select'];
+    }
+}
+
 function register_content_controls($widget)
 {
 
@@ -317,17 +324,227 @@ function register_cliniko_form_controls($widget)
         'raw' =>
             '<strong>Headless mode</strong><br>' .
             'No form UI is rendered. The Cliniko template is exposed via <code>formHandlerData.sections</code> so you can build your own UI.<br><br>' .
+            '<strong>Custom patient fields</strong><br>' .
+            'Register only the field label, type, and whether it is required. The widget will infer the local path, validation, and Cliniko field mapping from the label by default. Open <strong>Advanced Settings</strong> only when you need to override the inferred path, Cliniko mapping, or validation rules.<br><br>' .
             '<strong>Submitting</strong><br>' .
             'Provide a payload with <code>patient</code> and <code>content</code> and expose it as <code>window.clinikoHeadlessPayload</code> or <code>window.clinikoGetHeadlessPayload()</code>.<br>' .
-            'The payment step will call <code>submitBookingForm(...)</code> and use that payload automatically.<br><br>' .
+            'The payment step will call <code>submitBookingForm(...)</code> and use that payload automatically. Headless submissions will fail fast if a registered custom field is invalid.<br><br>' .
             '<strong>Submission template</strong><br>' .
-            'A backend-ready skeleton is available at <code>formHandlerData.submission_template</code> or in the <code>.cliniko-form-submission-template-json</code> script tag.<br><br>' .
+            'A backend-ready skeleton is available at <code>formHandlerData.submission_template</code> or in the <code>.cliniko-form-submission-template-json</code> script tag. The custom field registry is exposed at <code>formHandlerData.headless_patient_fields</code>.<br><br>' .
             '<strong>Headless calendar helpers</strong><br>' .
-            'Use <code>window.ClinikoHeadlessCalendar</code> to call the same endpoints used by the standard form (practitioners, calendar, available times), plus fresh next-available lookups per practitioner.<br><br>' .
+            'Use <code>window.ClinikoHeadlessCalendar</code> to call the same endpoints used by the standard form (practitioners, calendar, available times), plus fresh next-available lookups per practitioner. It also exposes helpers to update and validate headless patient fields.<br><br>' .
             '<strong>Payment UI</strong><br>' .
             'Payment markup is still rendered (hidden by default). Show <code>#payment_form</code> when you’re ready to collect payment.',
         'content_classes' => 'elementor-panel-alert elementor-panel-alert-info',
         'condition' => ['form_type' => 'headless'],
+    ]);
+
+    $headlessPatientFieldsRepeater = new Repeater();
+    $headlessPatientFieldsRepeater->add_control('field_label', [
+        'label' => 'Field Label',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'placeholder' => 'Cliniko custom field label',
+    ]);
+    $headlessPatientFieldsRepeater->add_control('field_type', [
+        'label' => 'Field Type',
+        'type' => Controls_Manager::SELECT,
+        'default' => 'text',
+        'options' => [
+            'text' => 'Text',
+            'textarea' => 'Textarea',
+            'email' => 'Email',
+            'tel' => 'Phone',
+            'date' => 'Date',
+            'number' => 'Number',
+            'select' => 'Select',
+            'radio' => 'Radio',
+            'checkbox' => 'Checkbox',
+            'checkboxes' => 'Checkboxes',
+            'multi_select' => 'Multi select',
+            'hidden' => 'Hidden',
+        ],
+        'description' => 'Validation and Cliniko mapping are inferred from the label and type by default.',
+    ]);
+    $headlessPatientFieldsRepeater->add_control('required', [
+        'label' => 'Required',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => '',
+    ]);
+    $headlessPatientFieldsRepeater->add_control('field_options', [
+        'label' => 'Field Options',
+        'type' => Controls_Manager::TEXTAREA,
+        'rows' => 4,
+        'placeholder' => "Option A\nOption B\nOption C",
+        'description' => 'Shown only for select, radio, checkbox, checkboxes, and multi select fields.',
+        'condition' => [
+            'field_type' => cliniko_headless_option_field_types(),
+        ],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('placeholder', [
+        'label' => 'Placeholder',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+    ]);
+    $headlessPatientFieldsRepeater->add_control('help_text', [
+        'label' => 'Help Text',
+        'type' => Controls_Manager::TEXTAREA,
+        'rows' => 3,
+        'default' => '',
+    ]);
+    $headlessPatientFieldsRepeater->add_control('advanced_settings', [
+        'label' => 'Advanced Settings',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => '',
+        'separator' => 'before',
+        'description' => 'Show manual path, Cliniko mapping, and validation overrides.',
+    ]);
+    $headlessPatientFieldsRepeater->add_control('field_path', [
+        'label' => 'Field Path',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'placeholder' => 'custom_fields.your_key',
+        'description' => 'Optional. Leave blank to derive the path from the label.',
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('cliniko_section_name', [
+        'label' => 'Cliniko Section Name',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'placeholder' => 'Private health',
+        'description' => 'Optional. Leave blank to let the backend search all Cliniko sections for a matching field name.',
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('cliniko_field_name', [
+        'label' => 'Cliniko Field Name',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'placeholder' => 'Allergies',
+        'description' => 'Optional. Leave blank to use the field label.',
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('cliniko_section_token', [
+        'label' => 'Cliniko Section Token',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'placeholder' => 'section token',
+        'description' => 'Optional manual override. Usually safe to leave blank so the backend can resolve it from Cliniko settings.',
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('cliniko_field_token', [
+        'label' => 'Cliniko Field Token',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'placeholder' => 'field token',
+        'description' => 'Optional manual override. Leave blank to auto-resolve from Cliniko settings when the section and field names match.',
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('cliniko_field_type', [
+        'label' => 'Cliniko Field Type',
+        'type' => Controls_Manager::SELECT,
+        'default' => 'text',
+        'options' => [
+            'text' => 'Text',
+            'textarea' => 'Textarea',
+            'email' => 'Email',
+            'tel' => 'Phone',
+            'date' => 'Date',
+            'number' => 'Number',
+            'select' => 'Select',
+            'radio' => 'Radio',
+            'checkbox' => 'Checkbox',
+            'checkboxes' => 'Checkboxes',
+            'multi_select' => 'Multi select',
+            'hidden' => 'Hidden',
+        ],
+        'description' => 'Optional. Defaults to the local field type.',
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('validation_type', [
+        'label' => 'Validation Override',
+        'type' => Controls_Manager::SELECT,
+        'default' => 'none',
+        'options' => [
+            'none' => 'None',
+            'regex' => 'Regex',
+            'email' => 'Email',
+            'phone_au' => 'Australian phone',
+            'postcode_au' => 'Australian postcode',
+            'medicare' => 'Medicare number',
+            'date_iso' => 'ISO date',
+            'length' => 'Length',
+            'number_range' => 'Number range',
+            'enum' => 'Allowed values',
+        ],
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('validation_pattern', [
+        'label' => 'Regex Pattern',
+        'type' => Controls_Manager::TEXT,
+        'placeholder' => '^\\\\d{4}$',
+        'condition' => [
+            'advanced_settings' => 'yes',
+            'validation_type' => 'regex',
+        ],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('min_length', [
+        'label' => 'Min Length',
+        'type' => Controls_Manager::NUMBER,
+        'step' => 1,
+        'condition' => [
+            'advanced_settings' => 'yes',
+            'validation_type' => 'length',
+        ],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('max_length', [
+        'label' => 'Max Length',
+        'type' => Controls_Manager::NUMBER,
+        'step' => 1,
+        'condition' => [
+            'advanced_settings' => 'yes',
+            'validation_type' => 'length',
+        ],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('min_value', [
+        'label' => 'Min Value',
+        'type' => Controls_Manager::NUMBER,
+        'step' => 0.01,
+        'condition' => [
+            'advanced_settings' => 'yes',
+            'validation_type' => 'number_range',
+        ],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('max_value', [
+        'label' => 'Max Value',
+        'type' => Controls_Manager::NUMBER,
+        'step' => 0.01,
+        'condition' => [
+            'advanced_settings' => 'yes',
+            'validation_type' => 'number_range',
+        ],
+    ]);
+    $headlessPatientFieldsRepeater->add_control('validation_message', [
+        'label' => 'Validation Message',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'description' => 'Optional custom error message. If blank, a default message is used.',
+        'condition' => ['advanced_settings' => 'yes'],
+    ]);
+
+    $widget->add_control('headless_patient_fields', [
+        'label' => 'Headless Patient Fields',
+        'type' => Controls_Manager::REPEATER,
+        'condition' => ['form_type' => 'headless'],
+        'title_field' => '{{{ field_label }}}',
+        'fields' => $headlessPatientFieldsRepeater->get_controls(),
+        'default' => [],
+        'description' => 'Headless-only patient fields that are added to the payload, merged into the submission template, and validated before submit.',
     ]);
 
     $widget->add_control(

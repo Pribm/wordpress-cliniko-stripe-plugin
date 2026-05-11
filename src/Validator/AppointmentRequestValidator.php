@@ -8,6 +8,9 @@ if (!defined('ABSPATH')) exit;
 
 class AppointmentRequestValidator
 {
+    private const MEDICARE_MODE_HAVE = 'have';
+    private const MEDICARE_MODE_NONE = 'none';
+
     /**
      * Helper para padronizar erros
      */
@@ -34,6 +37,55 @@ class AppointmentRequestValidator
     private static function normalizeString($value): string
     {
         return trim((string) $value);
+    }
+
+    /**
+     * Normalizes the Medicare branch so validation matches the shell UI.
+     *
+     * `medicare_mode` is the canonical flag, with `has_medicare` accepted as a
+     * compatibility alias for older payloads.
+     */
+    private static function normalizeMedicareMode($value, array $patient = []): string
+    {
+        $raw = strtolower(trim((string) $value));
+
+        if (in_array($raw, [self::MEDICARE_MODE_NONE, 'no', 'false', 'without'], true)) {
+            return self::MEDICARE_MODE_NONE;
+        }
+
+        if (in_array($raw, [self::MEDICARE_MODE_HAVE, 'yes', 'true', 'with'], true)) {
+            return self::MEDICARE_MODE_HAVE;
+        }
+
+        if (array_key_exists('has_medicare', $patient)) {
+            $hasMedicareValue = $patient['has_medicare'];
+            $hasMedicareRaw = trim((string) $hasMedicareValue);
+
+            if (is_bool($hasMedicareValue)) {
+                return $hasMedicareValue ? self::MEDICARE_MODE_HAVE : self::MEDICARE_MODE_NONE;
+            }
+
+            if ($hasMedicareRaw !== '') {
+                $hasMedicare = filter_var($hasMedicareValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($hasMedicare !== null) {
+                    return $hasMedicare ? self::MEDICARE_MODE_HAVE : self::MEDICARE_MODE_NONE;
+                }
+            }
+        }
+
+        $provider = self::normalizeString($patient['medicare_provider'] ?? '');
+        $hin = self::normalizeString($patient['health_identifier_number'] ?? '');
+        if ($provider !== '' || $hin !== '') {
+            return self::MEDICARE_MODE_NONE;
+        }
+
+        $medicareDigits = preg_replace('/\D+/', '', (string) ($patient['medicare'] ?? '')) ?? '';
+        $irn = self::normalizeString($patient['medicare_reference_number'] ?? '');
+        if ($medicareDigits !== '' || $irn !== '') {
+            return self::MEDICARE_MODE_HAVE;
+        }
+
+        return self::MEDICARE_MODE_HAVE;
     }
 
     private static function isValidClinikoId(string $value): bool
@@ -135,41 +187,67 @@ class AppointmentRequestValidator
             }
 
             // --- Medicare fields ---
-            $medicare = array_key_exists('medicare', $patient) ? (string) $patient['medicare'] : '';
+            $medicareMode = self::normalizeMedicareMode(
+                $patient['medicare_mode'] ?? ($patient['has_medicare'] ?? null),
+                $patient
+            );
 
-            if ($medicare === '') {
-                $errors[] = self::makeError('patient.medicare', 'Medicare', 'required', 'Medicare number is required.');
-            } else {
-                $medicareValid = self::isValidMedicareNumber($medicare);
-                if (!$medicareValid) {
+            if ($medicareMode === self::MEDICARE_MODE_NONE) {
+                if (!array_key_exists('medicare_provider', $patient) || self::normalizeString($patient['medicare_provider']) === '') {
                     $errors[] = self::makeError(
-                        'patient.medicare',
-                        'Medicare',
-                        'invalid',
-                        'Medicare must be 10 digits in Cliniko format (e.g. 1234 56789 0).'
+                        'patient.medicare_provider',
+                        'Medicare Provider',
+                        'required',
+                        'Medicare provider is required.'
                     );
                 }
-            }
 
-            if (!array_key_exists('medicare_reference_number', $patient)
-                || $patient['medicare_reference_number'] === ''
-                || $patient['medicare_reference_number'] === null) {
-                $errors[] = self::makeError(
-                    'patient.medicare_reference_number',
-                    'Medicare Reference Number',
-                    'required',
-                    'Medicare reference number is required.'
-                );
+                if (!array_key_exists('health_identifier_number', $patient)
+                    || self::normalizeString($patient['health_identifier_number']) === '') {
+                    $errors[] = self::makeError(
+                        'patient.health_identifier_number',
+                        'Health Identifier Number',
+                        'required',
+                        'Health Identifier Number is required.'
+                    );
+                }
             } else {
-                $ref = (string)$patient['medicare_reference_number'];
-                $refValid = Validator::regex('/^\d$/')->validate($ref);
-                if (!$refValid) {
+                $medicare = array_key_exists('medicare', $patient) ? (string) $patient['medicare'] : '';
+
+                if ($medicare === '') {
+                    $errors[] = self::makeError('patient.medicare', 'Medicare', 'required', 'Medicare number is required.');
+                } else {
+                    $medicareValid = self::isValidMedicareNumber($medicare);
+                    if (!$medicareValid) {
+                        $errors[] = self::makeError(
+                            'patient.medicare',
+                            'Medicare',
+                            'invalid',
+                            'Medicare must be 10 digits in Cliniko format (e.g. 1234 56789 0).'
+                        );
+                    }
+                }
+
+                if (!array_key_exists('medicare_reference_number', $patient)
+                    || $patient['medicare_reference_number'] === ''
+                    || $patient['medicare_reference_number'] === null) {
                     $errors[] = self::makeError(
                         'patient.medicare_reference_number',
                         'Medicare Reference Number',
-                        'invalid',
-                        'Medicare reference number must be a single digit between 0 and 9.'
+                        'required',
+                        'Medicare reference number is required.'
                     );
+                } else {
+                    $ref = (string)$patient['medicare_reference_number'];
+                    $refValid = Validator::regex('/^\d$/')->validate($ref);
+                    if (!$refValid) {
+                        $errors[] = self::makeError(
+                            'patient.medicare_reference_number',
+                            'Medicare Reference Number',
+                            'invalid',
+                            'Medicare reference number must be a single digit between 0 and 9.'
+                        );
+                    }
                 }
             }
             // --- end Medicare fields ---

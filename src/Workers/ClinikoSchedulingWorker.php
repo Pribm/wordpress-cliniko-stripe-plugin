@@ -192,6 +192,9 @@ class ClinikoSchedulingWorker
             $dto->dateOfBirth = $patient['date_of_birth'] ?? null;
             $dto->medicare = $patient['medicare'] ?? null;
             $dto->medicareReferenceNumber = $patient['medicare_reference_number'] ?? null;
+            if (is_array($patient['custom_fields'] ?? null) && array_key_exists('sections', $patient['custom_fields'])) {
+                $dto->customFields = $patient['custom_fields'];
+            }
             $dto->patientPhoneNumbers = [['number' => $patient['phone'] ?? '', 'phone_type' => 'Home']];
             $dto->acceptedPrivacyPolicy = true;
 
