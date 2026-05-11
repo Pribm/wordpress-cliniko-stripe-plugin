@@ -166,6 +166,33 @@ function base_payload(): array
     ];
 }
 
+function payload_with_cliniko_custom_fields(): array
+{
+    $payload = base_payload();
+    $payload['headless_patient_fields'] = [
+        [
+            'key' => 'allergies',
+            'label' => 'Allergies',
+            'path' => 'custom_fields.allergies',
+            'type' => 'text',
+            'required' => true,
+            'cliniko_section_name' => 'Medical history',
+            'cliniko_section_token' => 'section-token-1',
+            'cliniko_field_name' => 'Allergies',
+            'cliniko_field_token' => 'field-token-1',
+            'cliniko_field_type' => 'text',
+            'validation' => [
+                'type' => 'none',
+            ],
+        ],
+    ];
+    $payload['patient']['custom_fields'] = [
+        'allergies' => 'Peanuts',
+    ];
+
+    return $payload;
+}
+
 function appointment_type_payload(): array
 {
     return [
@@ -361,6 +388,29 @@ function test_preflight_creates_attempt_and_finalize_attaches_form(): void
     assert_true(in_array('PATCH patient_forms/pf_1', $client->calls, true), 'Expected patient form attach patch');
 }
 
+function test_preflight_maps_headless_custom_fields_into_cliniko_payload(): void
+{
+    $service = new BookingAttemptService(new BookingAttemptStore());
+    $preflight = $service->preflight(payload_with_cliniko_custom_fields());
+
+    assert_same(true, $preflight['ok'], 'Preflight should succeed');
+
+    /** @var AttemptFakeApiClient $client */
+    $client = $GLOBALS['__attempt_fake_client'];
+    $requests = $client->requests['POST patients'] ?? [];
+    assert_true(!empty($requests), 'Expected patient create request payload');
+
+    $patientCreate = $requests[0];
+    $customFields = $patientCreate['custom_fields'] ?? [];
+
+    assert_same('Medical history', $customFields['sections'][0]['name'] ?? null, 'Section name mismatch');
+    assert_same('section-token-1', $customFields['sections'][0]['token'] ?? null, 'Section token mismatch');
+    assert_same('Allergies', $customFields['sections'][0]['fields'][0]['name'] ?? null, 'Field name mismatch');
+    assert_same('field-token-1', $customFields['sections'][0]['fields'][0]['token'] ?? null, 'Field token mismatch');
+    assert_same('text', $customFields['sections'][0]['fields'][0]['type'] ?? null, 'Field type mismatch');
+    assert_same('Peanuts', $customFields['sections'][0]['fields'][0]['value'] ?? null, 'Field value mismatch');
+}
+
 function test_cleanup_worker_archives_orphans_for_abandoned_attempt(): void
 {
     $service = new BookingAttemptService(new BookingAttemptStore());
@@ -447,6 +497,7 @@ function run_test(string $name, callable $test): bool
 
 $tests = [
     'preflight_creates_attempt_and_finalize_attaches_form' => 'test_preflight_creates_attempt_and_finalize_attaches_form',
+    'preflight_maps_headless_custom_fields_into_cliniko_payload' => 'test_preflight_maps_headless_custom_fields_into_cliniko_payload',
     'cleanup_worker_archives_orphans_for_abandoned_attempt' => 'test_cleanup_worker_archives_orphans_for_abandoned_attempt',
     'preflight_validation_errors_include_summary_and_code' => 'test_preflight_validation_errors_include_summary_and_code',
     'preflight_unsets_empty_optional_text_answers_before_cliniko_submit' => 'test_preflight_unsets_empty_optional_text_answers_before_cliniko_submit',

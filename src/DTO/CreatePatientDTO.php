@@ -25,6 +25,7 @@ class CreatePatientDTO
     public ?string $genderIdentity = null;
     public ?string $preferredFirstName = null;
 
+    public ?array $customFields = null;
     public ?array $patientPhoneNumbers = null;
 
     public function toArray(): array
@@ -46,6 +47,7 @@ class CreatePatientDTO
             'notes'                     => $this->notes,
             'gender_identity'           => $this->genderIdentity,
             'preferred_first_name'      => $this->preferredFirstName,
+            'custom_fields'             => $this->customFields,
             'patient_phone_numbers'     => $this->patientPhoneNumbers,
             'accepted_privacy_policy' => $this->acceptedPrivacyPolicy
         ];

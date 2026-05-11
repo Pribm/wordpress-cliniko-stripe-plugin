@@ -10,6 +10,7 @@ use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 use App\Model\AppointmentType;
 use App\Service\PatientAccessTokenService;
+use App\Service\PatientCustomFieldService;
 use App\Service\PublicRequestGuard;
 use Elementor\Widget_Base;
 
@@ -26,9 +27,9 @@ class Widget extends Widget_Base
     return $default;
   }
 
-  private function build_patient_skeleton(): array
+  private function build_patient_skeleton(array $customFieldDefaults = []): array
   {
-    return [
+    $skeleton = [
       'first_name' => '',
       'last_name' => '',
       'email' => '',
@@ -45,13 +46,300 @@ class Widget extends Widget_Base
       'appointment_start' => '',
       'practitioner_id' => '',
     ];
+
+    foreach ($customFieldDefaults as $path => $default) {
+      $this->set_nested_value($skeleton, (string) $path, $default);
+    }
+
+    return $skeleton;
   }
 
-  private function build_submission_template($sections): array
+  private function get_core_patient_field_keys(): array
+  {
+    return [
+      'first_name',
+      'last_name',
+      'email',
+      'phone',
+      'medicare',
+      'medicare_reference_number',
+      'address_1',
+      'address_2',
+      'city',
+      'state',
+      'post_code',
+      'country',
+      'date_of_birth',
+      'appointment_start',
+      'appointment_date',
+      'practitioner_id',
+      'patient_booked_time',
+      'notes',
+      'gender_identity',
+      'preferred_first_name',
+    ];
+  }
+
+  private function default_headless_field_value(string $type)
+  {
+    if (in_array($type, ['checkbox', 'switch', 'toggle'], true)) {
+      return false;
+    }
+
+    return in_array($type, ['checkboxes', 'multi_checkbox', 'multi_select'], true) ? [] : '';
+  }
+
+  private function normalize_headless_field_segment(string $segment): string
+  {
+    $segment = strtolower(trim($segment));
+    $segment = preg_replace('/[^a-z0-9_-]+/', '_', $segment) ?? '';
+    $segment = preg_replace('/_+/', '_', $segment) ?? '';
+    return trim($segment, '_-');
+  }
+
+  private function normalize_headless_field_path(string $path): string
+  {
+    $path = trim($path);
+    if ($path === '') {
+      return '';
+    }
+
+    $segments = array_filter(array_map(
+      fn ($segment) => $this->normalize_headless_field_segment((string) $segment),
+      explode('.', $path)
+    ));
+
+    $segments = array_values(array_filter($segments, static fn ($segment) => $segment !== ''));
+    if (empty($segments)) {
+      return '';
+    }
+
+    if ($segments[0] === 'patient') {
+      array_shift($segments);
+    }
+
+    return implode('.', $segments);
+  }
+
+  private function set_nested_value(array &$target, string $path, $value): void
+  {
+    $normalizedPath = $this->normalize_headless_field_path($path);
+    if ($normalizedPath === '') {
+      return;
+    }
+
+    $segments = explode('.', $normalizedPath);
+    $cursor =& $target;
+    $lastIndex = count($segments) - 1;
+
+    foreach ($segments as $index => $segment) {
+      if ($index === $lastIndex) {
+        $cursor[$segment] = $value;
+        return;
+      }
+
+      if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+        $cursor[$segment] = [];
+      }
+
+      $cursor =& $cursor[$segment];
+    }
+  }
+
+  private function build_headless_patient_field_registry(array $settings): array
+  {
+    $rawFields = $settings['headless_patient_fields'] ?? [];
+    if (!is_array($rawFields) || empty($rawFields)) {
+      return [];
+    }
+
+    $reserved = array_fill_keys($this->get_core_patient_field_keys(), true);
+    $allowedTypes = [
+      'text',
+      'textarea',
+      'email',
+      'tel',
+      'date',
+      'number',
+      'select',
+      'radio',
+      'checkbox',
+      'checkboxes',
+      'multi_checkbox',
+      'multi_select',
+      'hidden',
+    ];
+    $allowedValidationTypes = [
+      'none',
+      'regex',
+      'email',
+      'phone_au',
+      'postcode_au',
+      'medicare',
+      'date_iso',
+      'length',
+      'number_range',
+      'enum',
+    ];
+    $registry = [];
+    $seenPaths = [];
+
+    foreach ($rawFields as $rawField) {
+      $fieldLabel = trim((string) $this->readProp($rawField, 'field_label', ''));
+      $fieldType = strtolower(trim((string) $this->readProp($rawField, 'field_type', 'text')));
+
+      if (!in_array($fieldType, $allowedTypes, true)) {
+        $fieldType = 'text';
+      }
+
+      $advancedSettings = in_array(
+        $this->readProp($rawField, 'advanced_settings', false),
+        [true, 'true', 'yes', 1, '1'],
+        true
+      );
+
+      $fieldKey = $this->normalize_headless_field_segment((string) $this->readProp($rawField, 'field_key', ''));
+      if ($fieldKey === '') {
+        $fieldKey = $this->normalize_headless_field_segment($fieldLabel);
+      }
+
+      if ($fieldKey === '') {
+        continue;
+      }
+
+      $fieldPath = '';
+      if ($advancedSettings) {
+        $fieldPath = $this->normalize_headless_field_path((string) $this->readProp($rawField, 'field_path', ''));
+      }
+
+      if ($fieldPath === '') {
+        $fieldPath = 'custom_fields.' . $fieldKey;
+      }
+
+      $fieldPath = $this->normalize_headless_field_path($fieldPath);
+      if ($fieldPath === '') {
+        continue;
+      }
+
+      if (isset($reserved[$fieldPath])) {
+        continue;
+      }
+
+      if (isset($seenPaths[$fieldPath])) {
+        continue;
+      }
+
+      $required = in_array($this->readProp($rawField, 'required', false), [true, 'true', 'yes', 1, '1'], true);
+      $placeholder = trim((string) $this->readProp($rawField, 'placeholder', ''));
+      $helpText = trim((string) $this->readProp($rawField, 'help_text', ''));
+
+      $optionsRaw = trim((string) $this->readProp($rawField, 'field_options', ''));
+      $options = [];
+      if ($optionsRaw !== '') {
+        $chunks = preg_split('/[\r\n,]+/', $optionsRaw) ?: [];
+        foreach ($chunks as $chunk) {
+          $chunk = trim((string) $chunk);
+          if ($chunk === '') {
+            continue;
+          }
+          $options[] = $chunk;
+        }
+      }
+
+      $validationType = $advancedSettings
+        ? strtolower(trim((string) $this->readProp($rawField, 'validation_type', 'none')))
+        : 'none';
+      if (!in_array($validationType, $allowedValidationTypes, true) || $validationType === 'none') {
+        $validationType = PatientCustomFieldService::inferValidationType($fieldType, [
+          'label' => $fieldLabel,
+          'name' => $fieldLabel,
+          'key' => $fieldKey,
+          'path' => 'custom_fields.' . $fieldKey,
+          'options' => $options,
+        ]);
+      }
+
+      $pattern = $advancedSettings ? trim((string) $this->readProp($rawField, 'validation_pattern', '')) : '';
+      $validationMessage = $advancedSettings ? trim((string) $this->readProp($rawField, 'validation_message', '')) : '';
+      $clinikoSectionName = $advancedSettings ? trim((string) $this->readProp($rawField, 'cliniko_section_name', '')) : '';
+      $clinikoSectionToken = $advancedSettings ? trim((string) $this->readProp($rawField, 'cliniko_section_token', '')) : '';
+      $clinikoFieldName = $advancedSettings ? trim((string) $this->readProp($rawField, 'cliniko_field_name', '')) : '';
+      if ($clinikoFieldName === '') {
+        $clinikoFieldName = $fieldLabel !== '' ? $fieldLabel : $fieldKey;
+      }
+      $clinikoFieldToken = $advancedSettings ? trim((string) $this->readProp($rawField, 'cliniko_field_token', '')) : '';
+      $clinikoFieldType = $advancedSettings
+        ? strtolower(trim((string) $this->readProp($rawField, 'cliniko_field_type', $fieldType)))
+        : $fieldType;
+      if (!in_array($clinikoFieldType, $allowedTypes, true)) {
+        $clinikoFieldType = $fieldType;
+      }
+      $defaultValue = $this->default_headless_field_value($fieldType);
+
+      $validation = [
+        'type' => $validationType,
+      ];
+
+      if ($pattern !== '') {
+        $validation['pattern'] = $pattern;
+      }
+      if ($validationMessage !== '') {
+        $validation['message'] = $validationMessage;
+      }
+
+      foreach (['min_length', 'max_length', 'min_value', 'max_value'] as $numericKey) {
+        $numericValue = $this->readProp($rawField, $numericKey, null);
+        if ($numericValue === null || $numericValue === '') {
+          continue;
+        }
+        if (is_numeric($numericValue)) {
+          $validation[$numericKey] = (float) $numericValue;
+        }
+      }
+
+      if (!empty($options)) {
+        $validation['options'] = $options;
+      }
+
+      $registry[] = [
+        'key' => $fieldKey,
+        'label' => $fieldLabel !== '' ? $fieldLabel : $fieldKey,
+        'path' => $fieldPath,
+        'type' => $fieldType,
+        'required' => $required,
+        'placeholder' => $placeholder,
+        'help_text' => $helpText,
+        'options' => $options,
+        'default' => $defaultValue,
+        'validation' => $validation,
+        'advanced_settings' => $advancedSettings,
+        'cliniko_section_name' => $clinikoSectionName,
+        'cliniko_section_token' => $clinikoSectionToken,
+        'cliniko_field_name' => $clinikoFieldName,
+        'cliniko_field_token' => $clinikoFieldToken,
+        'cliniko_field_type' => $clinikoFieldType,
+      ];
+
+      $seenPaths[$fieldPath] = true;
+    }
+
+    return $registry;
+  }
+
+  private function build_submission_template($sections, array $headlessPatientFields = []): array
   {
     $outputSections = [];
     if (!is_array($sections)) {
       $sections = [];
+    }
+
+    $customPatientDefaults = [];
+    foreach ($headlessPatientFields as $field) {
+      $path = (string) ($field['path'] ?? '');
+      if ($path === '') {
+        continue;
+      }
+      $customPatientDefaults[$path] = $field['default'] ?? '';
     }
 
     foreach ($sections as $section) {
@@ -131,7 +419,8 @@ class Widget extends Widget_Base
     }
 
     return [
-      'patient' => $this->build_patient_skeleton(),
+      'patient' => $this->build_patient_skeleton($customPatientDefaults),
+      'headless_patient_fields' => $headlessPatientFields,
       'content' => [
         'sections' => $outputSections,
       ],
@@ -330,6 +619,7 @@ class Widget extends Widget_Base
 
     $template = isset($settings['booking_html_template']) ? ltrim($settings['booking_html_template']) : '';
     $field_mapping_array = $settings['field_mapping'] ?? [];
+    $headlessPatientFields = $is_headless ? $this->build_headless_patient_field_registry($settings) : [];
 
 
     $appearance = [
@@ -380,7 +670,7 @@ class Widget extends Widget_Base
       $patientHistoryReturnUrl = (string) get_site_url();
     }
 
-    $submission_template = $this->build_submission_template($sections ?? []);
+    $submission_template = $this->build_submission_template($sections ?? [], $headlessPatientFields);
     $submission_template['moduleId'] = $settings['module_id'] ?? '';
     $submission_template['patient_form_template_id'] = $form_template_id ?? '';
 
@@ -390,6 +680,7 @@ class Widget extends Widget_Base
       [
         'sections' => $sections ?? [],
         'submission_template' => $submission_template,
+        'headless_patient_fields' => $headlessPatientFields,
         'btn_bg' => esc_attr($settings['form_button_color'] ?? '#0073e6'),
         'btn_text' => esc_attr($settings['form_button_text_color'] ?? '#ffffff'),
         'btn_pad' => $btn_pad,
@@ -474,6 +765,7 @@ class Widget extends Widget_Base
 
       echo '<div class="cliniko-form-headless" data-cliniko-headless="1" data-form-template-id="' . esc_attr($form_template_id ?? '') . '">';
       echo '<script type="application/json" class="cliniko-form-template-json">' . wp_json_encode($sections ?? []) . '</script>';
+      echo '<script type="application/json" class="cliniko-form-headless-fields-json">' . wp_json_encode($headlessPatientFields) . '</script>';
       echo '<script type="application/json" class="cliniko-form-submission-template-json">' . wp_json_encode($submission_template) . '</script>';
 
       if ($is_editor) {

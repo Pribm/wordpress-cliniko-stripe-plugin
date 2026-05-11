@@ -183,19 +183,551 @@ const fetchJson = async (url) => {
     }
   };
 
-  const clearCalendarCache = () => {
-    cacheStore.values.clear();
-    cacheStore.pending.clear();
+  const isPlainObject = (value) =>
+    !!value && typeof value === "object" && !Array.isArray(value);
+
+  const normalizeHeadlessFieldSegment = (segment) =>
+    String(segment || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^-+|-+$/g, "");
+
+  const normalizeHeadlessFieldPath = (path) => {
+    const raw = String(path || "").trim();
+    if (!raw) return "";
+
+    const segments = raw
+      .split(".")
+      .map((segment) => normalizeHeadlessFieldSegment(segment))
+      .filter(Boolean);
+
+    if (!segments.length) return "";
+    if (segments[0] === "patient") segments.shift();
+    return segments.join(".");
+  };
+
+  const parseHeadlessFieldOptions = (raw) =>
+    String(raw || "")
+      .split(/[\r\n,]+/)
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+
+  const defaultHeadlessFieldValue = (type) => {
+    if (["checkbox", "switch", "toggle"].includes(type)) {
+      return false;
+    }
+
+    if (["checkboxes", "multi_checkbox", "multi_select"].includes(type)) {
+      return [];
+    }
+
+    return "";
+  };
+
+  const getNestedValue = (source, path) => {
+    const normalizedPath = normalizeHeadlessFieldPath(path);
+    if (!normalizedPath || !isPlainObject(source)) return undefined;
+
+    return normalizedPath.split(".").reduce((cursor, segment) => {
+      if (!isPlainObject(cursor) && !Array.isArray(cursor)) {
+        return undefined;
+      }
+      return cursor?.[segment];
+    }, source);
+  };
+
+  const setNestedValue = (target, path, value) => {
+    const normalizedPath = normalizeHeadlessFieldPath(path);
+    if (!normalizedPath || !isPlainObject(target)) return;
+
+    const segments = normalizedPath.split(".");
+    let cursor = target;
+    const lastIndex = segments.length - 1;
+
+    segments.forEach((segment, index) => {
+      if (index === lastIndex) {
+        cursor[segment] = value;
+        return;
+      }
+
+      if (!isPlainObject(cursor[segment])) {
+        cursor[segment] = {};
+      }
+
+      cursor = cursor[segment];
+    });
+  };
+
+  const normalizeHeadlessPatientFieldDefinition = (field) => {
+    if (!isPlainObject(field)) return null;
+
+    const rawPath = String(field.path || field.field_path || "").trim();
+    const rawKey = String(field.key || field.field_key || "").trim();
+    const rawLabel = String(field.label || field.field_label || "").trim();
+    const type = String(field.type || field.field_type || "text").trim().toLowerCase();
+    const allowedTypes = [
+      "text",
+      "textarea",
+      "email",
+      "tel",
+      "date",
+      "number",
+      "select",
+      "radio",
+      "checkbox",
+      "checkboxes",
+      "multi_checkbox",
+      "multi_select",
+      "hidden",
+    ];
+    const normalizedType = allowedTypes.includes(type) ? type : "text";
+    const path = normalizeHeadlessFieldPath(
+      rawPath || (rawKey ? `custom_fields.${rawKey}` : "")
+    );
+
+    if (!path) return null;
+
+    const key = normalizeHeadlessFieldSegment(
+      rawKey || path.replace(/\./g, "_") || rawLabel
+    );
+    if (!key) return null;
+
+    const validationSource = isPlainObject(field.validation) ? field.validation : {};
+    const validationType = String(
+      validationSource.type || field.validation_type || "none"
+    )
+      .trim()
+      .toLowerCase();
+
+    const rawOptions =
+      Array.isArray(field.options) && field.options.length
+        ? field.options
+        : parseHeadlessFieldOptions(field.field_options);
+
+    const options = rawOptions
+      .map((option) => {
+        if (isPlainObject(option)) {
+          return String(option.value || option.label || "").trim();
+        }
+        return String(option || "").trim();
+      })
+      .filter(Boolean);
+
+    const validation = {
+      type: validationType,
+    };
+
+    const pattern = String(
+      validationSource.pattern || field.validation_pattern || ""
+    ).trim();
+    if (pattern) {
+      validation.pattern = pattern;
+    }
+
+    const validationMessage = String(
+      validationSource.message || field.validation_message || ""
+    ).trim();
+    if (validationMessage) {
+      validation.message = validationMessage;
+    }
+
+    ["min_length", "max_length", "min_value", "max_value"].forEach((numericKey) => {
+      const numericValue =
+        validationSource[numericKey] ?? field[numericKey] ?? null;
+      if (numericValue === null || numericValue === "") return;
+      if (!Number.isFinite(Number(numericValue))) return;
+      validation[numericKey] = Number(numericValue);
+    });
+
+    if (options.length) {
+      validation.options = options;
+    }
+
+    const defaultValue =
+      Object.prototype.hasOwnProperty.call(field, "default")
+        ? cloneJson(field.default, defaultHeadlessFieldValue(normalizedType))
+        : defaultHeadlessFieldValue(normalizedType);
+
+    return {
+      key,
+      label: rawLabel || key,
+      path,
+      type: normalizedType,
+      required: !!field.required,
+      placeholder: String(field.placeholder || "").trim(),
+      help_text: String(field.help_text || "").trim(),
+      options,
+      default: defaultValue,
+      validation,
+      cliniko_section_name: String(field.cliniko_section_name || "").trim(),
+      cliniko_section_token: String(field.cliniko_section_token || "").trim(),
+      cliniko_field_name: String(field.cliniko_field_name || "").trim(),
+      cliniko_field_token: String(field.cliniko_field_token || "").trim(),
+      cliniko_field_type: String(field.cliniko_field_type || "").trim() || normalizedType,
+    };
+  };
+
+  const getHeadlessPatientFieldDefinitions = () => {
+    const directFields = Array.isArray(formHandlerData?.headless_patient_fields)
+      ? formHandlerData.headless_patient_fields
+      : null;
+    const templateFields = Array.isArray(formHandlerData?.submission_template?.headless_patient_fields)
+      ? formHandlerData.submission_template.headless_patient_fields
+      : null;
+    const rawFields =
+      (directFields && directFields.length ? directFields : null) ||
+      templateFields ||
+      [];
+
+    const overrideKeys = new Set([
+      normalizeHeadlessFieldSegment("medicare_provider"),
+      normalizeHeadlessFieldSegment("health_identifier_number"),
+    ]);
+
+    const fallbackProviderOptions = [
+      "ACA Health",
+      "AIA Health",
+      "Australian Unity",
+      "Bupa",
+      "CBHS Corporate Health",
+      "CBHS Health Fund",
+      "Defence Health",
+      "Doctors' Health Fund",
+      "GMHBA",
+      "HBF",
+      "HCF",
+      "Health Care Insurance",
+      "Health Partners",
+      "HIF",
+      "Hunter Health",
+      "Latrobe Health Services",
+      "Medibank",
+      "Mildura Health Fund",
+      "Navy Health",
+      "nib",
+      "OneMediFund",
+      "Peoplecare",
+      "Phoenix Health Fund",
+      "Police Health",
+      "Reserve Bank Health Society",
+      "St Luke's",
+      "Teachers Health",
+      "Westfund",
+      "Other",
+    ];
+
+    const fallbackFields = [
+      {
+        key: "medicare_provider",
+        field_key: "medicare_provider",
+        label: "Medicare provider",
+        field_label: "Medicare provider",
+        path: "medicare_provider",
+        field_path: "medicare_provider",
+        type: "select",
+        field_type: "select",
+        required: false,
+        placeholder: "Select a provider",
+        help_text: "",
+        options: fallbackProviderOptions,
+        default: "",
+        validation: {
+          type: "enum",
+          options: fallbackProviderOptions,
+        },
+        validation_type: "enum",
+        cliniko_field_name: "Medicare provider",
+        cliniko_field_type: "select",
+      },
+      {
+        key: "health_identifier_number",
+        field_key: "health_identifier_number",
+        label: "Health Identifier Number",
+        field_label: "Health Identifier Number",
+        path: "health_identifier_number",
+        field_path: "health_identifier_number",
+        type: "text",
+        field_type: "text",
+        required: false,
+        placeholder: "Enter HIN",
+        help_text: "",
+        default: "",
+        validation: {
+          type: "none",
+        },
+        validation_type: "none",
+        cliniko_field_name: "Health Identifier Number",
+        cliniko_field_type: "text",
+      },
+    ];
+
+    const normalized = rawFields
+      .filter((field) => {
+        const pathKey = normalizeHeadlessFieldPath(
+          String(field?.path || field?.field_path || "")
+        );
+        const fieldKey = normalizeHeadlessFieldSegment(
+          String(field?.key || field?.field_key || field?.label || field?.field_label || "")
+        );
+
+        return !overrideKeys.has(pathKey) && !overrideKeys.has(fieldKey);
+      })
+      .map((field) => normalizeHeadlessPatientFieldDefinition(field))
+      .filter(Boolean);
+
+    fallbackFields
+      .map((field) => normalizeHeadlessPatientFieldDefinition(field))
+      .filter(Boolean)
+      .forEach((field) => {
+        if (!field || !field.path) return;
+        const pathKey = normalizeHeadlessFieldPath(field.path);
+        const exists = normalized.some((candidate) => normalizeHeadlessFieldPath(candidate.path) === pathKey);
+        if (!exists) {
+          normalized.push(field);
+        }
+      });
+
+    return normalized;
+  };
+
+  const buildHeadlessPatientSkeleton = (
+    definitions = getHeadlessPatientFieldDefinitions()
+  ) => {
+    const skeleton = {};
+
+    (Array.isArray(definitions) ? definitions : []).forEach((field) => {
+      if (!field || !field.path) return;
+      setNestedValue(skeleton, field.path, cloneJson(field.default, field.default));
+    });
+
+    return skeleton;
   };
 
   const mergePatientWithSkeleton = (targetPatient, patientSkeleton) => {
-    const base = patientSkeleton && typeof patientSkeleton === "object"
-      ? cloneJson(patientSkeleton, {})
-      : {};
-    const current = targetPatient && typeof targetPatient === "object"
-      ? cloneJson(targetPatient, {})
-      : {};
-    return { ...base, ...current };
+    const mergeDeep = (base, override) => {
+      if (override === undefined) {
+        return cloneJson(base, null);
+      }
+
+      if (Array.isArray(base) || Array.isArray(override)) {
+        return cloneJson(override, []);
+      }
+
+      if (isPlainObject(base) && isPlainObject(override)) {
+        const out = cloneJson(base, {});
+        Object.keys(override).forEach((key) => {
+          out[key] = mergeDeep(base[key], override[key]);
+        });
+        return out;
+      }
+
+      return cloneJson(override, null);
+    };
+
+    return mergeDeep(
+      isPlainObject(patientSkeleton) ? patientSkeleton : {},
+      isPlainObject(targetPatient) ? targetPatient : {}
+    );
+  };
+
+  const isEmptyHeadlessValue = (value) => {
+    if (value === null || value === undefined) return true;
+    if (typeof value === "string") return value.trim() === "";
+    if (typeof value === "number") return Number.isNaN(value);
+    if (typeof value === "boolean") return !value;
+    if (Array.isArray(value)) return value.length === 0;
+    if (isPlainObject(value)) return Object.keys(value).length === 0;
+    return false;
+  };
+
+  const validateHeadlessPatientFields = (patientCandidate = null) => {
+    const patient = isPlainObject(patientCandidate)
+      ? patientCandidate
+      : isPlainObject(patientCandidate?.patient)
+        ? patientCandidate.patient
+        : getHeadlessPayload()?.patient;
+
+    const definitions = getHeadlessPatientFieldDefinitions();
+    if (!definitions.length) {
+      return { valid: true, errors: [], fields: definitions };
+    }
+
+    const errors = [];
+
+    const addError = (field, message, rule) => {
+      errors.push({
+        key: field.key,
+        label: field.label,
+        path: field.path,
+        message,
+        rule,
+      });
+    };
+
+    definitions.forEach((field) => {
+      const value = getNestedValue(patient, field.path);
+      const valueIsEmpty = isEmptyHeadlessValue(value);
+      const fieldType = String(field.type || "text").toLowerCase();
+      const validationType = String(field.validation?.type || "none").toLowerCase();
+      const ruleType =
+        validationType !== "none"
+          ? validationType
+          : (
+              fieldType === "email"
+                ? "email"
+                : fieldType === "tel"
+                  ? "phone_au"
+                  : fieldType === "date"
+                    ? "date_iso"
+                    : fieldType === "number"
+                      ? "number_range"
+                      : ((fieldType === "select" || fieldType === "radio" || fieldType === "checkboxes" || fieldType === "multi_checkbox" || fieldType === "multi_select") && (field.options || []).length ? "enum" : "none")
+            );
+
+      if (field.required && valueIsEmpty) {
+        addError(field, field.validation?.message || `${field.label} is required.`, "required");
+        return;
+      }
+
+      if (valueIsEmpty) {
+        return;
+      }
+
+      const stringValue = String(value ?? "").trim();
+      const arrayValue = Array.isArray(value)
+        ? value.map((item) => String(item || "").trim()).filter(Boolean)
+        : null;
+      const optionList = Array.isArray(field.validation?.options) && field.validation.options.length
+        ? field.validation.options
+        : field.options || [];
+
+      if (ruleType === "email") {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(stringValue)) {
+          addError(field, field.validation?.message || `${field.label} must be a valid email address.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "phone_au") {
+        const digits = String(value || "").replace(/\D/g, "");
+        if (!(digits.length === 10 || (digits.length === 11 && digits.startsWith("61")))) {
+          addError(field, field.validation?.message || `${field.label} must be a valid Australian phone number.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "postcode_au") {
+        if (!/^\d{4}$/.test(String(value || "").replace(/\D/g, ""))) {
+          addError(field, field.validation?.message || `${field.label} must be a 4-digit postcode.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "medicare") {
+        if (String(value || "").replace(/\D/g, "").length !== 10) {
+          addError(field, field.validation?.message || `${field.label} must be a 10-digit Medicare number.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "date_iso") {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(stringValue)) {
+          addError(field, field.validation?.message || `${field.label} must be a valid date in YYYY-MM-DD format.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "regex") {
+        const pattern = String(field.validation?.pattern || "").trim();
+        if (!pattern) {
+          addError(field, field.validation?.message || `${field.label} is missing a validation pattern.`, ruleType);
+          return;
+        }
+
+        try {
+          const regex = new RegExp(pattern);
+          if (!regex.test(stringValue)) {
+            addError(field, field.validation?.message || `${field.label} does not match the expected format.`, ruleType);
+          }
+        } catch (err) {
+          addError(field, field.validation?.message || `${field.label} has an invalid validation pattern.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "length") {
+        const minLength = Number(field.validation?.min_length);
+        const maxLength = Number(field.validation?.max_length);
+        const measuredLength = arrayValue ? arrayValue.length : stringValue.length;
+
+        if (Number.isFinite(minLength) && measuredLength < minLength) {
+          addError(field, field.validation?.message || `${field.label} must be at least ${minLength} characters long.`, ruleType);
+          return;
+        }
+
+        if (Number.isFinite(maxLength) && measuredLength > maxLength) {
+          addError(field, field.validation?.message || `${field.label} must be no more than ${maxLength} characters long.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "number_range") {
+        const numeric = Number(stringValue);
+        if (!Number.isFinite(numeric)) {
+          addError(field, field.validation?.message || `${field.label} must be a valid number.`, ruleType);
+          return;
+        }
+
+        const minValue = Number(field.validation?.min_value);
+        const maxValue = Number(field.validation?.max_value);
+        if (Number.isFinite(minValue) && numeric < minValue) {
+          addError(field, field.validation?.message || `${field.label} must be at least ${minValue}.`, ruleType);
+          return;
+        }
+        if (Number.isFinite(maxValue) && numeric > maxValue) {
+          addError(field, field.validation?.message || `${field.label} must be no more than ${maxValue}.`, ruleType);
+        }
+        return;
+      }
+
+      if (ruleType === "enum") {
+        const normalizedOptions = optionList.map((option) => String(option || "").trim()).filter(Boolean);
+        if (!normalizedOptions.length) {
+          return;
+        }
+
+        if (arrayValue) {
+          const invalid = arrayValue.filter(
+            (item) => !normalizedOptions.some((option) => option.toLowerCase() === item.toLowerCase())
+          );
+          if (invalid.length) {
+            addError(field, field.validation?.message || `${field.label} contains an invalid selection.`, ruleType);
+          }
+          return;
+        }
+
+        const matches = normalizedOptions.some(
+          (option) => option.toLowerCase() === stringValue.toLowerCase()
+        );
+        if (!matches) {
+          addError(field, field.validation?.message || `${field.label} contains an invalid selection.`, ruleType);
+        }
+      }
+    });
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      fields: definitions,
+    };
+  };
+
+  const clearCalendarCache = () => {
+    cacheStore.values.clear();
+    cacheStore.pending.clear();
   };
 
   const normalizeSectionsForSubmissionTemplate = (rawSections) => {
@@ -274,8 +806,11 @@ const fetchJson = async (url) => {
             practitioner_id: "",
           };
 
+    const headlessPatientSkeleton = buildHeadlessPatientSkeleton();
+
     return {
-      patient: basePatient,
+      patient: mergePatientWithSkeleton(basePatient, headlessPatientSkeleton),
+      headless_patient_fields: getHeadlessPatientFieldDefinitions(),
       content: {
         sections: normalizeSectionsForSubmissionTemplate(sections),
       },
@@ -302,6 +837,17 @@ const fetchJson = async (url) => {
       document.querySelector(".cliniko-form-submission-template-json");
     if (submissionNode) {
       submissionNode.textContent = JSON.stringify(submissionTemplate || {});
+    }
+
+    const fieldsNode =
+      root?.querySelector(".cliniko-form-headless-fields-json") ||
+      document.querySelector(".cliniko-form-headless-fields-json");
+    if (fieldsNode) {
+      const definitions =
+        formHandlerData?.headless_patient_fields ||
+        submissionTemplate?.headless_patient_fields ||
+        [];
+      fieldsNode.textContent = JSON.stringify(definitions || []);
     }
   };
 
@@ -333,7 +879,16 @@ const fetchJson = async (url) => {
 
   const ensureHeadlessPayload = () => {
     if (typeof window.clinikoGetHeadlessPayload === "function") {
-      return null;
+      try {
+        const providedPayload = window.clinikoGetHeadlessPayload();
+        if (providedPayload && typeof providedPayload === "object") {
+          window.clinikoHeadlessPayload = providedPayload;
+        } else {
+          return null;
+        }
+      } catch (_) {
+        return null;
+      }
     }
 
     if (!window.clinikoHeadlessPayload || typeof window.clinikoHeadlessPayload !== "object") {
@@ -352,15 +907,43 @@ const fetchJson = async (url) => {
     if (!window.clinikoHeadlessPayload.patient || typeof window.clinikoHeadlessPayload.patient !== "object") {
       window.clinikoHeadlessPayload.patient = {};
     }
+    window.clinikoHeadlessPayload.patient = mergePatientWithSkeleton(
+      window.clinikoHeadlessPayload.patient,
+      buildHeadlessPatientSkeleton()
+    );
+    if (!Array.isArray(window.clinikoHeadlessPayload.headless_patient_fields)) {
+      window.clinikoHeadlessPayload.headless_patient_fields = getHeadlessPatientFieldDefinitions();
+    }
     return window.clinikoHeadlessPayload;
   };
 
   const updateHeadlessPatient = (fields = {}) => {
     const payload = ensureHeadlessPayload();
     if (!payload) return false;
-    Object.entries(fields).forEach(([k, v]) => {
-      payload.patient[k] = v;
-    });
+
+    const applyPatch = (target, patch, prefix = "") => {
+      if (!isPlainObject(patch)) return;
+
+      Object.entries(patch).forEach(([key, value]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (key.includes(".")) {
+          setNestedValue(target, key, value);
+          return;
+        }
+
+        if (isPlainObject(value) && !Array.isArray(value)) {
+          if (!isPlainObject(target[key])) {
+            target[key] = {};
+          }
+          applyPatch(target[key], value, path);
+          return;
+        }
+
+        target[key] = cloneJson(value, value);
+      });
+    };
+
+    applyPatch(payload.patient, fields);
     return true;
   };
 
@@ -461,12 +1044,21 @@ const fetchJson = async (url) => {
 
     submissionTemplate.moduleId = String(formHandlerData?.module_id || currentAppointmentTypeId || "");
     submissionTemplate.patient_form_template_id = id;
+    submissionTemplate.headless_patient_fields = getHeadlessPatientFieldDefinitions();
+    submissionTemplate.patient = mergePatientWithSkeleton(
+      submissionTemplate.patient,
+      buildHeadlessPatientSkeleton(submissionTemplate.headless_patient_fields)
+    );
 
     const previousTemplateId = currentPatientFormTemplateId;
     currentPatientFormTemplateId = id;
     formHandlerData.patient_form_template_id = id;
     formHandlerData.sections = sections;
     formHandlerData.submission_template = submissionTemplate;
+    formHandlerData.headless_patient_fields = cloneJson(
+      submissionTemplate.headless_patient_fields,
+      []
+    );
 
     updateHeadlessScripts(sections, submissionTemplate, id);
 
@@ -477,6 +1069,10 @@ const fetchJson = async (url) => {
       payload.patient = mergePatientWithSkeleton(
         payload.patient,
         submissionTemplate.patient
+      );
+      payload.headless_patient_fields = cloneJson(
+        submissionTemplate.headless_patient_fields,
+        []
       );
     }
 
@@ -793,6 +1389,21 @@ const fetchJson = async (url) => {
     shiftMonthKey,
     toDateInputValue,
     groupTimesByPeriod,
+    getHeadlessPatientFieldDefinitions,
+    getHeadlessPatientFieldSkeleton: buildHeadlessPatientSkeleton,
+    getHeadlessPatientFieldValue: (path, patient = null) => {
+      const normalizedPath = normalizeHeadlessFieldPath(path);
+      if (!normalizedPath) return undefined;
+      return getNestedValue(
+        isPlainObject(patient) ? patient : getHeadlessPayload()?.patient,
+        normalizedPath
+      );
+    },
+    setHeadlessPatientField: (path, value) => {
+      const normalizedPath = normalizeHeadlessFieldPath(path);
+      if (!normalizedPath) return false;
+      return updateHeadlessPatient({ [normalizedPath]: value });
+    },
     fetchPractitioners,
     fetchCalendar,
     prefetchCalendarWindow,
@@ -800,6 +1411,7 @@ const fetchJson = async (url) => {
     fetchAllTimesForDate,
     fetchNextAvailableTimes,
     updateHeadlessPatient,
+    validateHeadlessPatientFields,
     updateFormtemplate,
     updateFormTemplate: updateFormtemplate,
     updateAppointmentType,
@@ -2720,13 +3332,20 @@ function getHeadlessPayload() {
   return null;
 }
 
-function normalizeHeadlessPayload(payload) {
-  if (!payload || typeof payload !== "object") return null;
-  const content = payload.content || null;
-  const patient = payload.patient || null;
-  if (!content || !patient) return null;
-  return { content, patient };
-}
+  function normalizeHeadlessPayload(payload) {
+    if (!payload || typeof payload !== "object") return null;
+    const content = payload.content || null;
+    const patient = payload.patient || null;
+    if (!content || !patient) return null;
+    const normalized = { ...payload, content, patient };
+    if (!Array.isArray(normalized.headless_patient_fields) && Array.isArray(payload.headless_patient_fields)) {
+      normalized.headless_patient_fields = payload.headless_patient_fields;
+    }
+    if (!Array.isArray(normalized.headless_patient_fields) && Array.isArray(payload.submission_template?.headless_patient_fields)) {
+      normalized.headless_patient_fields = payload.submission_template.headless_patient_fields;
+    }
+    return normalized;
+  }
 
 function toDateInputValue(date) {
   const tzOffset = date.getTimezoneOffset() * 60000;
@@ -4789,8 +5408,45 @@ async function submitBookingForm(
   }
 
   const parsed = headlessPayload || parseFormToStructuredBody(formElement);
+
+  if (isHeadless && window.ClinikoHeadlessCalendar?.validateHeadlessPatientFields) {
+    const headlessValidation = window.ClinikoHeadlessCalendar.validateHeadlessPatientFields(
+      parsed?.patient || {}
+    );
+
+    if (!headlessValidation?.valid) {
+      const firstError = headlessValidation?.errors?.[0];
+      const msg =
+        firstError?.message ||
+        "Please review the custom patient fields before continuing.";
+
+      try {
+        window.dispatchEvent(
+          new CustomEvent("es:headless-patient-validation-failed", {
+            detail: {
+              valid: false,
+              errors: headlessValidation?.errors || [],
+              fields: headlessValidation?.fields || [],
+              patient: parsed?.patient || {},
+            },
+          })
+        );
+      } catch (_) {
+      }
+
+      if (errorEl) errorEl.textContent = msg;
+      else showToast(msg, "error");
+      return;
+    }
+  }
+
   const content = normalizeContentForSubmission(parsed?.content || {});
   const patient = normalizePatientForSubmission(parsed?.patient || {});
+  const headlessPatientFields = Array.isArray(parsed?.headless_patient_fields)
+    ? parsed.headless_patient_fields
+    : Array.isArray(formHandlerData?.headless_patient_fields)
+      ? formHandlerData.headless_patient_fields
+      : [];
 
   // ---- normalize payment input (string token OR object) ----
   const payment = (() => {
@@ -4853,6 +5509,7 @@ async function submitBookingForm(
       : patient,
     moduleId: String(formHandlerData.module_id || ""),
     patient_form_template_id: String(formHandlerData.patient_form_template_id || ""),
+    headless_patient_fields: headlessPatientFields.length ? headlessPatientFields : null,
 
     // ✅ NEW: unified payment object (recommended for backend going forward)
     payment: payment.gateway

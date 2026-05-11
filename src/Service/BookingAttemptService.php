@@ -54,9 +54,17 @@ class BookingAttemptService
         $contentRaw = is_array($body['content'] ?? null)
             ? $body['content']
             : json_decode((string) ($body['content'] ?? '[]'), true);
+        $submissionTemplateBody = is_array($body['submission_template'] ?? null)
+            ? $body['submission_template']
+            : [];
+        $headlessFieldsRaw = $body['headless_patient_fields']
+            ?? ($submissionTemplateBody['headless_patient_fields'] ?? []);
 
         $patient = PatientSubmissionSanitizer::sanitize(is_array($patientRaw) ? $patientRaw : []);
         $content = PatientFormPayloadSanitizer::sanitizeContent($contentRaw);
+        $headlessPatientFields = PatientCustomFieldService::normalizeDefinitions(
+            is_array($headlessFieldsRaw) ? $headlessFieldsRaw : []
+        );
 
         $validationPayload = [
             'moduleId' => $moduleId,
@@ -67,6 +75,17 @@ class BookingAttemptService
 
         $errors = AppointmentRequestValidator::validate($validationPayload, false);
         $errors = array_merge($errors, PatientFormValidator::validateContentSections($content));
+        $errors = array_merge(
+            $errors,
+            PatientCustomFieldService::validate($patient, $headlessPatientFields)
+        );
+
+        $customFields = PatientCustomFieldService::buildCustomFields($patient, $headlessPatientFields);
+        if ($customFields !== null) {
+            $patient['custom_fields'] = $customFields;
+        } else {
+            unset($patient['custom_fields']);
+        }
 
         if (empty(trim((string) ($patient['appointment_start'] ?? '')))) {
             $errors[] = [
@@ -603,6 +622,9 @@ class BookingAttemptService
         $dto->dateOfBirth = $patient['date_of_birth'] ?? null;
         $dto->medicare = $patient['medicare'] ?? null;
         $dto->medicareReferenceNumber = $patient['medicare_reference_number'] ?? null;
+        if (is_array($patient['custom_fields'] ?? null)) {
+            $dto->customFields = $patient['custom_fields'];
+        }
         $dto->patientPhoneNumbers = [['number' => (string) ($patient['phone'] ?? ''), 'phone_type' => 'Home']];
         $dto->acceptedPrivacyPolicy = true;
 

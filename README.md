@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.6.7`
+- Current plugin version: `1.6.9`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,9 +14,10 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.6.7
-- Custom-form appointment selection now appears after patient details, and returning-patient checkout now opens the shared calendar step before payment when calendar selection is enabled.
-- Medicare capture now keeps the 10-digit card formatted as `xxxx xxxxx x` while storing the IRN separately across the headless and widget flows.
+## What Is New in 1.6.9
+- Headless custom patient fields can now be configured in the Cliniko form widget, with inferred payload paths, optional advanced Cliniko mapping, and pre-submit validation.
+- Booking preflight and scheduling now carry custom field values through to Cliniko patient payloads.
+- Medicare validation now follows the shell UI branch selection and supports the `medicare_mode` and legacy `has_medicare` payload shapes.
 
 ## Core Features
 - Shard-aware Cliniko API integration.

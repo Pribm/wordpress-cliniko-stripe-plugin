@@ -1,3 +1,14 @@
+## [1.6.9] - 2026-05-12
+### Added
+- Headless custom patient fields can now be configured in the Cliniko form widget, with inferred payload paths, optional advanced Cliniko mapping, and pre-submit validation.
+
+### Changed
+- Booking preflight and scheduling now carry custom field values through to Cliniko patient payloads.
+- Medicare validation now follows the shell UI branch selection and supports the `medicare_mode` and legacy `has_medicare` payload shapes.
+
+### Fixed
+- Headless submissions now fail fast when custom patient fields are invalid instead of sending malformed payloads to Cliniko.
+
 ## [1.6.7] - 2026-04-16
 ### Changed
 - Custom-form appointment selection now sits after patient details, and returning-patient checkout now opens the shared calendar step before payment when calendar selection is enabled.
