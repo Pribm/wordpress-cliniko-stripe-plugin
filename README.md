@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.6.9`
+- Current plugin version: `1.6.10`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,10 +14,9 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.6.9
-- Headless custom patient fields can now be configured in the Cliniko form widget, with inferred payload paths, optional advanced Cliniko mapping, and pre-submit validation.
-- Booking preflight and scheduling now carry custom field values through to Cliniko patient payloads.
-- Medicare validation now follows the shell UI branch selection and supports the `medicare_mode` and legacy `has_medicare` payload shapes.
+## What Is New in 1.6.10
+- The cached-page request token gate was removed so stale page caches and headless flows no longer fail with `Invalid or expired booking token`.
+- Public booking and availability requests now rely on the existing same-origin and route-specific checks only.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
@@ -216,15 +215,14 @@ Content schema notes:
 - `signature` questions are not allowed in payloads.
 
 ## Headless API Reference
-These are the REST endpoints the headless helpers call. They are registered under the WordPress REST API and protected by the request-token guard.
+These are the REST endpoints the headless helpers call. They are registered under the WordPress REST API and protected by same-origin checks plus route-specific tokens where needed.
 
 Base path:
 `/wp-json/v1`
 
 Auth:
-- Send the request token as query `request_token=<token>` or header `X-ES-Request-Token: <token>`.
-- In widget/headless flows, use `formHandlerData.request_token` (already localized by the widget render).
 - Booking-attempt mutation routes (`/wp-json/v2/booking-attempts/*`) also require the attempt token via `attempt_token` or `X-ES-Attempt-Token`.
+- Patient-access routes require the patient access token via `patient_access_token`, `access_token`, or `X-ES-Patient-Access-Token`.
 
 Response conventions:
 - Cliniko data endpoints return `{ success: true, data: ... }` on success.

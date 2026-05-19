@@ -11,7 +11,6 @@ use App\Model\PatientFormTemplate;
 use App\Model\AppointmentType;
 use App\Service\PatientAccessTokenService;
 use App\Service\PatientCustomFieldService;
-use App\Service\PublicRequestGuard;
 use Elementor\Widget_Base;
 
 class Widget extends Widget_Base
@@ -549,7 +548,6 @@ class Widget extends Widget_Base
       );
     }
 
-    $requestToken = PublicRequestGuard::issueRequestToken();
     $appointment_source = $settings['appointment_source'] ?? '';
     if ($appointment_source === 'custom_form' && $settings['enable_payment'] === 'yes') {
 
@@ -600,7 +598,6 @@ class Widget extends Widget_Base
           'appId' => $tyroAppId,
           'appVersion' => $tyroAppVersion,
           'providerNumber' => Credentials::getTyroProviderNumber(),
-          'request_token' => $requestToken,
           // short-lived token endpoint (your server uses Business Admin key)
           'sdk_token_url' => get_site_url() . '/wp-json/v1/tyrohealth/sdk-token',
           'create_invoice_url' => get_site_url() . '/wp-json/v1/tyrohealth/invoice',
@@ -695,7 +692,6 @@ class Widget extends Widget_Base
         'booking_attempt_confirm_tyro_url' => get_site_url() . '/wp-json/v2/booking-attempts/confirm-tyro',
         'booking_attempt_finalize_url' => get_site_url() . '/wp-json/v2/booking-attempts/finalize',
         'booking_attempt_status_url' => get_site_url() . '/wp-json/v2/booking-attempts/status',
-        'request_token' => $requestToken,
         'available_times_url' => get_site_url() . '/wp-json/v1/available-times',
         'next_available_times_url' => get_site_url() . '/wp-json/v1/next-available-times',
         'practitioners_url' => get_site_url() . '/wp-json/v1/practitioners',

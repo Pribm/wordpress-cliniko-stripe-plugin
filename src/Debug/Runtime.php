@@ -432,7 +432,6 @@ class Runtime
             'has_email' => self::hasNonEmptyValue($params['email'] ?? null),
             'has_code' => self::hasNonEmptyValue($params['code'] ?? null),
             'has_request_id' => self::hasNonEmptyValue($params['request_id'] ?? null),
-            'has_request_token' => self::hasHeader($headers, 'x-es-request-token'),
             'has_patient_access_token' => self::hasHeader($headers, 'x-es-patient-access-token')
                 || self::hasNonEmptyValue($params['patient_access_token'] ?? null)
                 || self::hasNonEmptyValue($params['access_token'] ?? null),

@@ -1,3 +1,8 @@
+## [1.6.10] - 2026-05-19
+### Fixed
+- Removed the cached-page request token gate from public booking routes so stale page caches and headless frontends no longer fail with `Invalid or expired booking token`.
+- Public booking and availability requests now rely on the existing same-origin and route-specific checks only.
+
 ## [1.6.9] - 2026-05-12
 ### Added
 - Headless custom patient fields can now be configured in the Cliniko form widget, with inferred payload paths, optional advanced Cliniko mapping, and pre-submit validation.

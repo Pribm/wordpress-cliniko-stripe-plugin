@@ -159,26 +159,13 @@ function assert_true(bool $condition, string $message): void
     }
 }
 
-function test_request_token_is_issued_and_validates(): void
-{
-    $token = PublicRequestGuard::issueRequestToken();
-    assert_true($token !== '', 'Expected non-empty request token');
-    assert_true(PublicRequestGuard::validateRequestToken($token), 'Expected request token to validate');
-}
-
-function test_public_mutation_requires_valid_request_token(): void
+function test_public_mutation_without_guard_token(): void
 {
     $guard = new PublicRequestGuard(new BookingAttemptStore());
     $request = new WP_REST_Request('POST', '/v2/booking-attempts/preflight');
-    $request->set_header('X-ES-Request-Token', PublicRequestGuard::issueRequestToken());
 
     $allowed = $guard->allowPublicMutation($request);
-    assert_true($allowed === true, 'Expected valid request token to pass guard');
-
-    $badRequest = new WP_REST_Request('POST', '/v2/booking-attempts/preflight');
-    $badRequest->set_header('X-ES-Request-Token', 'bad-token');
-    $denied = $guard->allowPublicMutation($badRequest);
-    assert_true($denied instanceof WP_Error, 'Expected invalid request token to be denied');
+    assert_true($allowed === true, 'Expected public mutation to pass without a guard token');
 }
 
 function test_attempt_mutation_requires_matching_attempt_token(): void
@@ -192,7 +179,6 @@ function test_attempt_mutation_requires_matching_attempt_token(): void
 
     $guard = new PublicRequestGuard($store);
     $request = new WP_REST_Request('POST', '/v2/booking-attempts/finalize');
-    $request->set_header('X-ES-Request-Token', PublicRequestGuard::issueRequestToken());
     $request->set_header('X-ES-Attempt-Token', $attemptToken);
     $request->set_params([
         'attempt_id' => $attempt['attempt_id'],
@@ -202,7 +188,6 @@ function test_attempt_mutation_requires_matching_attempt_token(): void
     assert_true($allowed === true, 'Expected matching attempt token to pass guard');
 
     $bad = new WP_REST_Request('POST', '/v2/booking-attempts/finalize');
-    $bad->set_header('X-ES-Request-Token', PublicRequestGuard::issueRequestToken());
     $bad->set_header('X-ES-Attempt-Token', 'wrong-token');
     $bad->set_params([
         'attempt_id' => $attempt['attempt_id'],
@@ -212,19 +197,13 @@ function test_attempt_mutation_requires_matching_attempt_token(): void
     assert_true($denied instanceof WP_Error, 'Expected wrong attempt token to be denied');
 }
 
-function test_public_read_requires_valid_request_token(): void
+function test_public_read_without_guard_token(): void
 {
     $guard = new PublicRequestGuard(new BookingAttemptStore());
 
     $request = new WP_REST_Request('GET', '/v1/available-times');
-    $request->set_header('X-ES-Request-Token', PublicRequestGuard::issueRequestToken());
     $allowed = $guard->allowPublicRead($request);
-    assert_true($allowed === true, 'Expected valid request token to allow read routes');
-
-    $badRequest = new WP_REST_Request('GET', '/v1/available-times');
-    $badRequest->set_header('X-ES-Request-Token', 'invalid');
-    $denied = $guard->allowPublicRead($badRequest);
-    assert_true($denied instanceof WP_Error, 'Expected invalid read token to be denied');
+    assert_true($allowed === true, 'Expected public read route to pass without a guard token');
 }
 
 function run_test(string $name, callable $test): bool
@@ -242,10 +221,9 @@ function run_test(string $name, callable $test): bool
 }
 
 $tests = [
-    'request_token_is_issued_and_validates' => 'test_request_token_is_issued_and_validates',
-    'public_mutation_requires_valid_request_token' => 'test_public_mutation_requires_valid_request_token',
+    'public_mutation_without_guard_token' => 'test_public_mutation_without_guard_token',
     'attempt_mutation_requires_matching_attempt_token' => 'test_attempt_mutation_requires_matching_attempt_token',
-    'public_read_requires_valid_request_token' => 'test_public_read_requires_valid_request_token',
+    'public_read_without_guard_token' => 'test_public_read_without_guard_token',
 ];
 
 $passed = 0;
