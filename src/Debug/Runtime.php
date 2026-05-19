@@ -90,12 +90,14 @@ class Runtime
             return $response;
         }
 
-        $traceId = TraceContext::begin($request->get_method(), $request->get_route());
+        $method = self::requestMethod($request);
+        $route = self::requestRoute($request);
+        $traceId = TraceContext::begin($method, $route);
         self::$restSpans[spl_object_id($request)] = [
             'started_at' => microtime(true),
             'trace_id' => $traceId,
-            'route' => $request->get_route(),
-            'method' => strtoupper($request->get_method()),
+            'route' => $route,
+            'method' => strtoupper($method),
             'handler' => self::describeHandler($handler),
             'request_flags' => self::summarizeRequest($request),
         ];
@@ -263,12 +265,12 @@ class Runtime
 
     public static function mailFailed(WP_Error $error): void
     {
-        $data = $error->get_error_data();
+        $data = self::errorData($error);
         self::finishMail(
             'error',
             'mail_failed',
             LogSanitizer::sanitizeString($error->get_error_message()),
-            is_array($data) ? $data : []
+            $data
         );
     }
 
@@ -424,17 +426,21 @@ class Runtime
      */
     private static function summarizeRequest(WP_REST_Request $request): array
     {
-        $headers = array_change_key_case($request->get_headers(), CASE_LOWER);
-        $params = $request->get_params();
+        $headers = array_change_key_case(self::requestHeaders($request), CASE_LOWER);
+        $email = $request->get_param('email');
+        $code = $request->get_param('code');
+        $requestId = $request->get_param('request_id');
+        $patientAccessToken = $request->get_param('patient_access_token');
+        $legacyAccessToken = $request->get_param('access_token');
 
         return [
-            'param_count' => count($params),
-            'has_email' => self::hasNonEmptyValue($params['email'] ?? null),
-            'has_code' => self::hasNonEmptyValue($params['code'] ?? null),
-            'has_request_id' => self::hasNonEmptyValue($params['request_id'] ?? null),
+            'param_count' => 0,
+            'has_email' => self::hasNonEmptyValue($email),
+            'has_code' => self::hasNonEmptyValue($code),
+            'has_request_id' => self::hasNonEmptyValue($requestId),
             'has_patient_access_token' => self::hasHeader($headers, 'x-es-patient-access-token')
-                || self::hasNonEmptyValue($params['patient_access_token'] ?? null)
-                || self::hasNonEmptyValue($params['access_token'] ?? null),
+                || self::hasNonEmptyValue($patientAccessToken)
+                || self::hasNonEmptyValue($legacyAccessToken),
         ];
     }
 
@@ -447,7 +453,7 @@ class Runtime
         if ($response instanceof WP_Error) {
             return [
                 'wp_error' => true,
-                'error_code' => LogSanitizer::sanitizeString((string) $response->get_error_code()),
+                'error_code' => LogSanitizer::sanitizeString(self::errorCode($response)),
             ];
         }
 
@@ -512,8 +518,8 @@ class Runtime
 
     private static function classifyService(string $url): string
     {
-        $host = strtolower((string) (wp_parse_url($url, PHP_URL_HOST) ?? ''));
-        $siteHost = strtolower((string) (wp_parse_url(home_url(), PHP_URL_HOST) ?? ''));
+        $host = self::extractHostFromUrl($url);
+        $siteHost = self::extractHostFromUrl((string) home_url());
 
         if ($host === '' || $host === $siteHost) {
             return 'internal';
@@ -532,6 +538,47 @@ class Runtime
         }
 
         return 'external';
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private static function requestHeaders(WP_REST_Request $request): array
+    {
+        return $request->get_headers();
+    }
+
+    private static function requestMethod(WP_REST_Request $request): string
+    {
+        return (string) $request->get_method();
+    }
+
+    private static function requestRoute(WP_REST_Request $request): string
+    {
+        return (string) $request->get_route();
+    }
+
+    private static function errorCode(WP_Error $error): string
+    {
+        return (string) $error->get_error_code();
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private static function errorData(WP_Error $error): array
+    {
+        return $error->get_error_data();
+    }
+
+    private static function extractHostFromUrl(string $url): string
+    {
+        $parts = function_exists('wp_parse_url') ? wp_parse_url($url) : parse_url($url);
+        if (!is_array($parts)) {
+            return '';
+        }
+
+        return strtolower((string) ($parts['host'] ?? ''));
     }
 
     /**
