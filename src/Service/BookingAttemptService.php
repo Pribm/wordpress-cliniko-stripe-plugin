@@ -282,7 +282,7 @@ class BookingAttemptService
 
         $patient = is_array($attempt['patient'] ?? null) ? $attempt['patient'] : [];
         $stripeMeta = $patient;
-        unset($stripeMeta['medicare'], $stripeMeta['medicare_reference_number']);
+        unset($stripeMeta['medicare'], $stripeMeta['medicare_reference_number'], $stripeMeta['medicare_mode'], $stripeMeta['medicare_provider'], $stripeMeta['health_identifier_number'], $stripeMeta['custom_fields']);
         $stripeMeta['booking_attempt_id'] = $attemptId;
         $stripeMeta['patient_form_id'] = (string) ($attempt['patient_form_id'] ?? '');
         $stripeMeta['module_id'] = (string) ($attempt['module_id'] ?? '');

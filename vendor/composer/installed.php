@@ -3,7 +3,7 @@
         'name' => 'monte/wp-easyscripts-payment-api',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '5d2e1deea46e041ea4ef7b0c7234d7ba8cb796b6',
+        'reference' => '7f1ea6b38e104c2452b2b7e49c8498837c92af91',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -40,7 +40,7 @@
         'monte/wp-easyscripts-payment-api' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '5d2e1deea46e041ea4ef7b0c7234d7ba8cb796b6',
+            'reference' => '7f1ea6b38e104c2452b2b7e49c8498837c92af91',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
