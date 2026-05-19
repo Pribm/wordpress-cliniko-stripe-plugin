@@ -173,12 +173,7 @@
 
   function buildRequestHeaders(attemptToken = "") {
     const headers = { "Content-Type": "application/json" };
-    const requestToken = String(window.TyroHealthData?.request_token || "").trim();
     const attempt = String(attemptToken || "").trim();
-
-    if (requestToken) {
-      headers["X-ES-Request-Token"] = requestToken;
-    }
 
     if (attempt) {
       headers["X-ES-Attempt-Token"] = attempt;

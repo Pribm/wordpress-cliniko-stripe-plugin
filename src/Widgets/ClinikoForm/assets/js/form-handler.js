@@ -160,9 +160,6 @@ const fetchJson = async (url) => {
     method: "GET",
     headers: {
       Accept: "application/json",
-      ...(formHandlerData?.request_token
-        ? { "X-ES-Request-Token": String(formHandlerData.request_token).trim() }
-        : {}),
     },
     credentials: "same-origin",
   });
@@ -2084,14 +2081,9 @@ function buildPatientHistoryPreviewAnswer(question) {
   return normalizePatientHistoryValue(question?.answer || "");
 }
 
-function buildPatientHistoryHeaders(patientAccessToken = "", includeRequestToken = true) {
+function buildPatientHistoryHeaders(patientAccessToken = "") {
   const headers = { "Content-Type": "application/json" };
-  const requestToken = String(formHandlerData?.request_token || "").trim();
   const accessToken = String(patientAccessToken || "").trim();
-
-  if (includeRequestToken && requestToken) {
-    headers["X-ES-Request-Token"] = requestToken;
-  }
 
   if (accessToken) {
     headers["X-ES-Patient-Access-Token"] = accessToken;
@@ -2469,7 +2461,7 @@ async function completePatientHistoryRequest(requestId, token = "") {
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      ...buildPatientHistoryHeaders(accessToken, false),
+      ...buildPatientHistoryHeaders(accessToken),
     },
     body: JSON.stringify({ request_id: normalizedRequestId }),
   });
@@ -2493,7 +2485,7 @@ async function loadPatientHistoryAppointments(token = "", limit = null) {
   const response = await fetch(url.toString(), {
     method: "GET",
     credentials: "same-origin",
-    headers: buildPatientHistoryHeaders(accessToken, false),
+    headers: buildPatientHistoryHeaders(accessToken),
   });
   const result = await response.json().catch(() => ({}));
   return { response, result };
@@ -2509,7 +2501,7 @@ async function loadPatientHistoryLatest(token = "") {
   const response = await fetch(latestUrl, {
     method: "GET",
     credentials: "same-origin",
-    headers: buildPatientHistoryHeaders(accessToken, false),
+    headers: buildPatientHistoryHeaders(accessToken),
   });
   const result = await response.json().catch(() => ({}));
   return { response, result };
@@ -2525,7 +2517,7 @@ async function loadPatientHistoryPrefill(bookingId, token = "") {
   const response = await fetch(url, {
     method: "GET",
     credentials: "same-origin",
-    headers: buildPatientHistoryHeaders(accessToken, false),
+    headers: buildPatientHistoryHeaders(accessToken),
   });
   const result = await response.json().catch(() => ({}));
   return { response, result };
@@ -3514,9 +3506,6 @@ async function fetchJson(url, fallbackMessage) {
     method: "GET",
     headers: {
       Accept: "application/json",
-      ...(formHandlerData?.request_token
-        ? { "X-ES-Request-Token": String(formHandlerData.request_token).trim() }
-        : {}),
     },
     credentials: "same-origin",
   });
@@ -5150,12 +5139,7 @@ function mountForm() {
  */
 function buildRequestHeaders(attemptToken = "") {
   const headers = { "Content-Type": "application/json" };
-  const requestToken = String(formHandlerData?.request_token || "").trim();
   const attempt = String(attemptToken || "").trim();
-
-  if (requestToken) {
-    headers["X-ES-Request-Token"] = requestToken;
-  }
 
   if (attempt) {
     headers["X-ES-Attempt-Token"] = attempt;

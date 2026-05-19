@@ -10,11 +10,8 @@ if (!defined('ABSPATH')) {
 
 class PublicRequestGuard
 {
-    public const REQUEST_TOKEN_HEADER = 'x-es-request-token';
     public const ATTEMPT_TOKEN_HEADER = 'x-es-attempt-token';
     public const PATIENT_ACCESS_TOKEN_HEADER = 'x-es-patient-access-token';
-
-    private const REQUEST_TOKEN_TTL = 172800;
 
     private BookingAttemptStore $store;
     private PatientAccessTokenService $patientAccessTokens;
@@ -26,44 +23,6 @@ class PublicRequestGuard
     {
         $this->store = $store ?: new BookingAttemptStore();
         $this->patientAccessTokens = $patientAccessTokens ?: new PatientAccessTokenService();
-    }
-
-    public static function issueRequestToken(): string
-    {
-        $payload = [
-            'exp' => time() + self::REQUEST_TOKEN_TTL,
-            'host' => self::siteOrigin(),
-            'scope' => 'widget',
-            'nonce' => self::randomToken(10),
-        ];
-
-        return self::signPayload($payload);
-    }
-
-    public static function validateRequestToken(string $token): bool
-    {
-        [$payloadJson, $signature] = self::splitSignedToken($token);
-        if ($payloadJson === null || $signature === null) {
-            return false;
-        }
-
-        $expected = hash_hmac('sha256', $payloadJson, self::secret());
-        if (!hash_equals($expected, $signature)) {
-            return false;
-        }
-
-        $payload = json_decode($payloadJson, true);
-        if (!is_array($payload)) {
-            return false;
-        }
-
-        $expiresAt = (int) ($payload['exp'] ?? 0);
-        if ($expiresAt <= time()) {
-            return false;
-        }
-
-        $host = trim((string) ($payload['host'] ?? ''));
-        return $host !== '' && hash_equals($host, self::siteOrigin());
     }
 
     public static function issueAttemptToken(): string
@@ -127,16 +86,6 @@ class PublicRequestGuard
             return $this->deny('Forbidden origin.');
         }
 
-        $requestToken = trim((string) $this->readRequestValue(
-            $request,
-            ['request_token'],
-            [self::REQUEST_TOKEN_HEADER]
-        ));
-
-        if (!self::validateRequestToken($requestToken)) {
-            return $this->deny('Invalid or expired booking token. Reload the page and try again.');
-        }
-
         return true;
     }
 
@@ -171,16 +120,6 @@ class PublicRequestGuard
     {
         if (!$this->isSameOriginOrMissing($request)) {
             return $this->deny('Forbidden origin.');
-        }
-
-        $requestToken = trim((string) $this->readRequestValue(
-            $request,
-            ['request_token'],
-            [self::REQUEST_TOKEN_HEADER]
-        ));
-
-        if (!self::validateRequestToken($requestToken)) {
-            return $this->deny('Invalid or expired booking token. Reload the page and try again.');
         }
 
         if (!$this->consumeRateLimit($bucket, $limit, $windowSeconds)) {
@@ -343,40 +282,6 @@ class PublicRequestGuard
         return false;
     }
 
-    /**
-     * @param array<string,mixed> $payload
-     */
-    private static function signPayload(array $payload): string
-    {
-        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
-        if (!is_string($json)) {
-            return '';
-        }
-
-        $signature = hash_hmac('sha256', $json, self::secret());
-        return self::base64UrlEncode($json) . '.' . $signature;
-    }
-
-    /**
-     * @return array{0:?string,1:?string}
-     */
-    private static function splitSignedToken(string $token): array
-    {
-        $parts = explode('.', trim($token), 2);
-        if (count($parts) !== 2) {
-            return [null, null];
-        }
-
-        $payloadJson = self::base64UrlDecode($parts[0]);
-        $signature = trim((string) $parts[1]);
-
-        if ($payloadJson === null || $signature === '') {
-            return [null, null];
-        }
-
-        return [$payloadJson, $signature];
-    }
-
     private static function secret(): string
     {
         if (function_exists('wp_salt')) {
@@ -388,6 +293,17 @@ class PublicRequestGuard
         }
 
         return __FILE__;
+    }
+
+    private static function randomToken(int $bytes): string
+    {
+        try {
+            $raw = random_bytes($bytes);
+        } catch (\Throwable $e) {
+            $raw = md5(uniqid('cliniko_guard_', true), true);
+        }
+
+        return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
     }
 
     private static function siteOrigin(): string
@@ -408,33 +324,5 @@ class PublicRequestGuard
         $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
 
         return $host === '' ? '' : $scheme . '://' . $host . $port;
-    }
-
-    private static function randomToken(int $bytes): string
-    {
-        try {
-            $raw = random_bytes($bytes);
-        } catch (\Throwable $e) {
-            $raw = md5(uniqid('cliniko_guard_', true), true);
-        }
-
-        return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
-    }
-
-    private static function base64UrlEncode(string $value): string
-    {
-        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
-    }
-
-    private static function base64UrlDecode(string $value): ?string
-    {
-        $padded = strtr($value, '-_', '+/');
-        $mod = strlen($padded) % 4;
-        if ($mod > 0) {
-            $padded .= str_repeat('=', 4 - $mod);
-        }
-
-        $decoded = base64_decode($padded, true);
-        return is_string($decoded) ? $decoded : null;
     }
 }
