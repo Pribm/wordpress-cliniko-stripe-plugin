@@ -222,7 +222,13 @@ class PublicRequestGuard
         $headers = $request->get_headers();
         foreach ($headers as $headerKey => $headerValue) {
             if (strcasecmp((string) $headerKey, $key) === 0) {
-                return is_array($headerValue) ? $headerValue[0] : $headerValue;
+                /** @var mixed $normalizedHeaderValue */
+                $normalizedHeaderValue = $headerValue;
+                if (is_array($normalizedHeaderValue)) {
+                    return $normalizedHeaderValue[0] ?? null;
+                }
+
+                return $normalizedHeaderValue;
             }
         }
 

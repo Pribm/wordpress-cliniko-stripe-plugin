@@ -13,6 +13,9 @@ parameters:
   bootstrapFiles:
     - phpstan-bootstrap.php
 
+  stubFiles:
+    - stubs/phpstan-wordpress-stubs.php
+
   inferPrivatePropertyTypeFromConstructor: true
   checkUninitializedProperties: false
   reportUnmatchedIgnoredErrors: false

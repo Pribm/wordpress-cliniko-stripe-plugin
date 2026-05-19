@@ -11,6 +11,9 @@ use App\Service\PublicRequestGuard;
 if (!class_exists('WP_REST_Request')) {
     class WP_REST_Request
     {
+        private string $body = '';
+        private string $method = 'POST';
+        private string $route = '';
         /** @var array<string,mixed> */
         private array $params = [];
         /** @var array<string,string> */
@@ -18,6 +21,28 @@ if (!class_exists('WP_REST_Request')) {
 
         public function __construct(string $method = 'POST', string $route = '')
         {
+            $this->method = $method;
+            $this->route = $route;
+        }
+
+        public function set_body(string $body): void
+        {
+            $this->body = $body;
+        }
+
+        public function get_body(): string
+        {
+            return $this->body;
+        }
+
+        public function get_method(): string
+        {
+            return $this->method;
+        }
+
+        public function get_route(): string
+        {
+            return $this->route;
         }
 
         /**
@@ -78,6 +103,19 @@ if (!class_exists('WP_Error')) {
         public function get_error_message(): string
         {
             return $this->message;
+        }
+
+        public function get_error_code(): string
+        {
+            return $this->code;
+        }
+
+        /**
+         * @return array<string,mixed>
+         */
+        public function get_error_data(): array
+        {
+            return $this->data;
         }
     }
 }
