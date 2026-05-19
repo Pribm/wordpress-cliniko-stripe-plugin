@@ -1,3 +1,7 @@
+## [1.6.11] - 2026-05-19
+### Fixed
+- Booking-attempt Stripe charges now strip additional Medicare and custom-field payload data before metadata is sent to Stripe.
+
 ## [1.6.10] - 2026-05-19
 ### Fixed
 - Removed the cached-page request token gate from public booking routes so stale page caches and headless frontends no longer fail with `Invalid or expired booking token`.

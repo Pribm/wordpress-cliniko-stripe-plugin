@@ -123,6 +123,43 @@ if (!function_exists('set_transient')) {
     }
 }
 
+if (!function_exists('get_option')) {
+    /**
+     * @param mixed $default
+     * @return mixed
+     */
+    function get_option(string $name, $default = false)
+    {
+        return $GLOBALS['__wp_options'][$name] ?? $default;
+    }
+}
+
+if (!function_exists('add_option')) {
+    /**
+     * @param mixed $value
+     */
+    function add_option(string $name, $value, string $deprecated = '', bool $autoload = true): bool
+    {
+        if (array_key_exists($name, $GLOBALS['__wp_options'])) {
+            return false;
+        }
+
+        $GLOBALS['__wp_options'][$name] = $value;
+        return true;
+    }
+}
+
+if (!function_exists('update_option')) {
+    /**
+     * @param mixed $value
+     */
+    function update_option(string $name, $value, bool $autoload = true): bool
+    {
+        $GLOBALS['__wp_options'][$name] = $value;
+        return true;
+    }
+}
+
 if (!function_exists('wp_cache_add')) {
     /**
      * @param mixed $value
@@ -369,6 +406,9 @@ namespace App\Service {
     class StripeService
     {
         /** @var array<int,array<string,mixed>> */
+        public static $charges = [];
+
+        /** @var array<int,array<string,mixed>> */
         public static $refunds = [];
 
         /**
@@ -382,6 +422,14 @@ namespace App\Service {
             array $metadata = [],
             ?string $receiptEmail = null
         ) {
+            self::$charges[] = [
+                'token' => $token,
+                'amount' => $amount,
+                'description' => $description,
+                'metadata' => $metadata,
+                'receiptEmail' => $receiptEmail,
+            ];
+
             return (object) [
                 'id' => 'ch_fake_1',
                 'receipt_url' => null,
@@ -450,7 +498,11 @@ namespace App\Service {
 
 namespace {
     require __DIR__ . '/../src/Workers/ClinikoSchedulingWorker.php';
+    require __DIR__ . '/../src/Service/BookingAttemptStore.php';
+    require __DIR__ . '/../src/Service/BookingAttemptService.php';
 
+    use App\Service\BookingAttemptService;
+    use App\Service\BookingAttemptStore;
     use App\Model\AppointmentType;
     use App\Model\Booking;
     use App\Model\IndividualAppointment;
@@ -542,6 +594,7 @@ namespace {
 
         NotificationService::$successCalls = [];
         NotificationService::$failureCalls = [];
+        StripeService::$charges = [];
         StripeService::$refunds = [];
     }
 
@@ -620,6 +673,58 @@ namespace {
         assert_same('ch_test_123', $refund['chargeId'], 'Refund should target payment reference');
         assert_same(12500, $refund['amount'], 'Refund amount should match worker amount');
         assert_same('requested_by_customer', $refund['reason'], 'Refund reason mismatch');
+    }
+
+    function test_booking_attempt_charge_stripe_strips_sensitive_metadata_before_charge(): void
+    {
+        $store = new BookingAttemptStore();
+        $attempt = $store->create([
+            'status' => 'preflighted',
+            'amount' => 12500,
+            'currency' => 'aud',
+            'patient' => [
+                'first_name' => 'John',
+                'last_name' => 'Doe',
+                'email' => 'john@example.com',
+                'medicare' => '1234 56789 0',
+                'medicare_reference_number' => '1',
+                'medicare_mode' => true,
+                'medicare_provider' => 'Provider',
+                'health_identifier_number' => '1234567890',
+                'custom_fields' => ['sections' => [['name' => 'Clinical', 'fields' => []]]],
+            ],
+            'patient_form_id' => 'pf_1',
+            'module_id' => 'module_1',
+            'appointment_label' => 'Consult',
+            'payment' => [
+                'status' => 'pending',
+                'gateway' => 'stripe',
+                'reference' => null,
+                'receipt_url' => null,
+            ],
+            'booking' => [
+                'appointment_id' => null,
+                'attendee_id' => null,
+            ],
+        ]);
+
+        $service = new BookingAttemptService($store);
+        $result = $service->chargeStripe((string) $attempt['attempt_id'], 'tok_test_123');
+
+        assert_same(true, $result['ok'], 'Charge should succeed');
+        assert_same(1, count(StripeService::$charges), 'Expected one Stripe charge call');
+
+        $metadata = StripeService::$charges[0]['metadata'] ?? [];
+        assert_true(is_array($metadata), 'Captured metadata should be an array');
+        assert_true(!array_key_exists('medicare', $metadata), 'Medicare should not be sent to Stripe metadata');
+        assert_true(!array_key_exists('medicare_reference_number', $metadata), 'Medicare reference should not be sent to Stripe metadata');
+        assert_true(!array_key_exists('medicare_mode', $metadata), 'Medicare mode should not be sent to Stripe metadata');
+        assert_true(!array_key_exists('medicare_provider', $metadata), 'Medicare provider should not be sent to Stripe metadata');
+        assert_true(!array_key_exists('health_identifier_number', $metadata), 'HIN should not be sent to Stripe metadata');
+        assert_true(!array_key_exists('custom_fields', $metadata), 'Custom fields should not be sent to Stripe metadata');
+        assert_same((string) $attempt['attempt_id'], $metadata['booking_attempt_id'] ?? null, 'Booking attempt id should still be present');
+        assert_same('pf_1', $metadata['patient_form_id'] ?? null, 'Patient form id should still be present');
+        assert_same('module_1', $metadata['module_id'] ?? null, 'Module id should still be present');
     }
 
     function test_worker_patient_form_failure_is_not_reported_as_success(): void
@@ -701,6 +806,7 @@ namespace {
     $tests = [
         'worker_free_success_path_sends_success_notification' => 'test_worker_free_success_path_sends_success_notification',
         'worker_paid_failure_triggers_refund_and_failure_notification' => 'test_worker_paid_failure_triggers_refund_and_failure_notification',
+        'booking_attempt_charge_stripe_strips_sensitive_metadata_before_charge' => 'test_booking_attempt_charge_stripe_strips_sensitive_metadata_before_charge',
         'worker_patient_form_failure_is_not_reported_as_success' => 'test_worker_patient_form_failure_is_not_reported_as_success',
         'worker_mutex_prevents_duplicate_processing_for_same_lock_source' => 'test_worker_mutex_prevents_duplicate_processing_for_same_lock_source',
     ];
