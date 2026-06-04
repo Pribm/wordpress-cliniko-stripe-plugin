@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Admin\Modules\Credentials;
+use App\DTO\TyroHealthTransactionDTO;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -11,9 +12,9 @@ if (!defined('ABSPATH')) {
 class TyroHealthService
 {
     /**
-     * @return array<string,mixed>
+     * @return TyroHealthTransactionDTO
      */
-    public function fetchTransaction(string $transactionId): array
+    public function fetchTransaction(string $transactionId): TyroHealthTransactionDTO
     {
         $apiKey = Credentials::getTyroAdminApiKey();
         $appId = Credentials::getTyroAppId();
@@ -44,74 +45,14 @@ class TyroHealthService
             throw new \RuntimeException($message !== '' ? $message : 'Tyro verification failed.');
         }
 
-        return $body;
+        return TyroHealthTransactionDTO::fromArray($body);
     }
 
     /**
-     * @param array<string,mixed> $transaction
+     * @return bool
      */
-    public function isPaidTransaction(array $transaction, int $expectedAmountCents, string $expectedInvoiceReference): bool
+    public function isPaidTransaction(TyroHealthTransactionDTO $transaction, int $expectedAmountCents, string $expectedInvoiceReference): bool
     {
-        $statusCandidates = [
-            strtolower(trim((string) ($transaction['businessStatus'] ?? ''))),
-            strtolower(trim((string) ($transaction['status'] ?? ''))),
-            strtolower(trim((string) ($transaction['paymentStatus'] ?? ''))),
-        ];
-
-        $successfulStatuses = [
-            'success',
-            'succeeded',
-            'completed',
-            'complete',
-            'approved',
-            'authorised',
-            'authorized',
-            'paid',
-        ];
-
-        $statusOk = false;
-        foreach ($statusCandidates as $candidate) {
-            if ($candidate !== '' && in_array($candidate, $successfulStatuses, true)) {
-                $statusOk = true;
-                break;
-            }
-        }
-
-        $invoiceReference = trim((string) (
-            $transaction['invoiceReference']
-            ?? $transaction['invoice_reference']
-            ?? ($transaction['invoice']['reference'] ?? '')
-        ));
-
-        $amountRaw = $transaction['chargeAmount']
-            ?? $transaction['charge_amount']
-            ?? ($transaction['invoice']['chargeAmount'] ?? null);
-
-        $amountOk = $this->normalizeAmountCents($amountRaw) === $expectedAmountCents;
-        $invoiceOk = $invoiceReference !== '' && $invoiceReference === $expectedInvoiceReference;
-
-        return $statusOk && $amountOk && $invoiceOk;
-    }
-
-    /**
-     * @param mixed $amount
-     */
-    private function normalizeAmountCents($amount): int
-    {
-        if (is_int($amount)) {
-            return $amount;
-        }
-
-        $raw = trim((string) $amount);
-        if ($raw === '') {
-            return 0;
-        }
-
-        $raw = ltrim($raw, '$');
-        if (preg_match('/^\d+$/', $raw) === 1) {
-            return (int) $raw;
-        }
-
-        return (int) round(((float) $raw) * 100);
+        return $transaction->isPaidFor($expectedAmountCents, $expectedInvoiceReference);
     }
 }

@@ -1,3 +1,8 @@
+## [1.6.12] - 2026-06-04
+### Fixed
+- Tyro payment confirmation now uses the SDK transaction `_id` instead of the human-facing transaction number, which prevents verifier 422s for invalid Mongo IDs.
+- Tyro payment verification now uses a transaction DTO and requires matching approved/completed status, invoice reference, charged amount, and approved payment total before marking an attempt paid.
+
 ## [1.6.11] - 2026-05-19
 ### Fixed
 - Booking-attempt Stripe charges now strip additional Medicare and custom-field payload data before metadata is sent to Stripe.

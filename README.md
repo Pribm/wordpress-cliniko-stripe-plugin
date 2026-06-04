@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.6.11`
+- Current plugin version: `1.6.12`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,8 +14,9 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.6.11
-- Booking-attempt Stripe charges now strip additional Medicare and custom-field payload data before metadata is sent to Stripe.
+## What Is New in 1.6.12
+- Tyro payment confirmation now uses the SDK transaction `_id` instead of the human-facing transaction number.
+- Tyro payment verification now uses a typed transaction DTO and checks approved/completed status, amount, invoice reference, and approved payment total.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
@@ -539,7 +540,7 @@ Queues scheduling after a Tyro Health transaction.
 Body (JSON):
 - `moduleId` (required)
 - `patient_form_template_id` (required)
-- `tyroTransactionId` or `transactionId` (required when payment is required)
+- `tyroTransactionId` or `transactionId` (required when payment is required). This must be the Tyro SDK transaction `_id` returned from `renderCreateTransaction` on success, not the human-facing transaction number.
 - `invoiceReference` (optional)
 - `patient` (required)
 - `content` (optional; accepted but not validated here)
@@ -550,7 +551,7 @@ Example request body:
 {
   "moduleId": "123",
   "patient_form_template_id": "999",
-  "tyroTransactionId": "txn_abc123",
+  "tyroTransactionId": "66b9f1a4c4b3f9d1e8a12345",
   "patient": {
     "first_name": "Jane",
     "last_name": "Doe",
@@ -579,6 +580,7 @@ Success response:
 Notes:
 - If the appointment type does not require payment, `tyroTransactionId` can be omitted and the response will include a `null` payment id with amount `0`.
 - `content` is accepted as-is; keep its structure aligned with the template.
+- The backend verifies the transaction's approved/completed status, charged amount, invoice reference, and approved payment total before it marks the attempt as paid.
 
 ## Async Processing
 The plugin uses Action Scheduler for background jobs.
