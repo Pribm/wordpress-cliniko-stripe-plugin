@@ -19,7 +19,7 @@ class Client implements ApiClientInterface
 
     private function __construct()
     {
-        $apiKey = get_option('wp_cliniko_api_key');
+        $apiKey = \wp_cliniko_get_secret_option('wp_cliniko_api_key');
         $this->authHeader = 'Basic ' . base64_encode($apiKey . ':');
         $this->baseUrl = $this->buildBaseUrlFromToken($apiKey);
     }

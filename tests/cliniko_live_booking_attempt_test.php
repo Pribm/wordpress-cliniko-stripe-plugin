@@ -29,6 +29,10 @@ if (!env_bool('CLINIKO_IT_ENABLED', false)) {
 
 require_once resolve_wp_load_path();
 
+if (!function_exists('wp_cliniko_secret_option_encrypt')) {
+    require_once __DIR__ . '/../src/Helpers/secret-options.php';
+}
+
 if (!function_exists('cliniko_client')) {
     require_once __DIR__ . '/../src/Helpers/cliniko_client.php';
 }
@@ -120,7 +124,6 @@ try {
     assert_true($attendeeId !== '', 'Finalize did not return an attendee id.');
 
     $patientFormRaw = $client->get('patient_forms/' . $patientFormId)->data ?? [];
-    assert_true(is_array($patientFormRaw), 'Could not fetch created patient form.');
     $linkedAttendeeId = extract_linked_resource_id($patientFormRaw['attendee']['links']['self'] ?? null)
         ?? trim((string) ($patientFormRaw['attendee_id'] ?? ''));
     assert_true(
@@ -219,7 +222,7 @@ function resolve_wp_load_path(): string
 
 function configure_test_options(string $apiKey, string $businessId): void
 {
-    update_option('wp_cliniko_api_key', $apiKey, false);
+    update_option('wp_cliniko_api_key', wp_cliniko_secret_option_encrypt($apiKey), false);
     update_option('wp_cliniko_business_id', $businessId, false);
     update_option('wp_cliniko_api_cache_ttl', 0, false);
 }

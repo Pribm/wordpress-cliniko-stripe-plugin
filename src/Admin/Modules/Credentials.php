@@ -117,10 +117,14 @@ class Credentials
             'default' => 21600,
         ]);
 
-        register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key');
+        register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key', [
+            'sanitize_callback' => 'wp_cliniko_secret_option_encrypt',
+        ]);
         register_setting('wp_cliniko_stripe_group', 'wp_cliniko_business_id');
         register_setting('wp_cliniko_stripe_group', 'wp_stripe_public_key');
-        register_setting('wp_cliniko_stripe_group', 'wp_stripe_secret_key');
+        register_setting('wp_cliniko_stripe_group', 'wp_stripe_secret_key', [
+            'sanitize_callback' => 'wp_cliniko_secret_option_encrypt',
+        ]);
 
         // NEW: Tyro Health settings
         register_setting('wp_cliniko_stripe_group', self::OPT_TYRO_ENV, [
@@ -131,7 +135,7 @@ class Credentials
             'sanitize_callback' => [self::class, 'sanitizeTyroAppId'],
         ]);
         register_setting('wp_cliniko_stripe_group', self::OPT_TYRO_ADMIN_APIKEY, [
-            'sanitize_callback' => [self::class, 'sanitizeTyroApiKey'],
+            'sanitize_callback' => 'wp_cliniko_secret_option_encrypt',
         ]);
         register_setting('wp_cliniko_stripe_group', self::OPT_TYRO_APP_VERSION, [
             'sanitize_callback' => [self::class, 'sanitizeTyroAppVersion'],
@@ -165,7 +169,7 @@ class Credentials
         }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 
         add_settings_field('wp_cliniko_api_key', 'Cliniko API Key', function () {
-            echo "<input type='password' id='wp_cliniko_api_key' name='wp_cliniko_api_key' value='" . esc_attr(get_option('wp_cliniko_api_key')) . "' class='regular-text' />";
+            echo "<input type='password' id='wp_cliniko_api_key' name='wp_cliniko_api_key' value='" . esc_attr(\wp_cliniko_get_secret_option('wp_cliniko_api_key')) . "' class='regular-text' />";
             echo "<p class='description'>Cliniko → <em>My info</em> → <em>API keys</em>.</p>";
         }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 
@@ -197,7 +201,7 @@ class Credentials
         }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 
         add_settings_field('wp_stripe_secret_key', 'Stripe Secret Key', function () {
-            echo "<input type='password' name='wp_stripe_secret_key' value='" . esc_attr(get_option('wp_stripe_secret_key')) . "' class='regular-text' />";
+            echo "<input type='password' name='wp_stripe_secret_key' value='" . esc_attr(\wp_cliniko_get_secret_option('wp_stripe_secret_key')) . "' class='regular-text' />";
         }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 
         /**
@@ -229,7 +233,7 @@ class Credentials
         }, 'wp-cliniko-stripe-settings', 'wp_tyrohealth_section');
 
         add_settings_field(self::OPT_TYRO_ADMIN_APIKEY, 'Tyro API Key (Business Admin)', function () {
-            $val = esc_attr(get_option(self::OPT_TYRO_ADMIN_APIKEY, ''));
+            $val = esc_attr(\wp_cliniko_get_secret_option(self::OPT_TYRO_ADMIN_APIKEY));
             echo "<input type='password' id='" . esc_attr(self::OPT_TYRO_ADMIN_APIKEY) . "' name='" . esc_attr(self::OPT_TYRO_ADMIN_APIKEY) . "' value='{$val}' class='regular-text' autocomplete='off' />";
             echo "<p class='description'>Used server-side to mint short-lived SDK tokens. Do not expose this key in JavaScript.</p>";
         }, 'wp-cliniko-stripe-settings', 'wp_tyrohealth_section');
@@ -497,7 +501,7 @@ class Credentials
 
     public static function getTyroAdminApiKey(): ?string
     {
-        $v = self::sanitizeTyroApiKey(get_option(self::OPT_TYRO_ADMIN_APIKEY, ''));
+        $v = \wp_cliniko_get_secret_option(self::OPT_TYRO_ADMIN_APIKEY);
         return $v !== '' ? $v : null;
     }
 

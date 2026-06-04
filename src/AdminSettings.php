@@ -46,9 +46,13 @@ class AdminSettings
 
     public function registerSettings()
     {
-        register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key');
+        register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key', [
+            'sanitize_callback' => 'wp_cliniko_secret_option_encrypt',
+        ]);
         register_setting('wp_cliniko_stripe_group', 'wp_stripe_public_key');
-        register_setting('wp_cliniko_stripe_group', 'wp_stripe_secret_key');
+        register_setting('wp_cliniko_stripe_group', 'wp_stripe_secret_key', [
+            'sanitize_callback' => 'wp_cliniko_secret_option_encrypt',
+        ]);
 
         add_settings_section(
             'wp_cliniko_stripe_section',
@@ -63,8 +67,8 @@ class AdminSettings
             'wp_cliniko_api_key',
             'Cliniko API Key',
             function () {
-                $value = esc_attr(get_option('wp_cliniko_api_key'));
-                echo "<input type='text' name='wp_cliniko_api_key' value='$value' class='regular-text' />";
+                $value = esc_attr(\wp_cliniko_get_secret_option('wp_cliniko_api_key'));
+                echo "<input type='password' name='wp_cliniko_api_key' value='$value' class='regular-text' />";
                 echo "<p class='description'>You can find this key in your Cliniko account under API Settings.</p>";
             },
             'wp-cliniko-stripe-settings',
@@ -87,7 +91,7 @@ class AdminSettings
             'wp_stripe_secret_key',
             'Stripe Secret Key',
             function () {
-                $value = esc_attr(get_option('wp_stripe_secret_key'));
+                $value = esc_attr(\wp_cliniko_get_secret_option('wp_stripe_secret_key'));
                 echo "<input type='password' name='wp_stripe_secret_key' value='$value' class='regular-text' />";
                 echo "<p class='description'>Used for processing payments securely. Keep this key safe.</p>";
             },

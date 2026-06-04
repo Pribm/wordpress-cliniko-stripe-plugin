@@ -107,11 +107,11 @@ public static function renderPage(): void
                     <tr><th>Server Software</th><td><?php echo esc_html($_SERVER['SERVER_SOFTWARE'] ?? 'N/A'); ?></td></tr>
                     <tr><th>Memory Limit</th><td><?php echo esc_html(ini_get('memory_limit')); ?></td></tr>
                     <tr><th>Max Execution Time</th><td><?php echo esc_html(ini_get('max_execution_time')) . ' seconds'; ?></td></tr>
-                    <tr><th>Cliniko API Key Set</th><td><?php echo get_option('wp_cliniko_api_key') ? '✅' : '❌'; ?></td></tr>
+                    <tr><th>Cliniko API Key Set</th><td><?php echo \wp_cliniko_get_secret_option('wp_cliniko_api_key') !== '' ? '✅' : '❌'; ?></td></tr>
                     <tr><th>Stripe Keys Set</th><td>
                         <?php
                             $pub = get_option('wp_stripe_public_key');
-                            $sec = get_option('wp_stripe_secret_key');
+                            $sec = \wp_cliniko_get_secret_option('wp_stripe_secret_key');
                             echo ($pub && $sec) ? '✅' : '❌';
                         ?>
                     </td></tr>
@@ -136,8 +136,8 @@ public static function renderPage(): void
     {
         check_admin_referer('wp_cliniko_test_connectivity');
 
-        $clinikoKey = get_option('wp_cliniko_api_key');
-        $stripeKey = get_option('wp_stripe_secret_key');
+        $clinikoKey = \wp_cliniko_get_secret_option('wp_cliniko_api_key');
+        $stripeKey = \wp_cliniko_get_secret_option('wp_stripe_secret_key');
 
         $results = [];
 

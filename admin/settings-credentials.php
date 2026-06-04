@@ -3,10 +3,14 @@ if (!defined('ABSPATH')) exit;
 
 
 add_action('admin_init', function () {
-  register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key');
+  register_setting('wp_cliniko_stripe_group', 'wp_cliniko_api_key', [
+    'sanitize_callback' => 'wp_cliniko_secret_option_encrypt',
+  ]);
   register_setting('wp_cliniko_stripe_group', 'wp_cliniko_business_id');
   register_setting('wp_cliniko_stripe_group', 'wp_stripe_public_key');
-  register_setting('wp_cliniko_stripe_group', 'wp_stripe_secret_key');
+  register_setting('wp_cliniko_stripe_group', 'wp_stripe_secret_key', [
+    'sanitize_callback' => 'wp_cliniko_secret_option_encrypt',
+  ]);
 
   add_settings_section(
     'wp_cliniko_stripe_section',
@@ -18,7 +22,7 @@ add_action('admin_init', function () {
   );
 
   add_settings_field('wp_cliniko_api_key', 'Cliniko API Key', function () {
-    echo "<input type='password' id='wp_cliniko_api_key' name='wp_cliniko_api_key' value='" . esc_attr(get_option('wp_cliniko_api_key')) . "' class='regular-text' />";
+    echo "<input type='password' id='wp_cliniko_api_key' name='wp_cliniko_api_key' value='" . esc_attr(\wp_cliniko_get_secret_option('wp_cliniko_api_key')) . "' class='regular-text' />";
   }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 
   add_settings_field('cliniko_connect_button', '', function () {
@@ -42,7 +46,7 @@ add_action('admin_init', function () {
   }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 
   add_settings_field('wp_stripe_secret_key', 'Stripe Secret Key', function () {
-    echo "<input type='password' name='wp_stripe_secret_key' value='" . esc_attr(get_option('wp_stripe_secret_key')) . "' class='regular-text' />";
+    echo "<input type='password' name='wp_stripe_secret_key' value='" . esc_attr(\wp_cliniko_get_secret_option('wp_stripe_secret_key')) . "' class='regular-text' />";
   }, 'wp-cliniko-stripe-settings', 'wp_cliniko_stripe_section');
 });
 

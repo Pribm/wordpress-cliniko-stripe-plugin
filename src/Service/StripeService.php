@@ -15,7 +15,7 @@ class StripeService
     private $stripe;
     public function __construct()
     {
-        $api_key = get_option('wp_stripe_secret_key');
+        $api_key = \wp_cliniko_get_secret_option('wp_stripe_secret_key');
         $this->stripe = new Stripe();
         $this->stripe::setApiKey($api_key);
     }

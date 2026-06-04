@@ -1,3 +1,7 @@
+## [1.6.13] - 2026-06-05
+### Fixed
+- Cliniko, Stripe secret, and Tyro admin API keys are now encrypted at rest in `wp_options` instead of being stored as plaintext.
+
 ## [1.6.12] - 2026-06-04
 ### Fixed
 - Tyro payment confirmation now uses the SDK transaction `_id` instead of the human-facing transaction number, which prevents verifier 422s for invalid Mongo IDs.
