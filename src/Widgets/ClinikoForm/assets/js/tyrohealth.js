@@ -119,6 +119,10 @@
     return `${yyyy}-${mm}-${dd}`;
   }
 
+  function isMongoObjectId(value) {
+    return /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+  }
+
   function collectPatient() {
     const headless = getHeadlessPatient();
 
@@ -348,12 +352,14 @@
             showLoader();
             setError("");
 
-            const txId =
-              transaction?.id ||
-              transaction?.transactionId ||
-              transaction?.transaction_id;
+            const txId = String(transaction?._id || "").trim();
 
             if (!txId) throw new Error("Tyro transaction id missing.");
+            if (!isMongoObjectId(txId)) {
+              throw new Error(
+                "Tyro returned a transaction number, not the transaction _id expected by the verifier."
+              );
+            }
 
             await window.submitBookingForm(
               {
