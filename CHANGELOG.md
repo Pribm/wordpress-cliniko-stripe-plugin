@@ -1,3 +1,8 @@
+## [1.6.14] - 2026-06-10
+### Changed
+- Tightened Cliniko DTO and model hydration to normalize linked resources, nullable fields, and response payloads.
+- Updated helper, client, and stub types to keep the booking and payment flows aligned with PHPStan.
+
 ## [1.6.13] - 2026-06-05
 ### Fixed
 - Cliniko, Stripe secret, and Tyro admin API keys are now encrypted at rest in `wp_options` instead of being stored as plaintext.
