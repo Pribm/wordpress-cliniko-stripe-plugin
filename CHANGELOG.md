@@ -1,3 +1,15 @@
+## [1.6.15] - 2026-06-30
+### Added
+- Added per-widget custom-form webhooks for `booking.preflighted`, `payment.verified`, `booking.completed`, and `booking.failed` events.
+- Added server-side webhook signing, encrypted/generated signing secret storage, retry scheduling, and privacy-filtered webhook payloads.
+
+### Changed
+- Public booking requests now prompt the bundled Action Scheduler async runner after immediate jobs are enqueued, reducing delay before booking and webhook workers run.
+- Custom-form booking attempts now remember the matched Elementor webhook context so later payment and booking events use the same widget configuration.
+
+### Fixed
+- Cliniko patient-form create and attach requests no longer send `email_to_patient_on_completion` unless the field is explicitly set, avoiding Cliniko rejections for unsupported payload fields.
+
 ## [1.6.14] - 2026-06-10
 ### Changed
 - Tightened Cliniko DTO and model hydration to normalize linked resources, nullable fields, and response payloads.

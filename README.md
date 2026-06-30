@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.6.14`
+- Current plugin version: `1.6.15`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,9 +14,10 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.6.14
-- Cliniko DTOs and model wrappers now normalize linked resources and nullable fields more safely.
-- Helper, client, and stub updates keep the booking and payment flows aligned with the stricter PHPStan types.
+## What Is New in 1.6.15
+- Custom-form widgets can now send signed server-side webhooks for booking and payment milestones.
+- Booking-attempt jobs now nudge Action Scheduler from public requests so async deliveries and booking work start promptly.
+- Cliniko patient-form create and attach requests no longer send `email_to_patient_on_completion` unless explicitly set.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
@@ -25,6 +26,7 @@ For custom form mode, appointment scheduling can use:
 - Async scheduling pipeline through Action Scheduler (WP-Cron fallback).
 - Validation pipeline for patient form payloads.
 - Gateway handling for Stripe and Tyro Health.
+- Signed server-side webhooks for custom-form booking events.
 
 ## Requirements
 - WordPress `>= 5.9`
@@ -88,6 +90,41 @@ Calendar mode behavior:
 Gateway behavior:
 - Final wizard action should continue to payment flow (not direct browser submit).
 - Wizard UI can be hidden while payment UI is active.
+
+## Custom Form Webhooks
+Custom-form widgets can send server-side webhook events to an external system without exposing webhook URLs, signing secrets, booking attempt tokens, payment tokens, or form payload templates to the browser.
+
+Configure webhooks in the Elementor `Cliniko: Stripe Booking Form` widget:
+- Enable `Webhooks`.
+- Enter the destination `Webhook URL`.
+- Select one or more events:
+  - `booking.preflighted`
+  - `payment.verified`
+  - `booking.completed`
+  - `booking.failed`
+- Optionally set a signing secret. If left blank, the plugin generates and stores one server-side.
+- Optionally enable basic patient fields. When enabled, only first name, last name, email, and phone are included.
+
+Delivery behavior:
+- Webhook settings are synced when the Elementor page is saved.
+- Events are queued through Action Scheduler using the `cliniko_form_webhook_send` action.
+- Failed deliveries with HTTP `4xx`/`5xx` responses or WordPress HTTP errors are retried up to three times after roughly 1 minute, 5 minutes, and 15 minutes.
+- The plugin sends `Content-Type: application/json` and these headers:
+  - `X-Cliniko-Webhook-Event`
+  - `X-Cliniko-Webhook-Timestamp`
+  - `X-Cliniko-Webhook-Signature`
+
+Signature verification:
+```text
+sha256 = HMAC_SHA256(timestamp + "." + raw_json_body, signing_secret)
+```
+
+Compare the calculated signature with the `X-Cliniko-Webhook-Signature` header after removing the `sha256=` prefix.
+
+Payload privacy:
+- Payment card last four digits and card brand are removed before delivery.
+- Patient form answers, Medicare details, health identifiers, access tokens, attempt tokens, and Stripe tokens are never included in webhook payloads.
+- `booking_attempt.id` is included as an operational identifier, but the private booking attempt token is not.
 
 ## Headless Mode (Custom Form)
 Headless mode renders no form UI. The Cliniko template is exposed so you can build your own UI while keeping the payment step intact.
@@ -598,6 +635,8 @@ If Action Scheduler is not available, WP-Cron is used as fallback.
 - Inputs are sanitized/validated before processing.
 - Widget output uses escaped attributes/content.
 - Stripe secret key is never exposed in frontend payloads.
+- Webhook signing secrets are stored server-side and encrypted when the plugin secret option helpers are available.
+- Webhook payloads intentionally omit clinical form answers, Medicare data, card details, and access tokens.
 
 ## Troubleshooting
 

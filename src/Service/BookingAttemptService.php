@@ -15,6 +15,8 @@ use App\Model\PatientForm;
 use App\Model\PatientFormTemplate;
 use App\Validator\AppointmentRequestValidator;
 use App\Validator\PatientFormValidator;
+use App\Widgets\ClinikoForm\Webhooks\WebhookDispatchService;
+use App\Widgets\ClinikoForm\Webhooks\WebhookSettingsRegistry;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -204,6 +206,7 @@ class BookingAttemptService
             : null;
 
         $attemptToken = PublicRequestGuard::issueAttemptToken();
+        $webhookConfig = WebhookSettingsRegistry::findForBooking($moduleId, $templateId);
         $attempt = $this->store->create([
             'status' => 'preflighted',
             'progress' => ['code' => 'preflighted', 'message' => 'Form validated with Cliniko.'],
@@ -227,6 +230,11 @@ class BookingAttemptService
                 'receipt_url' => null,
             ],
             'booking' => ['appointment_id' => null, 'attendee_id' => null],
+            'cliniko_form_webhook_context' => $webhookConfig ? [
+                'id' => (string) ($webhookConfig['id'] ?? ''),
+                'post_id' => (int) ($webhookConfig['post_id'] ?? 0),
+                'widget_id' => (string) ($webhookConfig['widget_id'] ?? ''),
+            ] : null,
         ]);
 
         (new \App\Infra\JobDispatcher())->enqueue(
@@ -235,6 +243,8 @@ class BookingAttemptService
             self::CLEANUP_DELAY_SECONDS,
             $attempt['attempt_id']
         );
+
+        $this->webhooks()->queue('booking.preflighted', $attempt);
 
         return [
             'ok' => true,
@@ -314,11 +324,15 @@ class BookingAttemptService
             'brand' => $charge->payment_method_details->card->brand ?? null,
         ];
 
-        $this->store->update($attemptId, [
+        $updatedAttempt = $this->store->update($attemptId, [
             'status' => 'paid',
             'progress' => ['code' => 'payment_verified', 'message' => 'Payment confirmed.'],
             'payment' => $payment,
         ]);
+
+        if ($updatedAttempt) {
+            $this->webhooks()->queue('payment.verified', $updatedAttempt);
+        }
 
         return ['ok' => true, 'status' => 200, 'payment' => $payment];
     }
@@ -371,11 +385,15 @@ class BookingAttemptService
             'currency' => (string) ($attempt['currency'] ?? 'aud'),
         ];
 
-        $this->store->update($attemptId, [
+        $updatedAttempt = $this->store->update($attemptId, [
             'status' => 'paid',
             'progress' => ['code' => 'payment_verified', 'message' => 'Payment confirmed.'],
             'payment' => $payment,
         ]);
+
+        if ($updatedAttempt) {
+            $this->webhooks()->queue('payment.verified', $updatedAttempt);
+        }
 
         return ['ok' => true, 'status' => 200, 'payment' => $payment];
     }
@@ -471,7 +489,6 @@ class BookingAttemptService
             PatientForm::patch($patientFormId, [
                 'attendee_id' => $attendeeId,
                 'name' => sprintf('%s - Appointment on %s', $template?->getName() ?: 'Patient Form', $appointmentLabel),
-                'email_to_patient_on_completion' => true,
             ], $client);
 
             if (!$this->verifyPatientFormAttachment($patientFormId, $attendeeId, $client)) {
@@ -483,6 +500,10 @@ class BookingAttemptService
                 'progress' => ['code' => 'completed', 'message' => 'Appointment confirmed.'],
                 'booking' => ['appointment_id' => $appointmentId, 'attendee_id' => $attendeeId],
             ]);
+
+            if ($finalAttempt) {
+                $this->webhooks()->queue('booking.completed', $finalAttempt);
+            }
 
             return [
                 'ok' => true,
@@ -501,6 +522,11 @@ class BookingAttemptService
             ]);
 
             $this->refundAndCleanupFailedAttempt($failedAttempt ?: $attempt, $client);
+            if ($failedAttempt) {
+                $this->webhooks()->queue('booking.failed', $failedAttempt, [
+                    'detail' => $e->getMessage(),
+                ]);
+            }
 
             return [
                 'ok' => false,
@@ -644,8 +670,7 @@ class BookingAttemptService
         $dto->business_id = (string) get_option('wp_cliniko_business_id');
         $dto->patient_form_template_id = $templateId;
         $dto->patient_id = $patientId;
-        $dto->email_to_patient_on_completion = false;
-        $dto->name = sprintf('%s - Pending appointment', $templateName);
+        $dto->name = sprintf('%s appointment', $templateName);
 
         $patientForm = PatientForm::create($dto, $client);
         if (!$patientForm) {
@@ -900,6 +925,11 @@ class BookingAttemptService
         } catch (\Throwable $e) {
             return false;
         }
+    }
+
+    private function webhooks(): WebhookDispatchService
+    {
+        return new WebhookDispatchService($this->store);
     }
 
     /**

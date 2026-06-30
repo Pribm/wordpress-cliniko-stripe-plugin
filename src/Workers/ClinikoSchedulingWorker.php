@@ -309,7 +309,6 @@ class ClinikoSchedulingWorker
                 $pfDTO->patient_id = $pt->getId();
                 $pfDTO->appointment_id = $appt->getId();
                 $pfDTO->attendee_id = $attendeeId;
-                $pfDTO->email_to_patient_on_completion = true;
                 $pfDTO->name = sprintf('%s - Appointment on %s', $_tpl->getName(), $label);
 
                 $pf = PatientForm::create($pfDTO, $client);

@@ -240,7 +240,7 @@ function patient_form_payload(): array
 {
     return [
         'id' => 'pf_1',
-        'name' => 'Consult Template - Pending appointment',
+        'name' => 'Consult Template appointment',
         'content' => ['sections' => []],
         'email_to_patient_on_completion' => false,
         'links' => ['self' => 'https://fake/patient_forms/pf_1'],
@@ -386,6 +386,20 @@ function test_preflight_creates_attempt_and_finalize_attaches_form(): void
     $client = $GLOBALS['__attempt_fake_client'];
     assert_true(in_array('POST patient_forms', $client->calls, true), 'Expected patient form draft creation');
     assert_true(in_array('PATCH patient_forms/pf_1', $client->calls, true), 'Expected patient form attach patch');
+
+    $createdForms = $client->requests['POST patient_forms'] ?? [];
+    assert_true(!empty($createdForms), 'Expected patient form draft request payload');
+    assert_true(
+        !array_key_exists('email_to_patient_on_completion', $createdForms[0]),
+        'Draft patient form create must not set email_to_patient_on_completion'
+    );
+
+    $patchedForms = $client->requests['PATCH patient_forms/pf_1'] ?? [];
+    assert_true(!empty($patchedForms), 'Expected patient form attach patch payload');
+    assert_true(
+        !array_key_exists('email_to_patient_on_completion', $patchedForms[0]),
+        'Patient form attach patch must not set email_to_patient_on_completion'
+    );
 }
 
 function test_preflight_maps_headless_custom_fields_into_cliniko_payload(): void

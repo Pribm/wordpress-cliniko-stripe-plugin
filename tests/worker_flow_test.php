@@ -499,6 +499,9 @@ namespace App\Service {
 namespace {
     require __DIR__ . '/../src/Workers/ClinikoSchedulingWorker.php';
     require __DIR__ . '/../src/Service/BookingAttemptStore.php';
+    require __DIR__ . '/../src/Infra/JobDispatcher.php';
+    require __DIR__ . '/../src/Widgets/ClinikoForm/Webhooks/WebhookSettingsRegistry.php';
+    require __DIR__ . '/../src/Widgets/ClinikoForm/Webhooks/WebhookDispatchService.php';
     require __DIR__ . '/../src/Service/BookingAttemptService.php';
 
     use App\Service\BookingAttemptService;

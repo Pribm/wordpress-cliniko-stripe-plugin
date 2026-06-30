@@ -12,6 +12,7 @@ use App\Admin\Modules\Tools;
 use App\Workers\BookingAttemptCleanupWorker;
 use App\Workers\ClinikoPatientFormWorker;
 use App\Workers\ClinikoSchedulingWorker;
+use App\Widgets\ClinikoForm\Webhooks\WebhookDeliveryWorker;
 
 
 
@@ -42,6 +43,7 @@ class PluginFacade
             BookingAttemptCleanupWorker::register();
             ClinikoSchedulingWorker::register();
             ClinikoPatientFormWorker::register();
+            WebhookDeliveryWorker::register();
         });
 
         ElementorTemplateSync::init();
