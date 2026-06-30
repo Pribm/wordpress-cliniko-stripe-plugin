@@ -40,6 +40,9 @@ class PatientCustomFieldService
         'enum',
     ];
 
+    /** @var array{loaded:bool,sections:array<int,array<string,mixed>>}|null */
+    private static ?array $clinikoCustomFieldSettingsCache = null;
+
     /**
      * @param mixed $definitions
      * @return array<int,array<string,mixed>>
@@ -673,7 +676,7 @@ class PatientCustomFieldService
         }
 
         if (in_array($fieldType, $optionTypes, true)) {
-            return $hasOptions ? 'enum' : 'none';
+            return 'none';
         }
 
         return 'none';
@@ -698,9 +701,8 @@ class PatientCustomFieldService
      */
     private static function getClinikoCustomFieldSettings(): array
     {
-        static $cached = null;
-        if (is_array($cached)) {
-            return $cached;
+        if (self::$clinikoCustomFieldSettingsCache !== null) {
+            return self::$clinikoCustomFieldSettingsCache;
         }
 
         $cached = [
@@ -709,27 +711,35 @@ class PatientCustomFieldService
         ];
 
         if (!function_exists('cliniko_client')) {
+            self::$clinikoCustomFieldSettingsCache = $cached;
             return $cached;
         }
 
         try {
             $client = cliniko_client(true, Credentials::getClinikoApiCacheTtl());
             $response = $client->get('settings');
+            if (!$response->isSuccessful()) {
+                self::$clinikoCustomFieldSettingsCache = $cached;
+                return $cached;
+            }
+
             $data = $response->data ?? null;
             if (!is_array($data)) {
-                $cached['loaded'] = true;
+                self::$clinikoCustomFieldSettingsCache = $cached;
                 return $cached;
             }
 
             $definition = $data['patient_custom_fields_definition'] ?? null;
             if (!is_array($definition)) {
                 $cached['loaded'] = true;
+                self::$clinikoCustomFieldSettingsCache = $cached;
                 return $cached;
             }
 
             $rawSections = $definition['sections'] ?? [];
             if (!is_array($rawSections)) {
                 $cached['loaded'] = true;
+                self::$clinikoCustomFieldSettingsCache = $cached;
                 return $cached;
             }
 
@@ -770,8 +780,10 @@ class PatientCustomFieldService
 
             $cached['loaded'] = true;
             $cached['sections'] = $sections;
+            self::$clinikoCustomFieldSettingsCache = $cached;
             return $cached;
         } catch (\Throwable $e) {
+            self::$clinikoCustomFieldSettingsCache = $cached;
             return $cached;
         }
     }

@@ -2,6 +2,8 @@
 
 namespace App\Admin\Modules;
 
+use App\Widgets\ClinikoForm\Webhooks\WebhookSettingsRegistry;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -27,6 +29,7 @@ class ElementorTemplateSync
      */
     public static function handleAfterSave(int $post_id, array $editor_data): void
     {
+        WebhookSettingsRegistry::syncElementorPage($post_id, $editor_data);
         self::walkElements($editor_data);
     }
 

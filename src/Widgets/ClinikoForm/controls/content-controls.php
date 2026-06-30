@@ -142,6 +142,76 @@ function register_content_controls($widget)
     $widget->end_controls_section();
 
     // ===============================
+    // Webhooks
+    // ===============================
+    $widget->start_controls_section('section_cliniko_form_webhooks', [
+        'label' => 'Webhooks',
+        'tab' => Controls_Manager::TAB_CONTENT,
+        'condition' => ['appointment_source' => 'custom_form'],
+    ]);
+
+    $widget->add_control('cliniko_webhook_enabled', [
+        'label' => 'Enable Webhooks',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'no',
+        'description' => 'Send server-side signed webhook events for this form. Nothing is exposed to the frontend.',
+    ]);
+
+    $widget->add_control('cliniko_webhook_url', [
+        'label' => 'Webhook URL',
+        'type' => Controls_Manager::TEXT,
+        'input_type' => 'url',
+        'placeholder' => 'https://example.com/webhooks/cliniko',
+        'condition' => [
+            'cliniko_webhook_enabled' => 'yes',
+        ],
+    ]);
+
+    $widget->add_control('cliniko_webhook_events', [
+        'label' => 'Events',
+        'type' => Controls_Manager::SELECT2,
+        'multiple' => true,
+        'default' => ['booking.completed', 'booking.failed'],
+        'options' => [
+            'booking.preflighted' => 'Booking Preflighted',
+            'payment.verified' => 'Payment Verified',
+            'booking.completed' => 'Booking Completed',
+            'booking.failed' => 'Booking Failed',
+        ],
+        'condition' => [
+            'cliniko_webhook_enabled' => 'yes',
+        ],
+    ]);
+
+    $widget->add_control('cliniko_webhook_signing_secret', [
+        'label' => 'Signing Secret',
+        'type' => Controls_Manager::TEXT,
+        'input_type' => 'password',
+        'description' => 'Used only on the server to sign webhook requests. If left blank, a server-generated secret is used.',
+        'condition' => [
+            'cliniko_webhook_enabled' => 'yes',
+        ],
+    ]);
+
+    $widget->add_control('cliniko_webhook_include_patient', [
+        'label' => 'Include Basic Patient Fields',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'no',
+        'description' => 'Includes only name, email, and phone. Medicare, health identifiers, custom fields, and form answers are never sent.',
+        'condition' => [
+            'cliniko_webhook_enabled' => 'yes',
+        ],
+    ]);
+
+    $widget->end_controls_section();
+
+    // ===============================
     // Email notifications
     // ===============================
     $widget->start_controls_section('section_email_notifications', [

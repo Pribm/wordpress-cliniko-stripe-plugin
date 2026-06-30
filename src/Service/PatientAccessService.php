@@ -1036,7 +1036,7 @@ class PatientAccessService
     }
 
     /**
-     * @return array{ok:bool,patient_ids:array<int,string>,latest_booking_context:?array<string,mixed>,has_matching_booking:bool,error:string}
+     * @return array{ok:bool,patient_ids:array<int,string>,latest_booking_context:?array<string,mixed>,patient_prefill:array<string,string>,has_matching_booking:bool,error:string}
      */
     private function resolveRequestLookup(string $email, $client, string $appointmentTypeId): array
     {

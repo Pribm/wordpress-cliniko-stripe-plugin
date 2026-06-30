@@ -15,7 +15,8 @@ class JobDispatcher implements JobDispatcherInterface
 
         if ($delaySeconds <= 0 && function_exists('as_enqueue_async_action')) {
             // Keep a single array argument shape for worker handlers that expect handle(array $args).
-            as_enqueue_async_action($job, [$args], 'wp-cliniko', false);
+            $actionId = as_enqueue_async_action($job, [$args], 'wp-cliniko', false);
+            $this->promptActionSchedulerRunner($actionId);
             return;
         }
 
@@ -27,5 +28,30 @@ class JobDispatcher implements JobDispatcherInterface
 
         // Fallback: WP-Cron
         wp_schedule_single_event(time() + max(0, $delaySeconds), $job, [$args]);
+    }
+
+    /**
+     * Action Scheduler only auto-starts its async runner from WP Admin shutdown
+     * in this bundled version. Public booking requests need a small nudge.
+     *
+     * @param int|string|null $actionId
+     */
+    private function promptActionSchedulerRunner($actionId): void
+    {
+        if (empty($actionId)) {
+            error_log('[JobDispatcher] Action Scheduler did not return an action id for wp-cliniko job.');
+            return;
+        }
+
+        if (!class_exists('\ActionScheduler_AsyncRequest_QueueRunner') || !class_exists('\ActionScheduler')) {
+            return;
+        }
+
+        try {
+            $runner = new \ActionScheduler_AsyncRequest_QueueRunner(\ActionScheduler::store());
+            $runner->maybe_dispatch();
+        } catch (\Throwable $e) {
+            error_log('[JobDispatcher] Could not prompt Action Scheduler runner: ' . $e->getMessage());
+        }
     }
 }

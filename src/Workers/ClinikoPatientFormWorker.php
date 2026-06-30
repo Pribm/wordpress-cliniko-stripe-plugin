@@ -114,9 +114,8 @@ class ClinikoPatientFormWorker
             $dto->patient_id = $patient->getId();
            // $dto->attendee_id = $patient->getId();
            $attendeeId = $booking->getAttendees()[0]->getId();
-           $dto->attendee_id = $booking->getAttendees()[0]->getId();
+            $dto->attendee_id = $booking->getAttendees()[0]->getId();
             $dto->patient_form_template_id = $templateId;
-            $dto->email_to_patient_on_completion = true;
             $dto->name = sprintf('%s - %s (%s)', $tpl->getName(), "{$patient->getFullName()}", gmdate('Y-m-d H:i'));
 
             $form = PatientForm::create($dto, $client);

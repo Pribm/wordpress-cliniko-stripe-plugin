@@ -12,7 +12,7 @@ class CreatePatientFormDTO
     /** @deprecated Cliniko patient-form linkage should use attendee_id. */
     public ?string $appointment_id = null;
 
-    public bool $email_to_patient_on_completion = false;
+    public ?bool $email_to_patient_on_completion = null;
     public string $patient_id = "";
     public string $patient_form_template_id = "";
 
@@ -24,12 +24,15 @@ class CreatePatientFormDTO
         $payload = [
             'business_id' => $this->business_id,
             'completed' => $this->completed,
-            'email_to_patient_on_completion' => $this->email_to_patient_on_completion,
             'patient_id' => $this->patient_id,
             'patient_form_template_id' => $this->patient_form_template_id,
             'content' => $this->content_sections,
             'name' => $this->name,
         ];
+
+        if ($this->email_to_patient_on_completion !== null) {
+            $payload['email_to_patient_on_completion'] = $this->email_to_patient_on_completion;
+        }
 
         if (!empty($this->attendee_id)) {
             $payload['attendee_id'] = $this->attendee_id;
