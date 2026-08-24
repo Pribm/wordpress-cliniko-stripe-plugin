@@ -251,7 +251,7 @@ class ClinikoController
             $available->getAvailableTimes()
         );
 
-        return new WP_REST_Response([
+        $response = new WP_REST_Response([
             'success' => true,
             'data' => [
                 'available_times' => $availableTimes,
@@ -267,6 +267,12 @@ class ClinikoController
                 'to' => $to,
             ],
         ], 200);
+
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->header('Pragma', 'no-cache');
+        $response->header('Expires', '0');
+
+        return $response;
     }
 
     public function getPractitioners(WP_REST_Request $request): WP_REST_Response
@@ -429,7 +435,7 @@ class ClinikoController
 
         $grid = \cliniko_render_appointment_calendar_grid($context);
 
-        return new WP_REST_Response([
+        $response = new WP_REST_Response([
             'success' => true,
             'data' => [
                 'month_label' => $context['month_label'],
@@ -439,6 +445,12 @@ class ClinikoController
                 'appointment_type_id' => $appointmentTypeId,
             ],
         ], 200);
+
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->header('Pragma', 'no-cache');
+        $response->header('Expires', '0');
+
+        return $response;
     }
 
     public function getNextAvailableTimes(WP_REST_Request $request): WP_REST_Response

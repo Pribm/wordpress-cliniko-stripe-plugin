@@ -1,0 +1,4981 @@
+<script>
+  (function () {
+    const ttlByKind = {
+      practitioners: 5 * 60 * 1000,
+      nextAvailableTimes: 15 * 1000,
+    };
+    const responseCache = new Map();
+    const originalFetch = window.fetch.bind(window);
+
+    function normalizeBaseUrl(raw) {
+      try {
+        const url = new URL(String(raw || ""), window.location.origin);
+        url.hash = "";
+        url.search = "";
+        return url.toString();
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function getRequestToken() {
+      return String(window.formHandlerData?.request_token || "").trim();
+    }
+
+    function getEndpointMap() {
+      const map = new Map();
+      const register = (kind, raw) => {
+        const normalized = normalizeBaseUrl(raw);
+        if (normalized) map.set(normalized, kind);
+      };
+
+      register("practitioners", window.formHandlerData?.practitioners_url);
+      register("calendar", window.formHandlerData?.appointment_calendar_url);
+      register("availableTimes", window.formHandlerData?.available_times_url);
+      register("nextAvailableTimes", window.formHandlerData?.next_available_times_url);
+
+      register("practitioners", window.ClinikoHeadlessCalendar?.endpoints?.practitioners);
+      register("calendar", window.ClinikoHeadlessCalendar?.endpoints?.calendar);
+      register("availableTimes", window.ClinikoHeadlessCalendar?.endpoints?.availableTimes);
+      register("nextAvailableTimes", window.ClinikoHeadlessCalendar?.endpoints?.nextAvailableTimes);
+
+      return map;
+    }
+
+    function resolveKind(url) {
+      const normalized = normalizeBaseUrl(url);
+      return getEndpointMap().get(normalized) || null;
+    }
+
+    function shouldCache(kind, url, method) {
+      if (method !== "GET") return false;
+      if (!kind) return false;
+      if (kind === "calendar" || kind === "availableTimes") return false;
+      if (url.searchParams.get("refresh") === "1") return false;
+      if (url.searchParams.has("_ts")) return false;
+      return true;
+    }
+
+    function getCacheKey(kind, url) {
+      return `${kind}|${url.toString()}`;
+    }
+
+    window.fetch = async function patchedFetch(input, init = {}) {
+      const requestUrl =
+        typeof input === "string" || input instanceof URL
+          ? new URL(String(input), window.location.origin)
+          : new URL(String(input.url), window.location.origin);
+
+      const method = String(
+        init.method ||
+          (typeof input === "object" && input && "method" in input ? input.method : "GET") ||
+          "GET"
+      ).toUpperCase();
+
+      const kind = resolveKind(requestUrl);
+      const cacheable = shouldCache(kind, requestUrl, method);
+
+      if (cacheable) {
+        const cacheKey = getCacheKey(kind, requestUrl);
+        const cached = responseCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+          return cached.response.clone();
+        }
+        if (cached) responseCache.delete(cacheKey);
+      }
+
+      let finalInit = { ...init };
+
+      if (kind) {
+        const token = getRequestToken();
+        const headers = new Headers(
+          init.headers ||
+            (typeof input === "object" && input && "headers" in input ? input.headers : undefined) ||
+            {}
+        );
+
+        headers.set("Accept", "application/json");
+        if (token) {
+          headers.set("X-ES-Request-Token", token);
+        }
+
+        finalInit.headers = headers;
+        if (!finalInit.credentials) {
+          finalInit.credentials = "same-origin";
+        }
+      }
+
+      const response = await originalFetch(input, finalInit);
+
+      if (cacheable && response.ok) {
+        const ttl = ttlByKind[kind] || 0;
+        if (ttl > 0) {
+          responseCache.set(getCacheKey(kind, requestUrl), {
+            expiresAt: Date.now() + ttl,
+            response: response.clone(),
+          });
+        }
+      }
+
+      return response;
+    };
+  })();
+</script>
+
+
+<script>
+  (function () {
+    const REQUIRED_PATIENT_FIELDS = new Set([
+      "first_name",
+      "last_name",
+      "email",
+      "phone",
+    ]);
+
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function deepClone(v) {
+      return JSON.parse(JSON.stringify(v));
+    }
+
+    function normalizeLookupKey(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    const MEDICARE_MODE_HAVE = "have";
+    const MEDICARE_MODE_NONE = "none";
+
+    // APRA-registered private health insurers, using the common consumer-facing brand names.
+    const RAW_MEDICARE_PROVIDER_OPTIONS = [
+      { label: "ACA Health", themeKey: "green" },
+      { label: "AIA Health", themeKey: "red" },
+      { label: "Australian Unity", themeKey: "teal" },
+      { label: "Bupa", themeKey: "blue" },
+      { label: "CBHS Corporate Health", themeKey: "green" },
+      { label: "CBHS Health Fund", themeKey: "green" },
+      { label: "Hunter Health", themeKey: "orange" },
+      { label: "Defence Health", themeKey: "navy" },
+      { label: "Doctors' Health Fund", themeKey: "purple" },
+      { label: "GMHBA", themeKey: "green" },
+      { label: "HBF", themeKey: "orange" },
+      { label: "Health Care Insurance", themeKey: "teal" },
+      { label: "HIF", themeKey: "blue" },
+      { label: "Health Partners", themeKey: "blue" },
+      { label: "HCF", themeKey: "red" },
+      { label: "Latrobe Health Services", themeKey: "blue" },
+      { label: "Medibank", themeKey: "red" },
+      { label: "Mildura Health Fund", themeKey: "green" },
+      { label: "OneMediFund", themeKey: "purple" },
+      { label: "Navy Health", themeKey: "navy" },
+      { label: "nib", themeKey: "purple" },
+      { label: "Peoplecare", themeKey: "green" },
+      { label: "Phoenix Health Fund", themeKey: "orange" },
+      { label: "Police Health", themeKey: "navy" },
+      { label: "Reserve Bank Health Society", themeKey: "burgundy" },
+      { label: "St Luke's", themeKey: "orange" },
+      { label: "Teachers Health", themeKey: "purple" },
+      { label: "Westfund", themeKey: "green" },
+      { label: "Other", themeKey: "slate" },
+    ];
+
+    const MEDICARE_PROVIDER_OPTIONS = RAW_MEDICARE_PROVIDER_OPTIONS
+      .map((option) => ({
+        ...option,
+        value: option.label,
+        key: normalizeLookupKey(option.label),
+      }))
+      .sort((a, b) => {
+        if (a.label === "Other") return 1;
+        if (b.label === "Other") return -1;
+        return a.label.localeCompare(b.label);
+      });
+
+    const HEALTH_CARD_THEMES = {
+      medicare: {
+        brand: "Medicare",
+        subtitle: "Services Australia",
+        badge: "Healthcare card",
+        numberLabel: "Medicare number",
+        summaryLabel: "IRN / cardholder name",
+        footerLabel: "DOB",
+        bg1: "#93c789",
+        bg2: "#d6ebc2",
+        bg3: "#7ec07b",
+        ink: "#153824",
+        muted: "#8a1f1f",
+        accent: "#0d7c4f",
+        badgeBg: "#0d7c4f",
+        badgeText: "#f3d64a",
+        chipBg: "rgba(13, 124, 79, .16)",
+        chipText: "#153824",
+        cardGlow: "rgba(13, 124, 79, .16)",
+      },
+      blue: {
+        brand: "Blue card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#1f5fb8",
+        bg2: "#d9e7fb",
+        bg3: "#6fa3ee",
+        ink: "#0d2342",
+        muted: "#274b7c",
+        accent: "#133f82",
+        badgeBg: "#133f82",
+        badgeText: "#eef4ff",
+        chipBg: "rgba(19, 63, 130, .15)",
+        chipText: "#0d2342",
+        cardGlow: "rgba(31, 95, 184, .24)",
+      },
+      red: {
+        brand: "Red card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#b11f37",
+        bg2: "#f8d7df",
+        bg3: "#eb7a8f",
+        ink: "#3c1020",
+        muted: "#6b2431",
+        accent: "#7c1730",
+        badgeBg: "#7c1730",
+        badgeText: "#fff4f7",
+        chipBg: "rgba(124, 23, 48, .15)",
+        chipText: "#3c1020",
+        cardGlow: "rgba(177, 31, 55, .22)",
+      },
+      green: {
+        brand: "Green card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#1f7b59",
+        bg2: "#def0e7",
+        bg3: "#73b89a",
+        ink: "#123a2b",
+        muted: "#285646",
+        accent: "#166142",
+        badgeBg: "#166142",
+        badgeText: "#effaf4",
+        chipBg: "rgba(22, 97, 66, .16)",
+        chipText: "#123a2b",
+        cardGlow: "rgba(31, 123, 89, .22)",
+      },
+      teal: {
+        brand: "Teal card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#0f8f92",
+        bg2: "#d9f5f5",
+        bg3: "#63c8cb",
+        ink: "#0d2f34",
+        muted: "#2c5c60",
+        accent: "#0f6d70",
+        badgeBg: "#0f6d70",
+        badgeText: "#edfdfd",
+        chipBg: "rgba(15, 109, 112, .16)",
+        chipText: "#0d2f34",
+        cardGlow: "rgba(15, 143, 146, .22)",
+      },
+      orange: {
+        brand: "Orange card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#d36a1c",
+        bg2: "#fde7d4",
+        bg3: "#f0a24d",
+        ink: "#442106",
+        muted: "#7b4b1f",
+        accent: "#b45512",
+        badgeBg: "#b45512",
+        badgeText: "#fff5ee",
+        chipBg: "rgba(180, 85, 18, .15)",
+        chipText: "#442106",
+        cardGlow: "rgba(211, 106, 28, .22)",
+      },
+      purple: {
+        brand: "Purple card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#6b45b9",
+        bg2: "#e4dbfb",
+        bg3: "#a38ae9",
+        ink: "#241742",
+        muted: "#50406f",
+        accent: "#4e2f92",
+        badgeBg: "#4e2f92",
+        badgeText: "#fbf8ff",
+        chipBg: "rgba(78, 47, 146, .15)",
+        chipText: "#241742",
+        cardGlow: "rgba(107, 69, 185, .22)",
+      },
+      navy: {
+        brand: "Navy card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#162847",
+        bg2: "#dce5f2",
+        bg3: "#647ba5",
+        ink: "#0f1e33",
+        muted: "#42526d",
+        accent: "#10203c",
+        badgeBg: "#10203c",
+        badgeText: "#f3f6fb",
+        chipBg: "rgba(16, 32, 60, .16)",
+        chipText: "#0f1e33",
+        cardGlow: "rgba(22, 40, 71, .22)",
+      },
+      burgundy: {
+        brand: "Burgundy card",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#6d1f43",
+        bg2: "#f6dae3",
+        bg3: "#b55c7f",
+        ink: "#34111f",
+        muted: "#6e3551",
+        accent: "#561534",
+        badgeBg: "#561534",
+        badgeText: "#fff7fa",
+        chipBg: "rgba(86, 21, 52, .15)",
+        chipText: "#34111f",
+        cardGlow: "rgba(109, 31, 67, .22)",
+      },
+      slate: {
+        brand: "Other",
+        subtitle: "Private health cover",
+        badge: "Provider card",
+        numberLabel: "Health Identifier Number",
+        summaryLabel: "Provider / cardholder",
+        footerLabel: "Status",
+        bg1: "#4b5563",
+        bg2: "#e5e7eb",
+        bg3: "#9ca3af",
+        ink: "#111827",
+        muted: "#374151",
+        accent: "#1f2937",
+        badgeBg: "#1f2937",
+        badgeText: "#f9fafb",
+        chipBg: "rgba(31, 41, 55, .12)",
+        chipText: "#111827",
+        cardGlow: "rgba(75, 85, 99, .2)",
+      },
+    };
+
+    const MEDICARE_PROVIDER_THEME_MAP = {
+      [normalizeLookupKey("ACA Health")]: "green",
+      [normalizeLookupKey("AIA Health")]: "red",
+      [normalizeLookupKey("Australian Unity")]: "teal",
+      [normalizeLookupKey("Bupa")]: "blue",
+      [normalizeLookupKey("CBHS Corporate Health")]: "green",
+      [normalizeLookupKey("CBHS Health Fund")]: "green",
+      [normalizeLookupKey("Hunter Health")]: "orange",
+      [normalizeLookupKey("Defence Health")]: "navy",
+      [normalizeLookupKey("Doctors' Health Fund")]: "purple",
+      [normalizeLookupKey("GMHBA")]: "green",
+      [normalizeLookupKey("HBF")]: "orange",
+      [normalizeLookupKey("Health Care Insurance")]: "teal",
+      [normalizeLookupKey("HIF")]: "blue",
+      [normalizeLookupKey("Health Partners")]: "blue",
+      [normalizeLookupKey("HCF")]: "red",
+      [normalizeLookupKey("Latrobe Health Services")]: "blue",
+      [normalizeLookupKey("Medibank")]: "red",
+      [normalizeLookupKey("Mildura Health Fund")]: "green",
+      [normalizeLookupKey("OneMediFund")]: "purple",
+      [normalizeLookupKey("Navy Health")]: "navy",
+      [normalizeLookupKey("nib")]: "purple",
+      [normalizeLookupKey("Peoplecare")]: "green",
+      [normalizeLookupKey("Phoenix Health Fund")]: "orange",
+      [normalizeLookupKey("Police Health")]: "navy",
+      [normalizeLookupKey("Reserve Bank Health Society")]: "burgundy",
+      [normalizeLookupKey("St Luke's")]: "orange",
+      [normalizeLookupKey("Teachers Health")]: "purple",
+      [normalizeLookupKey("Westfund")]: "green",
+      [normalizeLookupKey("Other")]: "slate",
+    };
+
+    function normalizeMedicareMode(value, patient = {}) {
+      const raw = String(value || "").trim().toLowerCase();
+      if (raw === MEDICARE_MODE_NONE || raw === "no" || raw === "false" || raw === "without") {
+        return MEDICARE_MODE_NONE;
+      }
+      if (raw === MEDICARE_MODE_HAVE || raw === "yes" || raw === "true" || raw === "with") {
+        return MEDICARE_MODE_HAVE;
+      }
+
+      const provider = String(patient?.medicare_provider || "").trim();
+      const hin = String(patient?.health_identifier_number || "").trim();
+      if (provider || hin) {
+        return MEDICARE_MODE_NONE;
+      }
+
+      const medicareDigits = String(patient?.medicare || "").replace(/\D+/g, "");
+      const irn = String(patient?.medicare_reference_number || "").trim();
+      if (medicareDigits || irn) {
+        return MEDICARE_MODE_HAVE;
+      }
+
+      return MEDICARE_MODE_HAVE;
+    }
+
+    function getMedicareMode(patient = {}) {
+      return normalizeMedicareMode(patient?.medicare_mode, patient);
+    }
+
+    function getMedicareProviderOption(value) {
+      const target = normalizeLookupKey(value);
+      if (!target) return null;
+      return MEDICARE_PROVIDER_OPTIONS.find((option) => normalizeLookupKey(option.value) === target) || null;
+    }
+
+    function getMedicareProviderTheme(value) {
+      const option = getMedicareProviderOption(value);
+      const themeKey =
+        option?.themeKey ||
+        MEDICARE_PROVIDER_THEME_MAP[normalizeLookupKey(value)] ||
+        "slate";
+      return HEALTH_CARD_THEMES[themeKey] || HEALTH_CARD_THEMES.slate;
+    }
+
+    function getMedicareProviderBadgeLabel(value) {
+      const raw = String(value || "").trim();
+      const key = normalizeLookupKey(raw);
+      const shortLabels = {
+        [normalizeLookupKey("ACA Health")]: "ACA",
+        [normalizeLookupKey("AIA Health")]: "AIA",
+        [normalizeLookupKey("Australian Unity")]: "Australian Unity",
+        [normalizeLookupKey("Bupa")]: "Bupa",
+        [normalizeLookupKey("CBHS Corporate Health")]: "CBHS",
+        [normalizeLookupKey("CBHS Health Fund")]: "CBHS",
+        [normalizeLookupKey("Hunter Health")]: "Hunter Health",
+        [normalizeLookupKey("Defence Health")]: "Defence Health",
+        [normalizeLookupKey("Doctors' Health Fund")]: "Doctors' Health",
+        [normalizeLookupKey("GMHBA")]: "GMHBA",
+        [normalizeLookupKey("HBF")]: "HBF",
+        [normalizeLookupKey("Health Care Insurance")]: "Health Care",
+        [normalizeLookupKey("HIF")]: "HIF",
+        [normalizeLookupKey("Health Partners")]: "Health Partners",
+        [normalizeLookupKey("HCF")]: "HCF",
+        [normalizeLookupKey("Latrobe Health Services")]: "Latrobe",
+        [normalizeLookupKey("Medibank")]: "Medibank",
+        [normalizeLookupKey("Mildura Health Fund")]: "Mildura",
+        [normalizeLookupKey("OneMediFund")]: "OneMediFund",
+        [normalizeLookupKey("Navy Health")]: "Navy Health",
+        [normalizeLookupKey("nib")]: "nib",
+        [normalizeLookupKey("Peoplecare")]: "Peoplecare",
+        [normalizeLookupKey("Phoenix Health Fund")]: "Phoenix",
+        [normalizeLookupKey("Police Health")]: "Police Health",
+        [normalizeLookupKey("Reserve Bank Health Society")]: "RBHS",
+        [normalizeLookupKey("St Luke's")]: "St Luke's",
+        [normalizeLookupKey("Teachers Health")]: "Teachers Health",
+        [normalizeLookupKey("Westfund")]: "Westfund",
+        [normalizeLookupKey("Other")]: "Other",
+      };
+
+      return shortLabels[key] || raw;
+    }
+
+    function formatHealthIdentifierNumber(raw) {
+      return String(raw || "")
+        .replace(/\D+/g, "")
+        .slice(0, 16);
+    }
+
+    function getUI() {
+      return {
+        root: document.getElementById("esStepRoot"),
+        back: document.getElementById("esBack"),
+        next: document.getElementById("esNext"),
+        submit: document.getElementById("esSubmit"),
+        pPct: document.getElementById("esProgressPct"),
+        pBar: document.getElementById("esProgressBar"),
+        pTrack: document.querySelector(".es-shellWrap .es-progress__track"),
+        shellWrap: document.querySelector(".es-shellWrap"),
+      };
+    }
+
+    function hasUI(ui) {
+      return !!(ui.root && ui.back && ui.next && ui.submit && ui.shellWrap);
+    }
+
+    function isRootInited(ui) {
+      return ui?.root?.dataset?.esWizardInited === "1";
+    }
+
+    function markRootInited(ui) {
+      if (ui?.root?.dataset) ui.root.dataset.esWizardInited = "1";
+    }
+
+    function getSubmissionTemplate() {
+      if (window.formHandlerData?.submission_template) {
+        return deepClone(window.formHandlerData.submission_template);
+      }
+
+      const node = document.querySelector(".cliniko-form-submission-template-json");
+      if (!node) return null;
+
+      try {
+        return JSON.parse(node.textContent || "{}");
+      } catch (err) {
+        console.error("[ES Headless] Invalid submission template JSON.", err);
+        return null;
+      }
+    }
+
+    function getAppointmentSelectionMode() {
+      const raw = String(window.formHandlerData?.appointment_time_selection || "calendar")
+        .trim()
+        .toLowerCase();
+      return raw === "next_available" ? "next_available" : "calendar";
+    }
+
+    function showInitError(ui, msg) {
+      if (!ui?.root) return;
+      ui.root.innerHTML = `
+      <div class="es-stepCard">
+        <div class="es-error">${msg}</div>
+      </div>
+    `;
+    }
+
+    function boot() {
+      const ui = getUI();
+      if (!hasUI(ui)) {
+        console.error(
+          "[ES Headless] Missing scaffold nodes (#esStepRoot, #esBack, #esNext, #esSubmit, .es-shellWrap)."
+        );
+        return;
+      }
+
+      const tpl = getSubmissionTemplate();
+      if (!tpl) {
+        showInitError(ui, "submission_template not found.");
+        return;
+      }
+
+      if (isRootInited(ui)) return;
+      markRootInited(ui);
+      startShell(ui, tpl);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", boot);
+    } else {
+      boot();
+    }
+
+    function ensureOptionCardHoverStyles() {
+      if (document.getElementById("es-option-hover-styles")) return;
+
+      const style = document.createElement("style");
+      style.id = "es-option-hover-styles";
+      style.textContent = `
+      .es-shellWrap .es-cardOpt {
+        --es-cardopt-grad: linear-gradient(180deg, color-mix(in srgb, var(--es-accent) 70%, white 30%), white);
+        transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease, color 180ms ease;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .es-shellWrap .es-cardOpt .es-optText,
+      .es-shellWrap .es-cardOpt .es-optIc,
+      .es-shellWrap .es-cardOpt .es-optLabel {
+        transition: color 180ms ease;
+      }
+
+      /* Selected state is independent from hover. */
+      .es-shellWrap .es-cardOpt[aria-checked="true"],
+      .es-shellWrap .es-cardOpt[aria-pressed="true"] {
+        background: var(--es-cardopt-grad);
+        border-color: rgba(94, 177, 146, .65);
+        color: var(--es-primary-dark);
+      }
+
+      .es-shellWrap .es-cardOpt[aria-checked="true"] .es-optText,
+      .es-shellWrap .es-cardOpt[aria-pressed="true"] .es-optText,
+      .es-shellWrap .es-cardOpt[aria-checked="true"] .es-optIc,
+      .es-shellWrap .es-cardOpt[aria-pressed="true"] .es-optIc,
+      .es-shellWrap .es-cardOpt[aria-checked="true"] .es-optLabel,
+      .es-shellWrap .es-cardOpt[aria-pressed="true"] .es-optLabel,
+      .es-shellWrap .es-cardOpt[aria-checked="true"] .es-optIc i,
+      .es-shellWrap .es-cardOpt[aria-pressed="true"] .es-optIc i {
+        color: var(--es-primary-dark);
+        opacity: 1;
+      }
+
+      /* Avoid iOS sticky touch-hover. Hover is enabled only for real pointers. */
+      @media (hover: hover) and (pointer: fine) {
+        .es-shellWrap .es-cardOpt:hover {
+          background: var(--es-cardopt-grad);
+          border-color: rgba(94, 177, 146, .65);
+          color: var(--es-primary-dark);
+        }
+
+        .es-shellWrap .es-cardOpt:hover .es-optText,
+        .es-shellWrap .es-cardOpt:hover .es-optIc,
+        .es-shellWrap .es-cardOpt:hover .es-optLabel,
+        .es-shellWrap .es-cardOpt:hover .es-optIc i {
+          color: var(--es-primary-dark);
+          opacity: 1;
+        }
+      }
+    `;
+      document.head.appendChild(style);
+    }
+
+    function startShell(ui, tpl) {
+      const prefersReducedMotion =
+        window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      ensureOptionCardHoverStyles();
+
+      const state = {
+        tpl,
+        answers: normalizeTemplateToAnswers(tpl),
+        steps: [],
+        index: 0,
+        appointmentMode: getAppointmentSelectionMode(),
+        isRendering: false,
+        shellSuppressed: document.documentElement.classList.contains("es-hpr-shell-hidden"),
+        paymentActive: false,
+        paymentEl: null,
+        paymentWrap: null,
+        _nextAvailableAuto: {
+          status: "idle", // idle | pending | ready | error
+          promise: null,
+          value: null,
+          error: null,
+        },
+      };
+
+      state.steps = buildStepsFromTemplate(state.answers, {
+        appointmentMode: state.appointmentMode,
+      });
+      syncPayloadExposure();
+
+      function syncPayloadExposure() {
+        const payload = buildPayload(state);
+        window.clinikoGetHeadlessPayload = function () {
+          return payload;
+        };
+        window.clinikoHeadlessPayload = payload;
+        document.dispatchEvent(
+          new CustomEvent("es:headless:payload-updated", { detail: { payload } })
+        );
+      }
+
+      state._apptPractitionersCache = state._apptPractitionersCache || null;
+      state._apptPrewarmPromise = state._apptPrewarmPromise || null;
+
+      const APPT_PREFETCH_TTL = {
+        practitioners: 5 * 60 * 1000,
+      };
+
+      function getCurrentModuleId() {
+        const runtimeId = String(window.formHandlerData?.module_id || "").trim();
+        const stateId = String(state.answers.moduleId || "").trim();
+        const resolved = runtimeId || stateId;
+        if (resolved && state.answers.moduleId !== resolved) {
+          state.answers.moduleId = resolved;
+        }
+        return resolved;
+      }
+
+      function getCurrentPatientFormTemplateId() {
+        const runtimeId = String(window.formHandlerData?.patient_form_template_id || "").trim();
+        const stateId = String(state.answers.patient_form_template_id || "").trim();
+        const resolved = runtimeId || stateId;
+        if (resolved && state.answers.patient_form_template_id !== resolved) {
+          state.answers.patient_form_template_id = resolved;
+        }
+        return resolved;
+      }
+
+      function getCurrentRequestToken() {
+        return String(window.formHandlerData?.request_token || "").trim();
+      }
+
+      function buildAuthedEndpointUrl(endpoint, params = {}) {
+        const base = String(endpoint || "").trim();
+        if (!base) return "";
+
+        const url = new URL(base, window.location.origin);
+        Object.entries(params || {}).forEach(([key, value]) => {
+          const normalized = String(value ?? "").trim();
+          if (!normalized) return;
+          url.searchParams.set(key, normalized);
+        });
+
+        const token = getCurrentRequestToken();
+        if (token && !url.searchParams.has("request_token")) {
+          url.searchParams.set("request_token", token);
+        }
+
+        return url.toString();
+      }
+
+      function syncAppointmentRuntimeModule(moduleId = "") {
+        const activeModuleId = String(moduleId || "").trim();
+        if (state._apptActiveModuleId === activeModuleId) {
+          return activeModuleId;
+        }
+
+        state._apptActiveModuleId = activeModuleId;
+
+        const practitionersCache = state._apptPractitionersCache;
+        if (
+          practitionersCache &&
+          String(practitionersCache.moduleId || "").trim() !== activeModuleId
+        ) {
+          state._apptPractitionersCache = null;
+        }
+
+        const prewarmMeta = state._apptPrewarmMeta;
+        if (
+          prewarmMeta &&
+          String(prewarmMeta.moduleId || "").trim() !== activeModuleId
+        ) {
+          state._apptPrewarmMeta = null;
+          state._apptPrewarmPromise = null;
+        }
+
+        return activeModuleId;
+      }
+
+      async function fetchJsonForPrewarm(url) {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data?.success === false) {
+          throw new Error(data?.message || "Request failed.");
+        }
+        return data?.data ?? data ?? {};
+      }
+
+      async function fetchPractitionersForPrewarm(cal, moduleId, endpoints) {
+        if (typeof cal?.fetchPractitioners === "function") {
+          const list = await cal.fetchPractitioners({ appointmentTypeId: moduleId });
+          return Array.isArray(list) ? list : [];
+        }
+
+        if (!endpoints.practitioners) return [];
+
+        const url = buildAuthedEndpointUrl(endpoints.practitioners, {
+          appointment_type_id: moduleId,
+        });
+        const payload = await fetchJsonForPrewarm(url);
+        return Array.isArray(payload.practitioners) ? payload.practitioners : [];
+      }
+
+      async function prewarmAppointmentCalendar() {
+        const moduleId = syncAppointmentRuntimeModule(getCurrentModuleId());
+        if (!moduleId) return false;
+
+        const cal = window.ClinikoHeadlessCalendar || {};
+        const endpoints = {
+          practitioners: cal?.endpoints?.practitioners || window.formHandlerData?.practitioners_url || "",
+        };
+
+        const practitioners = await fetchPractitionersForPrewarm(cal, moduleId, endpoints);
+        if (!Array.isArray(practitioners) || practitioners.length === 0) return false;
+
+        state._apptPractitionersCache = {
+          moduleId,
+          data: practitioners,
+          expiresAt: Date.now() + APPT_PREFETCH_TTL.practitioners,
+        };
+
+        const preferred = String(state.answers?.patient?.practitioner_id || "");
+        const practitionerId = preferred || String(practitioners[0]?.id || "");
+        if (!practitionerId) return false;
+
+        if (!state.answers.patient) state.answers.patient = {};
+        if (!String(state.answers.patient.practitioner_id || "").trim()) {
+          state.answers.patient.practitioner_id = practitionerId;
+          syncPayloadExposure();
+        }
+
+        // Live availability is intentionally not prefetched or cached.
+        return true;
+      }
+
+      function scheduleAppointmentCalendarPrewarm() {
+        if (!state.steps.some((step) => step.type === "appointmentSelection")) return;
+        const moduleId = syncAppointmentRuntimeModule(getCurrentModuleId());
+        if (!moduleId) return;
+        if (
+          state._apptPrewarmMeta &&
+          state._apptPrewarmMeta.moduleId === moduleId &&
+          state._apptPrewarmMeta.promise
+        ) {
+          state._apptPrewarmPromise = state._apptPrewarmMeta.promise;
+          return;
+        }
+
+        const run = () => {
+          const promise = prewarmAppointmentCalendar().catch(() => false);
+          state._apptPrewarmMeta = { moduleId, promise };
+          state._apptPrewarmPromise = promise;
+        };
+
+        if (typeof window.requestIdleCallback === "function") {
+          window.requestIdleCallback(run, { timeout: 1200 });
+        } else {
+          setTimeout(run, 120);
+        }
+      }
+
+      scheduleAppointmentCalendarPrewarm();
+
+      function isNextAvailableMode() {
+        return state.appointmentMode === "next_available";
+      }
+
+      function extractDateFromIso(iso) {
+        const raw = String(iso || "").trim();
+        if (!raw) return "";
+        const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (m) return m[1];
+        const dt = new Date(raw);
+        if (Number.isNaN(dt.getTime())) return "";
+        const y = dt.getFullYear();
+        const mo = String(dt.getMonth() + 1).padStart(2, "0");
+        const d = String(dt.getDate()).padStart(2, "0");
+        return `${y}-${mo}-${d}`;
+      }
+
+      function sortNextAvailableItemsClosestFirst(list) {
+        return (Array.isArray(list) ? list : [])
+          .slice()
+          .sort((a, b) => {
+            const aIso = String(a?.appointment_start || a?.appointmentStart || "");
+            const bIso = String(b?.appointment_start || b?.appointmentStart || "");
+            if (!aIso && !bIso) return 0;
+            if (!aIso) return 1;
+            if (!bIso) return -1;
+            const aTs = new Date(aIso).getTime();
+            const bTs = new Date(bIso).getTime();
+            const aBad = Number.isNaN(aTs);
+            const bBad = Number.isNaN(bTs);
+            if (aBad && bBad) return 0;
+            if (aBad) return 1;
+            if (bBad) return -1;
+            return aTs - bTs;
+          });
+      }
+
+      async function fetchNextAvailableList({ forceRefresh = false } = {}) {
+        const moduleId = syncAppointmentRuntimeModule(getCurrentModuleId());
+        if (!moduleId) {
+          throw new Error("Missing moduleId for next-available scheduling.");
+        }
+
+        const cal = window.ClinikoHeadlessCalendar || {};
+        if (typeof cal.fetchNextAvailableTimes === "function") {
+          const list = await cal.fetchNextAvailableTimes({
+            appointmentTypeId: moduleId,
+            includeUnavailable: false,
+            refreshPractitioners: !!forceRefresh,
+          });
+          return sortNextAvailableItemsClosestFirst(list);
+        }
+
+        const endpoint =
+          cal?.endpoints?.nextAvailableTimes ||
+          window.formHandlerData?.next_available_times_url ||
+          "";
+        if (!endpoint) {
+          throw new Error("Missing next-available-times endpoint.");
+        }
+
+        const url = buildAuthedEndpointUrl(endpoint, {
+          appointment_type_id: moduleId,
+          refresh: forceRefresh ? "1" : "",
+          _ts: Date.now(),
+        });
+
+        const payload = await fetchJsonForPrewarm(url);
+        const list = Array.isArray(payload?.next_available_times)
+          ? payload.next_available_times
+          : [];
+        const filtered = list.filter((item) => {
+          const iso = String(item?.appointment_start || item?.appointmentStart || "");
+          const pid = String(item?.practitioner_id || item?.practitionerId || "");
+          return !!iso && !!pid;
+        });
+        return sortNextAvailableItemsClosestFirst(filtered);
+      }
+
+      function applyAutoNextAvailableSelection(item) {
+        const practitionerId = String(item?.practitioner_id || item?.practitionerId || "").trim();
+        const appointmentStart = String(item?.appointment_start || item?.appointmentStart || "").trim();
+        const appointmentDate = extractDateFromIso(appointmentStart);
+        if (!practitionerId || !appointmentStart) return false;
+
+        if (!state.answers.patient || typeof state.answers.patient !== "object") {
+          state.answers.patient = {};
+        }
+
+        state.answers.patient.practitioner_id = practitionerId;
+        state.answers.patient.appointment_start = appointmentStart;
+        state.answers.patient.appointment_date = appointmentDate;
+        syncPayloadExposure();
+        return true;
+      }
+
+      async function ensureAutoNextAvailableSelection({
+        forceRefresh = false,
+        silent = false,
+      } = {}) {
+        if (!isNextAvailableMode()) return true;
+
+        const meta = state._nextAvailableAuto || {};
+        if (meta.status === "pending" && meta.promise && !forceRefresh) {
+          return !!(await meta.promise);
+        }
+
+        if (!forceRefresh && meta.status === "ready") {
+          return true;
+        }
+
+        meta.status = "pending";
+        meta.error = null;
+
+        meta.promise = (async () => {
+          try {
+            const list = await fetchNextAvailableList({ forceRefresh });
+            const selected = list[0] || null;
+            if (!selected || !applyAutoNextAvailableSelection(selected)) {
+              throw new Error("No next available appointment was returned.");
+            }
+            meta.status = "ready";
+            meta.value = selected;
+            meta.error = null;
+            return true;
+          } catch (err) {
+            meta.status = "error";
+            meta.value = null;
+            meta.error = err;
+            if (!silent) {
+              console.error("[ES Headless] Failed to resolve next available appointment.", err);
+            }
+            return false;
+          } finally {
+            meta.promise = null;
+          }
+        })();
+
+        state._nextAvailableAuto = meta;
+        return !!(await meta.promise);
+      }
+
+      function scheduleAutoNextAvailablePrefetch() {
+        if (!isNextAvailableMode()) return;
+
+        const run = () => {
+          void ensureAutoNextAvailableSelection({ forceRefresh: true, silent: true });
+        };
+
+        if (typeof window.requestIdleCallback === "function") {
+          window.requestIdleCallback(run, { timeout: 1200 });
+        } else {
+          setTimeout(run, 120);
+        }
+      }
+
+      scheduleAutoNextAvailablePrefetch();
+
+      function installNextAvailableSubmitGuard() {
+        if (!isNextAvailableMode()) return;
+        if (window.__esNextAvailableSubmitGuardInstalled) return;
+
+        const tryInstall = () => {
+          if (window.__esNextAvailableSubmitGuardInstalled) return true;
+          if (typeof window.submitBookingForm !== "function") return false;
+
+          const original = window.submitBookingForm;
+          const wrapped = async function (...args) {
+            const ok = await ensureAutoNextAvailableSelection({ forceRefresh: true, silent: false });
+            if (!ok) {
+              const detail =
+                state._nextAvailableAuto?.error?.message ||
+                "Unable to auto-select next available time.";
+              const errorEl = args[1];
+              if (errorEl && typeof errorEl === "object" && "textContent" in errorEl) {
+                errorEl.textContent = detail;
+              } else {
+                alert(detail);
+              }
+              return;
+            }
+            syncPayloadExposure();
+            return original.apply(this, args);
+          };
+
+          window.submitBookingForm = wrapped;
+          window.__esNextAvailableSubmitGuardInstalled = true;
+          return true;
+        };
+
+        if (tryInstall()) return;
+
+        let attempts = 0;
+        const timer = setInterval(() => {
+          attempts += 1;
+          if (tryInstall() || attempts > 80) {
+            clearInterval(timer);
+          }
+        }, 250);
+      }
+
+      installNextAvailableSubmitGuard();
+
+      function triggerConditionals() {
+        if (typeof window.ES_SHELL_CONDITIONALS_APPLY === "function") {
+          window.ES_SHELL_CONDITIONALS_APPLY();
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function stripHtml(html) {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = String(html || "");
+        return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
+      }
+
+      function looksLikeHtml(str) {
+        const s = String(str || "");
+        // quick heuristic: any tag-like pattern
+        return /<\/?[a-z][\s\S]*>/i.test(s);
+      }
+
+      function sanitizeHtmlBasic(html) {
+        const tpl = document.createElement("template");
+        tpl.innerHTML = String(html || "");
+
+        // Remove dangerous nodes
+        tpl.content.querySelectorAll("script, iframe, object, embed, link, meta").forEach((n) => n.remove());
+
+        // Remove inline JS handlers + javascript: URLs
+        tpl.content.querySelectorAll("*").forEach((el) => {
+          // remove on* handlers
+          [...el.attributes].forEach((attr) => {
+            const name = attr.name.toLowerCase();
+            const val = String(attr.value || "");
+
+            if (name.startsWith("on")) el.removeAttribute(attr.name);
+
+            // block javascript: in href/src
+            if ((name === "href" || name === "src") && /^\s*javascript:/i.test(val)) {
+              el.removeAttribute(attr.name);
+            }
+          });
+        });
+
+        return tpl.innerHTML;
+      }
+
+
+      function safeText(s) {
+        return String(s || "").replace(/\s+\*/g, "").replace(/\s+/g, " ").trim();
+      }
+
+      function onlyDigits(s) {
+        return String(s || "").replace(/\D+/g, "");
+      }
+
+      function setShellHeaderTitle(title) {
+        const el = ui.shellWrap?.querySelector?.(".es-headIntro__title");
+        if (el) el.textContent = title || "";
+      }
+
+      function applyCurrentStepData(step) {
+        const stepKey = String(step?.key || "");
+        const stepType = String(step?.type || "");
+        const stepToken = stepKey || stepType || "";
+        const stepIndex = String(state.index);
+        const stepNumber = String(state.index + 1);
+        const stepCount = String(state.steps.length || 0);
+
+        const applyTo = (el) => {
+          if (!el?.dataset) return;
+          el.dataset.esStep = stepToken;
+          el.dataset.esStepKey = stepKey;
+          el.dataset.esStepType = stepType;
+          el.dataset.esStepIndex = stepIndex;
+          el.dataset.esStepNumber = stepNumber;
+          el.dataset.esStepCount = stepCount;
+        };
+
+        applyTo(ui.shellWrap);
+        applyTo(ui.root);
+      }
+
+      function scrollStepRootToTop(forceWindow = false) {
+        const behavior = prefersReducedMotion ? "auto" : "smooth";
+        const isDesktopViewport =
+          window.matchMedia && window.matchMedia("(min-width: 641px)").matches;
+
+        if (forceWindow || isDesktopViewport) {
+          window.scrollTo({ top: 0, left: 0, behavior });
+          return;
+        }
+
+        const classStepRoot = document.querySelector(".es-stepRoot");
+        if (classStepRoot) classStepRoot.scrollTop = 0;
+
+        if (ui?.root) {
+          if (typeof ui.root.scrollTo === "function") {
+            ui.root.scrollTo({ top: 0, left: 0, behavior });
+          } else {
+            ui.root.scrollTop = 0;
+          }
+        }
+
+        if (ui?.shellWrap) {
+          if (typeof ui.shellWrap.scrollTo === "function") {
+            ui.shellWrap.scrollTo({ top: 0, left: 0, behavior });
+          } else {
+            ui.shellWrap.scrollTop = 0;
+          }
+        }
+
+        window.scrollTo({ top: 0, left: 0, behavior });
+      }
+
+      function setProgress(i, total) {
+        const pct = total <= 1 ? 100 : Math.round((i / (total - 1)) * 100);
+        if (ui.pPct) ui.pPct.textContent = `${pct}%`;
+        if (ui.pBar) ui.pBar.style.width = `${pct}%`;
+        if (ui.pTrack) ui.pTrack.setAttribute("aria-valuenow", String(pct));
+
+        const pPctMobile = document.getElementById("esProgressPctMobile");
+        const pBarMobile = document.getElementById("esProgressBarMobile");
+        const pTrackMobile = document.querySelector(".es-progress__track--mobile");
+        if (pPctMobile) pPctMobile.textContent = `${pct}%`;
+        if (pBarMobile) pBarMobile.style.width = `${pct}%`;
+        if (pTrackMobile) pTrackMobile.setAttribute("aria-valuenow", String(pct));
+      }
+
+      function isValidDateYmd(v) {
+        if (!YMD_RE.test(v)) return false;
+        const [y, m, d] = v.split("-").map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        return (
+          dt.getUTCFullYear() === y &&
+          dt.getUTCMonth() + 1 === m &&
+          dt.getUTCDate() === d
+        );
+      }
+
+      function ymdToDisplayDob(ymd) {
+        if (!isValidDateYmd(String(ymd || ""))) return "";
+        const [y, m, d] = ymd.split("-");
+        return `${d}/${m}/${y}`;
+      }
+
+      function formatDobInput(value) {
+        const v = String(value || "").trim();
+        if (!v) return "";
+
+        // Backend/Cliniko value -> fixed UI format.
+        if (YMD_RE.test(v) && isValidDateYmd(v)) {
+          return ymdToDisplayDob(v);
+        }
+
+        // User-facing DOB is always DD/MM/YYYY on every browser/device.
+        const digits = onlyDigits(v).slice(0, 8);
+        if (!digits) return "";
+        if (digits.length <= 2) return digits;
+        if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+        return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+      }
+
+      function displayDobToYmd(value) {
+        const v = String(value || "").trim();
+        if (!v) return "";
+
+        if (YMD_RE.test(v) && isValidDateYmd(v)) return v;
+
+        // UI format: DD/MM/YYYY.
+        const slash = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (slash) {
+          const day = String(slash[1]).padStart(2, "0");
+          const month = String(slash[2]).padStart(2, "0");
+          const out = `${slash[3]}-${month}-${day}`;
+          return isValidDateYmd(out) ? out : "";
+        }
+
+        const dash = v.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+        if (dash) {
+          const day = String(dash[1]).padStart(2, "0");
+          const month = String(dash[2]).padStart(2, "0");
+          const out = `${dash[3]}-${month}-${day}`;
+          return isValidDateYmd(out) ? out : "";
+        }
+
+        const compact = onlyDigits(v);
+        if (compact.length === 8) {
+          const out = `${compact.slice(4, 8)}-${compact.slice(2, 4)}-${compact.slice(0, 2)}`;
+          return isValidDateYmd(out) ? out : "";
+        }
+
+        return "";
+      }
+
+      function normalizeDateYmd(input) {
+        const v = String(input || "").trim();
+        if (!v) return "";
+        if (YMD_RE.test(v) && isValidDateYmd(v)) return v;
+        return displayDobToYmd(v);
+      }
+
+      function parseLegacySelectedValues(question) {
+        const selected = new Set();
+
+        if (question?.type === "radiobuttons" && typeof question?.answer === "string") {
+          const v = safeText(question.answer);
+          if (v) selected.add(v);
+        }
+
+        if (question?.type === "checkboxes" && Array.isArray(question?.answer)) {
+          question.answer.forEach((item) => {
+            const v = safeText(item);
+            if (v) selected.add(v);
+          });
+        }
+
+        return selected;
+      }
+
+      function normalizeOptionAnswers(list, selectedSet) {
+        return (Array.isArray(list) ? list : [])
+          .map((a) => {
+            const value = safeText(a?.value || "");
+            if (!value) return null;
+            const isSelected = !!a?.selected || (selectedSet && selectedSet.has(value));
+            return { value, selected: isSelected };
+          })
+          .filter(Boolean);
+      }
+
+      function normalizeTemplateToAnswers(tplObj) {
+        const out = {
+          patient: { ...(tplObj.patient || {}) },
+          content: { sections: [] },
+          moduleId: String(
+            tplObj.moduleId ||
+            tplObj.module_id ||
+            window.formHandlerData?.module_id ||
+            ""
+          ),
+          patient_form_template_id: String(
+            tplObj.patient_form_template_id ||
+            window.formHandlerData?.patient_form_template_id ||
+            ""
+          ),
+        };
+
+        out.patient.date_of_birth = normalizeDateYmd(out.patient.date_of_birth || "");
+        out.patient.medicare_mode = normalizeMedicareMode(out.patient.medicare_mode, out.patient);
+
+        out.content.sections = (tplObj?.content?.sections || []).map((sec) => {
+          const questions = Array.isArray(sec.questions) ? sec.questions : [];
+
+          return {
+            name: sec.name || "",
+            description: sec.description || "",
+            questions: questions
+              .map((q) => {
+                const base = {
+                  name: q.name || "",
+                  type: q.type || "text",
+                  required: !!q.required,
+                };
+
+                if (base.type === "signature") return null;
+
+                if (base.type === "checkboxes" || base.type === "radiobuttons") {
+                  const legacySelected = parseLegacySelectedValues(q);
+                  const answers = normalizeOptionAnswers(q.answers, legacySelected);
+
+                  const item = { ...base, answers };
+
+                  if (q?.other?.enabled) {
+                    item.other = {
+                      enabled: true,
+                      selected: !!q.other.selected,
+                      value: String(q.other.value || ""),
+                    };
+                  }
+
+                  return item;
+                }
+
+                return { ...base, answer: String(q.answer || "") };
+              })
+              .filter(Boolean),
+          };
+        });
+
+        return out;
+      }
+
+      function normalizePatientForBackend(patient) {
+        const p = { ...(patient || {}) };
+
+        if ("first_name" in p) p.first_name = String(p.first_name || "").trim();
+        if ("last_name" in p) p.last_name = String(p.last_name || "").trim();
+        if ("email" in p) p.email = String(p.email || "").trim();
+        if ("medicare_mode" in p) p.medicare_mode = normalizeMedicareMode(p.medicare_mode, p);
+
+        if ("medicare" in p) p.medicare = onlyDigits(p.medicare).slice(0, 10);
+
+        if ("medicare_reference_number" in p) {
+          p.medicare_reference_number = onlyDigits(p.medicare_reference_number).slice(0, 1);
+        }
+
+        if ("medicare_provider" in p) {
+          p.medicare_provider = String(p.medicare_provider || "").trim();
+        }
+
+        if ("health_identifier_number" in p) {
+          p.health_identifier_number = formatHealthIdentifierNumber(p.health_identifier_number);
+        }
+
+        if ("phone" in p) {
+          let d = onlyDigits(p.phone);
+          if (d.startsWith("61")) d = "0" + d.slice(2);
+          p.phone = d.slice(0, 10);
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(p, "post_code")) {
+          const aliasValue =
+            p.postal_code ??
+            p.postcode ??
+            "";
+          if (String(aliasValue || "").trim()) {
+            p.post_code = aliasValue;
+          }
+        }
+
+        if ("post_code" in p) {
+          const d = onlyDigits(p.post_code);
+          p.post_code = d ? d.slice(0, 4) : String(p.post_code || "").trim();
+        }
+
+        if ("postcode" in p) delete p.postcode;
+        if ("postal_code" in p) delete p.postal_code;
+
+        if ("date_of_birth" in p) {
+          p.date_of_birth = normalizeDateYmd(p.date_of_birth);
+        }
+
+        if ("practitioner_id" in p) p.practitioner_id = String(p.practitioner_id || "").trim();
+        if ("appointment_start" in p) p.appointment_start = String(p.appointment_start || "").trim();
+        if ("appointment_date" in p) p.appointment_date = String(p.appointment_date || "").trim();
+
+        return p;
+      }
+
+      function serializeOptionQuestion(q) {
+        const answers = (Array.isArray(q.answers) ? q.answers : [])
+          .map((a) => {
+            const value = safeText(a?.value || "");
+            if (!value) return null;
+            return { value, selected: !!a?.selected };
+          })
+          .filter(Boolean);
+
+        const question = {
+          name: q.name,
+          type: q.type,
+          required: !!q.required,
+          answers,
+        };
+
+        if (q?.other?.enabled) {
+          question.other = q.other.selected
+            ? {
+              enabled: true,
+              selected: true,
+              value: String(q.other.value || "").trim(),
+            }
+            : { enabled: true };
+        }
+
+        return question;
+      }
+
+      function normalizeHeadlessFieldPathKey(path) {
+        const raw = String(path || "").trim();
+        if (!raw) return "";
+
+        return normalizeLookupKey(raw.replace(/^patient\./i, ""));
+      }
+
+      function getHeadlessPatientFieldDefinitions() {
+        const overrideKeys = new Set([
+          normalizeLookupKey("medicare_provider"),
+          normalizeLookupKey("health_identifier_number"),
+        ]);
+
+        let existing = Array.isArray(state.tpl?.headless_patient_fields)
+          ? deepClone(state.tpl.headless_patient_fields)
+          : [];
+
+        existing = existing.filter((field) => {
+          const pathKey = normalizeHeadlessFieldPathKey(field?.path || field?.field_path || "");
+          const fieldKey = normalizeLookupKey(
+            field?.key || field?.field_key || field?.label || field?.field_label || ""
+          );
+
+          if (overrideKeys.has(pathKey) || overrideKeys.has(fieldKey)) {
+            return false;
+          }
+
+          return true;
+        });
+
+        const providerOptions = MEDICARE_PROVIDER_OPTIONS.map((option) => option.value);
+        const fallbackFields = [
+          {
+            key: "medicare_provider",
+            field_key: "medicare_provider",
+            label: "Medicare provider",
+            field_label: "Medicare provider",
+            path: "medicare_provider",
+            field_path: "medicare_provider",
+            type: "select",
+            field_type: "select",
+            required: false,
+            placeholder: "Select a provider",
+            help_text: "",
+            options: providerOptions,
+            field_options: providerOptions,
+            default: "",
+            validation: {
+              type: "enum",
+              options: providerOptions,
+            },
+            validation_type: "enum",
+            cliniko_field_name: "Medicare provider",
+            cliniko_field_type: "select",
+          },
+          {
+            key: "health_identifier_number",
+            field_key: "health_identifier_number",
+            label: "Health Identifier Number",
+            field_label: "Health Identifier Number",
+            path: "health_identifier_number",
+            field_path: "health_identifier_number",
+            type: "text",
+            field_type: "text",
+            required: false,
+            placeholder: "Enter 16-digit HIN",
+            help_text: "Must contain exactly 16 numbers.",
+            default: "",
+            validation: {
+              type: "regex",
+              pattern: "^\\d{16}$",
+            },
+            validation_type: "regex",
+            cliniko_field_name: "Health Identifier Number",
+            cliniko_field_type: "text",
+          },
+        ];
+
+        const seenPaths = new Set(
+          existing.map((field) => normalizeHeadlessFieldPathKey(field?.path || field?.field_path || ""))
+        );
+
+        fallbackFields.forEach((field) => {
+          const pathKey = normalizeHeadlessFieldPathKey(field.path || field.field_path || "");
+          if (!pathKey || seenPaths.has(pathKey)) {
+            return;
+          }
+
+          existing.push(field);
+          seenPaths.add(pathKey);
+        });
+
+        return existing;
+      }
+
+      function buildPayload(s) {
+        return {
+          patient: normalizePatientForBackend(s.answers.patient || {}),
+          content: {
+            sections: (s.answers.content?.sections || []).map((section) => ({
+              name: section.name,
+              description: section.description,
+              questions: (section.questions || []).map((q) => {
+                if (q.type === "checkboxes" || q.type === "radiobuttons") {
+                  return serializeOptionQuestion(q);
+                }
+                return {
+                  name: q.name,
+                  type: q.type,
+                  required: !!q.required,
+                  answer: String(q.answer || ""),
+                };
+              }),
+            })),
+          },
+          headless_patient_fields: getHeadlessPatientFieldDefinitions(),
+          moduleId: getCurrentModuleId(),
+          patient_form_template_id: getCurrentPatientFormTemplateId(),
+        };
+      }
+
+      function buildStepsFromTemplate(tplAnswers, opts = {}) {
+        const steps = [];
+        const sections = tplAnswers?.content?.sections || [];
+        const appointmentMode = String(opts?.appointmentMode || "calendar").toLowerCase();
+
+        sections.forEach((sec, idx) => {
+          steps.push({
+            key: `section_${idx}`,
+            type: "section",
+            title: safeText(sec?.name) || `Section ${idx + 1}`,
+            description: sec?.description || "",
+            sectionIndex: idx,
+          });
+        });
+
+        steps.push({
+          key: "patient_details",
+          type: "patientDetails",
+          title: "Confirm Your Details",
+        });
+
+        if (appointmentMode !== "next_available") {
+          steps.push({
+            key: "appointment_selection",
+            type: "appointmentSelection",
+            title: "Select Appointment",
+          });
+        }
+
+        return steps;
+      }
+
+      function ensurePaymentTarget() {
+        const el =
+          document.getElementById("payment_form") ||
+          document.getElementById("cliniko-payment_iframe") ||
+          document.querySelector("#cliniko-form-steps iframe") ||
+          null;
+
+        state.paymentEl = el;
+        if (!el) return null;
+        state.paymentWrap = el.id === "payment_form" ? el : el.parentElement || el;
+        return state.paymentWrap;
+      }
+
+      function syncShellVisibility() {
+        if (!ui?.shellWrap) return;
+        ui.shellWrap.style.display =
+          state.paymentActive || state.shellSuppressed ? "none" : "";
+      }
+
+      function showPayment() {
+        const wrap = ensurePaymentTarget();
+        if (!wrap) {
+          console.error("[ES Headless] Payment target not found.");
+          return;
+        }
+
+        applyCurrentStepData({ key: "payment", type: "payment" });
+        state.paymentActive = true;
+        syncShellVisibility();
+        wrap.style.display = "";
+        wrap.removeAttribute("hidden");
+        wrap.setAttribute("aria-hidden", "false");
+      }
+
+      function hidePayment() {
+        state.paymentActive = false;
+        if (state.paymentWrap) {
+          state.paymentWrap.style.display = "none";
+          state.paymentWrap.setAttribute("aria-hidden", "true");
+        }
+        syncShellVisibility();
+        render(false);
+      }
+
+      (function initPaymentVisibility() {
+        const wrap = ensurePaymentTarget();
+        if (wrap) {
+          wrap.style.display = "none";
+          wrap.setAttribute("aria-hidden", "true");
+        }
+      })();
+
+      document.addEventListener(
+        "click",
+        (e) => {
+          const backBtn = e.target?.closest?.("[data-es-payment-back], button#go-back-button");
+          if (!backBtn) return;
+          e.preventDefault();
+          hidePayment();
+        },
+        true
+      );
+
+      function iconFor(label, kind) {
+        const t = String(label || "").trim().toLowerCase();
+        if (t === "yes") return "fa-circle-check";
+        if (t === "no") return "fa-circle-xmark";
+        if (t.includes("other")) return "fa-ellipsis";
+        return kind === "checkbox" ? "fa-square-check" : "fa-circle-dot";
+      }
+
+      function renderGroupTitle(title, required) {
+        const h4 = document.createElement("h4");
+        h4.className = "question-title";
+        h4.innerHTML = `${escapeHtml(title)}${required ? ' <span class="req">*</span>' : ""}`;
+        return h4;
+      }
+
+      function renderAppointmentSelectionStep() {
+        const card = document.createElement("div");
+        card.className = "es-stepCard es-stepCard--appointment";
+
+        // Tiny style for slot badges (only once)
+        if (!document.getElementById("es-appt-slot-badge-style")) {
+          const st = document.createElement("style");
+          st.id = "es-appt-slot-badge-style";
+          st.textContent = `
+      .es-shellWrap .appointment-time-slot {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .es-shellWrap .es-slotBadge {
+        font-size: 12px;
+        line-height: 1;
+        padding: 6px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(31, 44, 59, 0.14);
+        background: color-mix(in srgb, var(--es-accent) 55%, white 45%);
+        color: var(--es-primary-dark, #1f4c3b);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+    `;
+          document.head.appendChild(st);
+        }
+
+        const body = document.createElement("div");
+        body.className = "es-stepBody";
+        body.innerHTML = `
+    <div class="es-apptNotice">
+      If needed, we may contact you for additional details. Please select an appointment time that suits you.
+    </div>
+
+    <div class="appointment-selection es-apptLayout" data-es-appt-layout>
+      <div class="appointment-calendar es-apptLeft" data-es-appt-panel="calendar">
+        <div class="appointment-calendar__header">
+          <div class="appointment-calendar__nav">
+            <button
+              type="button"
+              id="esCalendarPrev"
+              class="calendar-nav calendar-nav--prev"
+              aria-label="Previous month"
+            ><i class="fa-solid fa-chevron-left"></i></button>
+
+            <div class="appointment-calendar__month" id="esCalendarMonthLabel">Loading calendar...</div>
+
+            <button
+              type="button"
+              id="esCalendarNext"
+              class="calendar-nav calendar-nav--next"
+              aria-label="Next month"
+            ><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+
+        <div class="appointment-calendar__legend" aria-hidden="false">
+            <span class="calendar-legend-item"><span class="calendar-legend-dot calendar-legend-dot--morning"></span>Morning</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot calendar-legend-dot--afternoon"></span>Afternoon</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot calendar-legend-dot--evening"></span>Evening</span>
+          </div>
+        </div>
+
+        <div class="appointment-calendar__filters" data-es-practitioner-filter>
+          <label class="appointment-calendar__label" for="esAppointmentPractitioner">Practitioner</label>
+          <select id="esAppointmentPractitioner" class="appointment-calendar__select">
+            <option value="">Loading practitioners...</option>
+          </select>
+        </div>
+
+        <div class="appointment-calendar__weekdays">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+
+        <div id="esCalendarGrid" class="appointment-calendar__grid" aria-live="polite"></div>
+        <div class="es-help" id="esCalendarHelp"></div>
+      </div>
+
+      <div class="appointment-day-times es-apptRight" data-es-appt-panel="times">
+        <div class="appointment-day-times__title" id="esTimesLabel">Select a date first</div>
+        <div class="appointment-day-times__hint" id="esTimesHelp">Choose a date to see available times.</div>
+
+        <div class="appointment-day-times__placeholder" id="esTimesPlaceholder">
+          <i class="fas fa-calendar-day" aria-hidden="true"></i>
+          <div class="appointment-day-times__placeholder-title">Select a date and time</div>
+          <div class="appointment-day-times__placeholder-text">Pick a day on the calendar to view available times.</div>
+        </div>
+
+        <div class="appointment-day-times__loading is-hidden" id="esTimesLoading" aria-live="polite">
+          <span class="appointment-day-times__spinner" aria-hidden="true"></span>
+          <div class="appointment-day-times__loading-text">Loading available times...</div>
+        </div>
+
+        <button type="button" class="es-timesBack es-hidden" id="esTimesBack">← Back to calendar</button>
+
+        <div id="esTimesGroups" class="appointment-day-times__groups">
+          <div class="appointment-day-times__group" data-period="morning">
+            <div class="appointment-day-times__group-title">Morning</div>
+            <div class="appointment-day-times__group-slots" id="esTimesMorning"></div>
+          </div>
+          <div class="appointment-day-times__group" data-period="afternoon">
+            <div class="appointment-day-times__group-title">Afternoon</div>
+            <div class="appointment-day-times__group-slots" id="esTimesAfternoon"></div>
+          </div>
+          <div class="appointment-day-times__group" data-period="evening">
+            <div class="appointment-day-times__group-title">Evening</div>
+            <div class="appointment-day-times__group-slots" id="esTimesEvening"></div>
+          </div>
+        </div>
+
+        <div class="appointment-day-times__empty is-hidden" id="esTimesEmpty">No times available.</div>
+      </div>
+    </div>
+  `;
+        card.appendChild(body);
+
+        setTimeout(async () => {
+          const layout = card.querySelector("[data-es-appt-layout]");
+          const backBtn = card.querySelector("#esTimesBack");
+
+          const monthLabel = card.querySelector("#esCalendarMonthLabel");
+          const grid = card.querySelector("#esCalendarGrid");
+          const calHelp = card.querySelector("#esCalendarHelp");
+          const calPrevBtn = card.querySelector("#esCalendarPrev");
+          const calNextBtn = card.querySelector("#esCalendarNext");
+          const practitionerSelect = card.querySelector("#esAppointmentPractitioner");
+
+          const timesLabel = card.querySelector("#esTimesLabel");
+          const timesHelp = card.querySelector("#esTimesHelp");
+          const timesPlaceholder = card.querySelector("#esTimesPlaceholder");
+          const timesLoading = card.querySelector("#esTimesLoading");
+          const timesGroups = card.querySelector("#esTimesGroups");
+          const timesEmpty = card.querySelector("#esTimesEmpty");
+          const timesMorning = card.querySelector("#esTimesMorning");
+          const timesAfternoon = card.querySelector("#esTimesAfternoon");
+          const timesEvening = card.querySelector("#esTimesEvening");
+
+          if (!grid || !timesGroups || !timesMorning || !timesAfternoon || !timesEvening || !layout) return;
+
+          syncAppointmentRuntimeModule(getCurrentModuleId());
+          if (state._apptPrewarmPromise) {
+            try { await state._apptPrewarmPromise; } catch (_) { }
+          }
+
+          const cal = window.ClinikoHeadlessCalendar || {};
+
+          let timesUiLoading = false;
+          let selectedPractitionerId = "";
+          let selectFirstAvailableDateAfterReload = false;
+          let calendarLoadSequence = 0;
+
+          function setHelp(el, msg) { if (el) el.textContent = msg || ""; }
+          function show(el) { if (el) el.classList.remove("es-hidden"); }
+          function hide(el) { if (el) el.classList.add("es-hidden"); }
+
+          function isMobile() {
+            return window.matchMedia && window.matchMedia("(max-width: 640px)").matches;
+          }
+
+          function showPanel(which) {
+            layout.setAttribute("data-es-appt-view", which);
+            if (!backBtn) return;
+            if (isMobile() && which === "times" && !timesUiLoading) backBtn.classList.remove("es-hidden");
+            else backBtn.classList.add("es-hidden");
+          }
+
+          function getMonthKeyFromDate(dateObj) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+            return `${year}-${month}`;
+          }
+
+          function shiftMonthKey(monthKey, delta) {
+            if (!monthKey) return "";
+            const parts = monthKey.split("-");
+            if (parts.length !== 2) return "";
+            const year = Number(parts[0]);
+            const month = Number(parts[1]);
+            if (!Number.isFinite(year) || !Number.isFinite(month)) return "";
+            const shifted = new Date(year, month - 1 + delta, 1);
+            return getMonthKeyFromDate(shifted);
+          }
+
+          let currentMonthKey = getMonthKeyFromDate(new Date());
+
+          function getActiveModuleId() {
+            return syncAppointmentRuntimeModule(getCurrentModuleId());
+          }
+
+          async function fetchCalendarPayload(practId, monthKey, options = {}) {
+            const activeModuleId = getActiveModuleId();
+            if (!activeModuleId) {
+              throw new Error("Missing moduleId.");
+            }
+            const month = String(monthKey || currentMonthKey || "");
+            const forceRefresh = options?.forceRefresh === true;
+
+            const requestCalendar = async () => {
+              let payload;
+              const endpoint =
+                cal?.endpoints?.calendar ||
+                window.formHandlerData?.appointment_calendar_url ||
+                "";
+              if (!endpoint) {
+                throw new Error("Missing calendar endpoint.");
+              }
+
+              // Use a unique request token so changing practitioner cannot
+              // reuse a stale shared helper/cache request.
+              const url = buildAuthedEndpointUrl(endpoint, {
+                appointment_type_id: activeModuleId,
+                practitioner_id: practId,
+                month,
+                _ts: Date.now(),
+              });
+
+              console.info("[ES Headless] Calendar API request", {
+                appointmentTypeId: activeModuleId,
+                practitionerId: practId,
+                month,
+                url,
+                forceRefresh,
+                reason: options?.reason || "calendar-load",
+              });
+
+              const res = await fetch(url, {
+                credentials: "same-origin",
+                cache: "no-store",
+              });
+              console.info("[ES Headless] Calendar API response", {
+                practitionerId: practId,
+                month,
+                status: res.status,
+                ok: res.ok,
+              });
+              const json = await res.json().catch(() => ({}));
+              if (!res.ok || json?.success === false) {
+                throw new Error(json?.message || "Failed to load calendar.");
+              }
+              payload = json?.data || {};
+
+              const normalized = payload || {};
+              return normalized;
+            };
+
+            return requestCalendar();
+          }
+
+          // practitioners (reuse your cached fetch if present)
+          function readPractitionersCache(expectedModuleId = "") {
+            const hit = state._apptPractitionersCache;
+            if (!hit || !Array.isArray(hit.data)) return null;
+            if (
+              expectedModuleId &&
+              String(hit.moduleId || "").trim() !== String(expectedModuleId).trim()
+            ) {
+              return null;
+            }
+            if (!hit.expiresAt || hit.expiresAt < Date.now()) {
+              state._apptPractitionersCache = null;
+              return null;
+            }
+            return hit.data;
+          }
+
+          async function fetchPractitionersList() {
+            const activeModuleId = getActiveModuleId();
+            if (!activeModuleId) {
+              throw new Error("Missing moduleId.");
+            }
+
+            const cached = readPractitionersCache(activeModuleId);
+            if (cached) return cached;
+
+            let list = [];
+            if (typeof cal?.fetchPractitioners === "function") {
+              list = await cal.fetchPractitioners({ appointmentTypeId: activeModuleId });
+            } else {
+              const endpoint =
+                cal?.endpoints?.practitioners ||
+                window.formHandlerData?.practitioners_url ||
+                "";
+              if (!endpoint) throw new Error("Missing practitioners endpoint.");
+
+              const practitionersUrl = buildAuthedEndpointUrl(endpoint, {
+                appointment_type_id: activeModuleId,
+              });
+              const res = await fetch(practitionersUrl, { credentials: "same-origin" });
+              const json = await res.json().catch(() => ({}));
+              if (!res.ok || json?.success === false) {
+                throw new Error(json?.message || "Failed to load practitioners.");
+              }
+              list = json?.data?.practitioners || [];
+            }
+
+            const normalized = Array.isArray(list) ? list : [];
+            state._apptPractitionersCache = {
+              moduleId: activeModuleId,
+              data: normalized,
+              expiresAt: Date.now() + APPT_PREFETCH_TTL.practitioners,
+            };
+            return normalized;
+          }
+
+          function updateCalendarNavState() {
+            const thisMonthKey = getMonthKeyFromDate(new Date());
+            if (calPrevBtn) calPrevBtn.disabled = !currentMonthKey || currentMonthKey <= thisMonthKey;
+            if (calNextBtn) calNextBtn.disabled = false;
+          }
+
+          function setLoadingCalendar(text) {
+            if (monthLabel) monthLabel.textContent = text || "Loading calendar...";
+            grid.innerHTML = "";
+          }
+
+          // The calendar endpoint returns a table because it is shared with
+          // the standard widget. The headless shell already provides its own
+          // weekday row and its grid CSS expects the days as direct children.
+          // Flatten the table cells into that grid to avoid a duplicate
+          // weekday header and prevent the table from becoming one grid item.
+          function renderCalendarGridMarkup(gridHtml) {
+            grid.innerHTML = String(gridHtml || "");
+
+            const table = grid.querySelector("table.appointment-calendar__table");
+            if (!table) return;
+
+            const cells = Array.from(table.querySelectorAll("tbody td.calendar-day"));
+            if (!cells.length) return;
+
+            const fragment = document.createDocumentFragment();
+            cells.forEach((cell) => fragment.appendChild(cell));
+            grid.replaceChildren(fragment);
+          }
+
+          function clearTimeSlots() {
+            timesMorning.innerHTML = "";
+            timesAfternoon.innerHTML = "";
+            timesEvening.innerHTML = "";
+          }
+
+          function setTimesLoading(isLoading, text) {
+            if (!timesLoading) return;
+            timesUiLoading = !!isLoading;
+            const loadingText = timesLoading.querySelector(".appointment-day-times__loading-text");
+            if (loadingText && text) loadingText.textContent = text;
+            timesLoading.classList.toggle("is-hidden", !isLoading);
+
+            const setVisible = (el, visible) => { if (el) el.style.display = visible ? "" : "none"; };
+
+            if (isLoading) {
+              setVisible(timesLabel, false);
+              setVisible(timesHelp, false);
+              setVisible(timesPlaceholder, false);
+              setVisible(timesGroups, false);
+              setVisible(timesEmpty, false);
+              if (backBtn) backBtn.classList.add("es-hidden");
+              return;
+            }
+
+            setVisible(timesLabel, true);
+            setVisible(timesHelp, true);
+            setVisible(timesPlaceholder, true);
+            setVisible(timesGroups, true);
+            setVisible(timesEmpty, true);
+
+            if (isMobile() && layout?.getAttribute("data-es-appt-view") === "times" && backBtn) {
+              backBtn.classList.remove("es-hidden");
+            }
+          }
+
+          function setTimesPlaceholderVisible(visible) {
+            if (!timesPlaceholder) return;
+            timesPlaceholder.classList.toggle("is-hidden", !visible);
+          }
+
+          function setTimesEmptyVisible(visible, text = "") {
+            if (!timesEmpty) return;
+            if (text) timesEmpty.textContent = text;
+            timesEmpty.classList.toggle("is-hidden", !visible);
+          }
+
+          function clearTimesUI(labelText) {
+            if (timesLabel) timesLabel.textContent = labelText || "Select a date first";
+            setHelp(timesHelp, "Choose a date to see available times.");
+            clearTimeSlots();
+            setTimesLoading(false);
+            setTimesEmptyVisible(false);
+            setTimesPlaceholderVisible(true);
+          }
+
+          function pad2(n) { return String(n).padStart(2, "0"); }
+          function isoToLocalLabel(iso) {
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return "";
+            return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+          }
+          function bucketByLocal(iso) {
+            const d = new Date(iso);
+            const h = d.getHours();
+            if (h >= 5 && h < 12) return "morning";
+            if (h >= 12 && h < 17) return "afternoon";
+            return "evening";
+          }
+
+          // ---- AGGREGATED CALENDAR ----
+          function parseGridMapFromHtml(gridHtml) {
+            const tmp = document.createElement("div");
+            tmp.innerHTML = String(gridHtml || "");
+            const map = new Map(); // dateKey -> { available: boolean, classes: Set<string> }
+            tmp.querySelectorAll(".calendar-day").forEach((day) => {
+              const dateKey = day.dataset?.date || "";
+              if (!dateKey) return;
+              const isDisabled =
+                day.classList.contains("is-disabled") ||
+                day.getAttribute("aria-disabled") === "true";
+              const cls = new Set(
+                [...day.classList].filter((c) => /(morning|afternoon|evening)/i.test(c))
+              );
+              map.set(dateKey, { available: !isDisabled, classes: cls });
+            });
+            return map;
+          }
+
+          function applyAggregatedAvailabilityToBaseGrid(baseGridHtml, unionMap) {
+            const tmp = document.createElement("div");
+            tmp.innerHTML = String(baseGridHtml || "");
+            tmp.querySelectorAll(".calendar-day").forEach((day) => {
+              const dateKey = day.dataset?.date || "";
+              if (!dateKey) return;
+
+              const u = unionMap.get(dateKey);
+              const shouldBeAvailable = !!u?.available;
+
+              // If union says unavailable => force disable
+              if (!shouldBeAvailable) {
+                day.classList.add("is-disabled");
+                day.setAttribute("aria-disabled", "true");
+                day.style.cursor = "";
+                return;
+              }
+
+              // If union says available => ensure enabled
+              day.classList.remove("is-disabled");
+              day.setAttribute("aria-disabled", "false");
+              day.style.cursor = "pointer";
+
+              // Merge time-of-day-ish classes (best-effort)
+              if (u?.classes && u.classes.size) {
+                u.classes.forEach((c) => day.classList.add(c));
+              }
+            });
+
+            return tmp.innerHTML;
+          }
+
+          async function fetchAggregatedCalendar(monthKey, options = {}) {
+            const activeModuleId = getActiveModuleId();
+            if (!activeModuleId) {
+              throw new Error("Missing moduleId.");
+            }
+            const month = String(monthKey || currentMonthKey || "");
+            const practitionerId = String(selectedPractitionerId || "").trim();
+            if (!practitionerId) {
+              throw new Error("No practitioner selected.");
+            }
+
+            // The selector represents one concrete practitioner. Fetch that
+            // practitioner's calendar directly; wrapping this call in another
+            // pending request with the same key caused an uncached request to
+            // wait on itself forever.
+            return fetchCalendarPayload(practitionerId, month, options);
+          }
+
+          // ---- AGGREGATED TIMES (GROUPED BY HH:MM) ----
+          async function fetchAvailableTimesForPractitioner(practId, dateKey) {
+            const activeModuleId = getActiveModuleId();
+            const endpoint =
+              cal?.endpoints?.availableTimes ||
+              window.formHandlerData?.available_times_url ||
+              "";
+            if (!endpoint || !activeModuleId || !dateKey || !practId) return [];
+            const url = buildAuthedEndpointUrl(endpoint, {
+              appointment_type_id: activeModuleId,
+              from: dateKey,
+              to: dateKey,
+              practitioner_id: practId,
+              _ts: Date.now(),
+            });
+
+            console.info("[ES Headless] Available-times API request", {
+              appointmentTypeId: activeModuleId,
+              practitionerId: practId,
+              date: dateKey,
+              url,
+            });
+
+            const res = await fetch(url, {
+              credentials: "same-origin",
+              cache: "no-store",
+            });
+            console.info("[ES Headless] Available-times API response", {
+              practitionerId: practId,
+              date: dateKey,
+              status: res.status,
+              ok: res.ok,
+            });
+            const json = await res.json().catch(() => ({}));
+            const list = json?.data?.available_times || [];
+            return Array.isArray(list) ? list : [];
+          }
+
+          function renderGroupedTimesWithSlots(groupedByLabel) {
+            const selectedIso = String(state.answers.patient?.appointment_start || "");
+            clearTimeSlots();
+            setTimesLoading(false);
+            setTimesPlaceholderVisible(false);
+            setTimesEmptyVisible(false);
+
+            const all = Object.keys(groupedByLabel || {});
+            if (!all.length) {
+              setTimesEmptyVisible(true, "No times available.");
+              setHelp(timesHelp, "No available times for this day.");
+              return;
+            }
+
+            const buckets = { morning: [], afternoon: [], evening: [] };
+
+            all.forEach((label) => {
+              const items = groupedByLabel[label] || [];
+              const first = items[0] || null;
+              if (!first?.iso) return;
+              buckets[bucketByLocal(first.iso)].push({
+                label,
+                count: items.length,
+                items,
+              });
+            });
+
+            function renderBucket(container, list) {
+              if (!container) return;
+
+              if (!list.length) {
+                const empty = document.createElement("span");
+                empty.className = "appointment-day-times__empty";
+                empty.textContent = "No times";
+                container.appendChild(empty);
+                return;
+              }
+
+              list
+                .slice()
+                .sort((a, b) => {
+                  // sort by time label (HH:MM)
+                  return String(a.label).localeCompare(String(b.label));
+                })
+                .forEach(({ label, count, items }) => {
+                  const btn = document.createElement("button");
+                  btn.type = "button";
+                  btn.className = "appointment-time-slot";
+                  btn.dataset.timeLabel = label;
+
+                  const text = document.createElement("span");
+                  text.textContent = label;
+
+                  const badge = document.createElement("span");
+                  badge.className = "es-slotBadge";
+                  badge.textContent = `${count} slot${count > 1 ? "s" : ""}`;
+
+                  btn.appendChild(text);
+                  btn.appendChild(badge);
+
+                  // selected state (by ISO)
+                  const isSelected = items.some((x) => String(x.iso) === selectedIso);
+                  if (isSelected) btn.classList.add("is-selected");
+
+                  btn.addEventListener("click", () => {
+                    card
+                      .querySelectorAll(".appointment-time-slot.is-selected")
+                      .forEach((b) => b.classList.remove("is-selected"));
+                    btn.classList.add("is-selected");
+
+                    // Pick any available practitioner for that time (Option A)
+                    const pick = items[0];
+                    state.answers.patient.appointment_start = String(pick.iso || "");
+                    state.answers.patient.practitioner_id = String(pick.practitionerId || "");
+                    syncPayloadExposure();
+                  });
+
+                  container.appendChild(btn);
+                });
+            }
+
+            renderBucket(timesMorning, buckets.morning);
+            renderBucket(timesAfternoon, buckets.afternoon);
+            renderBucket(timesEvening, buckets.evening);
+
+            setHelp(timesHelp, "Select a time below to continue.");
+          }
+
+          async function loadAggregatedTimesForDay(dateKey) {
+            try {
+              if (!dateKey) return;
+
+              if (timesLabel) timesLabel.textContent = `Available times (${dateKey})`;
+              setHelp(timesHelp, "Loading available times...");
+              clearTimeSlots();
+              setTimesPlaceholderVisible(false);
+              setTimesEmptyVisible(false);
+              setTimesLoading(true, "Loading available times...");
+              if (isMobile()) showPanel("times");
+
+              const practitionerId = String(selectedPractitionerId || "").trim();
+              if (!practitionerId) {
+                renderGroupedTimesWithSlots({});
+                return;
+              }
+
+              // Pull times directly for the selected practitioner.
+              const results = await Promise.allSettled(
+                [practitionerId].map(async (pid) => {
+                  const list = await fetchAvailableTimesForPractitioner(pid, dateKey);
+                  return list.map((t) => {
+                    const iso = typeof t === "string" ? t : String(t?.appointment_start || "");
+                    return { iso, practitionerId: pid };
+                  }).filter((x) => !!x.iso);
+                })
+              );
+
+              // Group by HH:MM label
+              const grouped = {}; // label -> [{iso, practitionerId}, ...]
+              results.forEach((r) => {
+                if (r.status !== "fulfilled") return;
+                (r.value || []).forEach((item) => {
+                  const label = isoToLocalLabel(item.iso);
+                  if (!label) return;
+                  if (!grouped[label]) grouped[label] = [];
+                  grouped[label].push(item);
+                });
+              });
+
+              renderGroupedTimesWithSlots(grouped);
+            } catch (err) {
+              console.error("Failed to load aggregated times:", err);
+              setHelp(timesHelp, "Could not fetch times. Check console/network.");
+              clearTimeSlots();
+              setTimesPlaceholderVisible(false);
+              setTimesEmptyVisible(true, "Failed to load times.");
+            } finally {
+              setTimesLoading(false);
+            }
+          }
+
+          async function loadAggregatedCalendarMonth(monthKey = null, options = {}) {
+            const activeModuleId = getActiveModuleId();
+            const requestedMonth = String(monthKey || currentMonthKey || "");
+            const requestedPractitionerId = String(selectedPractitionerId || "").trim();
+            const loadSequence = ++calendarLoadSequence;
+            const hasCalendarSource =
+              typeof cal?.fetchCalendar === "function" ||
+              !!cal?.endpoints?.calendar ||
+              !!window.formHandlerData?.appointment_calendar_url;
+            console.info("[ES Headless] Calendar load started", {
+              practitionerId: requestedPractitionerId,
+              month: requestedMonth,
+              moduleId: activeModuleId,
+              hasCalendarSource,
+              forceRefresh: options?.forceRefresh === true,
+              reason: options?.reason || "calendar-load",
+            });
+            if (!hasCalendarSource || !activeModuleId) {
+              console.warn("[ES Headless] Calendar load skipped", {
+                practitionerId: selectedPractitionerId,
+                month: String(monthKey || currentMonthKey || ""),
+                moduleId: activeModuleId,
+                hasCalendarSource,
+              });
+              setLoadingCalendar("Calendar unavailable");
+              setHelp(calHelp, "Missing calendar endpoint or moduleId.");
+              return;
+            }
+
+            try {
+              setHelp(calHelp, "");
+              setLoadingCalendar("Loading calendar...");
+              grid.classList.add("is-loading");
+              grid.setAttribute("aria-busy", "true");
+
+              // reset selection
+              state.answers.patient.appointment_date = "";
+              state.answers.patient.appointment_start = "";
+              state.answers.patient.practitioner_id = selectedPractitionerId;
+              syncPayloadExposure();
+
+              clearTimesUI("Select a date first");
+              if (isMobile()) showPanel("calendar");
+
+              const data = await fetchAggregatedCalendar(requestedMonth, options);
+
+              // Ignore a slower response after the user has already selected
+              // another practitioner or month.
+              if (
+                loadSequence !== calendarLoadSequence ||
+                requestedPractitionerId !== String(selectedPractitionerId || "").trim()
+              ) {
+                console.info("[ES Headless] Stale calendar response ignored", {
+                  practitionerId: requestedPractitionerId,
+                  month: requestedMonth,
+                });
+                return;
+              }
+
+              if (monthLabel) monthLabel.textContent = data.month_label || "Select a date";
+              renderCalendarGridMarkup(data.grid_html || "");
+              currentMonthKey = String(data.month_key || monthKey || currentMonthKey || "");
+              updateCalendarNavState();
+
+              const days = grid.querySelectorAll(".calendar-day");
+              days.forEach((day) => {
+                const isDisabled =
+                  day.classList.contains("is-disabled") ||
+                  day.getAttribute("aria-disabled") === "true";
+                if (isDisabled) return;
+
+                day.style.cursor = "pointer";
+                day.addEventListener("click", async () => {
+                  days.forEach((d) => d.classList.remove("is-selected"));
+                  day.classList.add("is-selected");
+
+                  const dateKey = day.dataset.date || "";
+                  state.answers.patient.appointment_date = dateKey;
+                  state.answers.patient.appointment_start = "";
+                  state.answers.patient.practitioner_id = selectedPractitionerId;
+                  syncPayloadExposure();
+
+                  await loadAggregatedTimesForDay(dateKey);
+                });
+              });
+
+              if (selectFirstAvailableDateAfterReload) {
+                selectFirstAvailableDateAfterReload = false;
+                const firstAvailableDay = Array.from(days).find((day) => {
+                  return !day.classList.contains("is-blank") &&
+                    !day.classList.contains("is-disabled") &&
+                    day.getAttribute("aria-disabled") !== "true";
+                });
+
+                if (firstAvailableDay) {
+                  days.forEach((day) => day.classList.remove("is-selected"));
+                  firstAvailableDay.classList.add("is-selected");
+
+                  const firstDateKey = firstAvailableDay.dataset.date || "";
+                  state.answers.patient.appointment_date = firstDateKey;
+                  state.answers.patient.appointment_start = "";
+                  state.answers.patient.practitioner_id = selectedPractitionerId;
+                  syncPayloadExposure();
+
+                  // Do not hold the calendar loader open while the selected
+                  // date's times request is running.
+                  void loadAggregatedTimesForDay(firstDateKey);
+                }
+              }
+
+            } catch (err) {
+              if (loadSequence !== calendarLoadSequence) return;
+              console.error("Failed to load aggregated calendar:", err);
+              setLoadingCalendar("Failed to load calendar");
+              setHelp(calHelp, "Could not fetch calendar. Check console/network.");
+            } finally {
+              if (loadSequence === calendarLoadSequence) {
+                grid.classList.remove("is-loading");
+                grid.removeAttribute("aria-busy");
+              }
+            }
+          }
+
+          showPanel("calendar");
+          updateCalendarNavState();
+
+          window.addEventListener("resize", () => {
+            if (!isMobile()) {
+              if (backBtn) backBtn.classList.add("es-hidden");
+            } else {
+              if (state.answers.patient?.appointment_date) showPanel("times");
+              else showPanel("calendar");
+            }
+          });
+
+          if (backBtn) backBtn.addEventListener("click", () => showPanel("calendar"));
+
+          function populatePractitionerSelect(practitioners) {
+            if (!practitionerSelect) return;
+
+            practitionerSelect.innerHTML = "";
+            const validPractitioners = (Array.isArray(practitioners) ? practitioners : []).filter(
+              (practitioner) => String(practitioner?.id || "").trim()
+            );
+
+            if (!selectedPractitionerId && validPractitioners.length) {
+              selectedPractitionerId = String(validPractitioners[0].id).trim();
+            }
+
+            validPractitioners.forEach((practitioner) => {
+              const id = String(practitioner?.id || "").trim();
+              if (!id) return;
+
+              const option = document.createElement("option");
+              option.value = id;
+              option.textContent = String(practitioner?.name || practitioner?.label || id);
+              practitionerSelect.appendChild(option);
+            });
+
+            practitionerSelect.value = selectedPractitionerId;
+            practitionerSelect.disabled = practitionerSelect.options.length === 0;
+
+            if (selectedPractitionerId) {
+              state.answers.patient.practitioner_id = selectedPractitionerId;
+              syncPayloadExposure();
+            }
+          }
+
+          if (practitionerSelect) {
+            practitionerSelect.addEventListener("change", async () => {
+              selectedPractitionerId = String(practitionerSelect.value || "").trim();
+              if (!selectedPractitionerId) return;
+
+              console.info("[ES Headless] Practitioner changed", {
+                practitionerId: selectedPractitionerId,
+                month: currentMonthKey,
+              });
+
+              state.answers.patient.appointment_date = "";
+              state.answers.patient.appointment_start = "";
+              state.answers.patient.practitioner_id = selectedPractitionerId;
+              syncPayloadExposure();
+              clearTimesUI("Select a date first");
+              selectFirstAvailableDateAfterReload = true;
+              showPanel("calendar");
+              await loadAggregatedCalendarMonth(currentMonthKey, {
+                forceRefresh: true,
+                reason: "practitioner-change",
+              });
+            });
+          }
+
+          if (calPrevBtn) {
+            calPrevBtn.addEventListener("click", async (event) => {
+              event.preventDefault();
+              if (calPrevBtn.disabled) return;
+              const targetKey = shiftMonthKey(currentMonthKey, -1);
+              if (!targetKey) return;
+
+              console.info("[ES Headless] Calendar month changed", {
+                direction: "previous",
+                practitionerId: selectedPractitionerId,
+                month: targetKey,
+              });
+
+              state.answers.patient.appointment_date = "";
+              state.answers.patient.appointment_start = "";
+              state.answers.patient.practitioner_id = selectedPractitionerId;
+              syncPayloadExposure();
+              clearTimesUI("Select a date first");
+              if (isMobile()) showPanel("calendar");
+
+              await loadAggregatedCalendarMonth(targetKey, {
+                forceRefresh: true,
+                reason: "previous-month",
+              });
+            });
+          }
+
+          if (calNextBtn) {
+            calNextBtn.addEventListener("click", async (event) => {
+              event.preventDefault();
+              const targetKey = shiftMonthKey(currentMonthKey, 1);
+              if (!targetKey) return;
+
+              console.info("[ES Headless] Calendar month changed", {
+                direction: "next",
+                practitionerId: selectedPractitionerId,
+                month: targetKey,
+              });
+
+              state.answers.patient.appointment_date = "";
+              state.answers.patient.appointment_start = "";
+              state.answers.patient.practitioner_id = selectedPractitionerId;
+              syncPayloadExposure();
+              clearTimesUI("Select a date first");
+              if (isMobile()) showPanel("calendar");
+
+              await loadAggregatedCalendarMonth(targetKey, {
+                forceRefresh: true,
+                reason: "next-month",
+              });
+            });
+          }
+
+          // Validate prerequisites
+          const hasPractitionerSource =
+            !!readPractitionersCache(getActiveModuleId()) ||
+            typeof cal?.fetchPractitioners === "function" ||
+            !!cal?.endpoints?.practitioners ||
+            !!window.formHandlerData?.practitioners_url;
+
+          if (!getActiveModuleId() || !hasPractitionerSource) {
+            setLoadingCalendar("Calendar unavailable");
+            setHelp(calHelp, "ClinikoHeadlessCalendar or moduleId not available.");
+            clearTimesUI("Times unavailable");
+            return;
+          }
+
+          // initial load
+          try {
+            // Ensure practitioners list is reachable (also warms cache)
+            const list = await fetchPractitionersList();
+            if (!Array.isArray(list) || !list.length) {
+              setLoadingCalendar("No practitioners available");
+              setHelp(calHelp, "No practitioners returned for this appointment type.");
+              clearTimesUI("No times");
+              return;
+            }
+
+            populatePractitionerSelect(list);
+
+            await loadAggregatedCalendarMonth(currentMonthKey);
+          } catch (err) {
+            console.error("Failed to init aggregated calendar:", err);
+            setLoadingCalendar("Calendar unavailable");
+            setHelp(calHelp, "Could not initialize aggregated calendar. Check console/network.");
+            clearTimesUI("Times unavailable");
+          }
+        }, 0);
+
+        return card;
+      }
+
+      function renderOtherInputField(q) {
+        if (!q?.other?.enabled || !q?.other?.selected) return null;
+
+        const wrap = document.createElement("div");
+        wrap.className = "es-field es-otherInputWrap";
+        wrap.style.gridColumn = "1 / -1";
+        wrap.style.marginTop = "4px";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "es-textInput";
+        input.placeholder = "Please specify";
+        input.value = String(q?.other?.value || "");
+        if (q?.required) {
+          input.setAttribute("required", "required");
+        }
+
+        input.addEventListener("input", () => {
+          if (!q.other || typeof q.other !== "object") {
+            q.other = { enabled: true, selected: true, value: "" };
+          }
+          q.other.value = input.value;
+          syncPayloadExposure();
+        });
+
+        wrap.appendChild(input);
+        return wrap;
+      }
+
+      function renderRadioCards(q) {
+        const wrap = document.createElement("div");
+        wrap.className = "es-options es-grid2";
+
+        const buttons = [];
+        let otherBtn = null;
+
+        function syncOtherInput() {
+          const existing = wrap.querySelector(".es-otherInputWrap");
+          const shouldExist = !!(q?.other?.enabled && q?.other?.selected);
+
+          if (shouldExist && !existing) {
+            const otherInput = renderOtherInputField(q);
+            if (otherInput) wrap.appendChild(otherInput);
+            return;
+          }
+
+          if (!shouldExist && existing) {
+            existing.remove();
+          }
+        }
+
+        function syncVisualState() {
+          buttons.forEach(({ btn, index }) => {
+            const selected = !!q.answers?.[index]?.selected;
+            btn.setAttribute("aria-pressed", String(selected));
+            btn.classList.toggle("is-selected", selected);
+          });
+
+          if (otherBtn) {
+            const selected = !!q?.other?.selected;
+            otherBtn.setAttribute("aria-pressed", String(selected));
+            otherBtn.classList.toggle("is-selected", selected);
+          }
+
+          syncOtherInput();
+        }
+
+        function finishOptionUpdate() {
+          syncVisualState();
+          syncPayloadExposure();
+
+          /*
+           * Do not rerender the whole step after a tap. On iOS, deleting the
+           * focused/touched button can make Safari reposition the viewport.
+           */
+          requestAnimationFrame(triggerConditionals);
+        }
+
+        (q.answers || []).forEach((a, idx) => {
+          const label = safeText(a.value);
+          const checked = !!a.selected;
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "es-cardOpt";
+          btn.setAttribute("aria-pressed", String(checked));
+          if (checked) btn.classList.add("is-selected");
+
+          btn.innerHTML = `
+          <div class="es-optIc" aria-hidden="true"><i class="fa-solid ${iconFor(label, "radio")}"></i></div>
+          <div class="es-optText"><div class="es-optLabel">${escapeHtml(label)}</div></div>
+        `;
+
+          btn.addEventListener("click", () => {
+            (q.answers || []).forEach((answer, i) => {
+              answer.selected = i === idx;
+            });
+
+            if (q?.other?.enabled) {
+              q.other.selected = false;
+              q.other.value = "";
+            }
+
+            finishOptionUpdate();
+          });
+
+          buttons.push({ btn, index: idx });
+          wrap.appendChild(btn);
+        });
+
+        if (q?.other?.enabled) {
+          const otherSelected = !!q?.other?.selected;
+          otherBtn = document.createElement("button");
+          otherBtn.type = "button";
+          otherBtn.className = "es-cardOpt";
+          otherBtn.setAttribute("aria-pressed", String(otherSelected));
+          if (otherSelected) otherBtn.classList.add("is-selected");
+
+          otherBtn.innerHTML = `
+          <div class="es-optIc" aria-hidden="true"><i class="fa-solid ${iconFor("Other", "radio")}"></i></div>
+          <div class="es-optText"><div class="es-optLabel">Other</div></div>
+        `;
+
+          otherBtn.addEventListener("click", () => {
+            (q.answers || []).forEach((answer) => {
+              answer.selected = false;
+            });
+
+            if (!q.other || typeof q.other !== "object") {
+              q.other = { enabled: true, selected: true, value: "" };
+            } else {
+              q.other.enabled = true;
+              q.other.selected = true;
+            }
+
+            finishOptionUpdate();
+          });
+
+          wrap.appendChild(otherBtn);
+          syncOtherInput();
+        }
+
+        return wrap;
+      }
+
+      function renderCheckboxCards(q) {
+        const wrap = document.createElement("div");
+        wrap.className = "es-options";
+
+        const buttons = [];
+        let otherBtn = null;
+
+        function syncOtherInput() {
+          const existing = wrap.querySelector(".es-otherInputWrap");
+          const shouldExist = !!(q?.other?.enabled && q?.other?.selected);
+
+          if (shouldExist && !existing) {
+            const otherInput = renderOtherInputField(q);
+            if (otherInput) wrap.appendChild(otherInput);
+            return;
+          }
+
+          if (!shouldExist && existing) {
+            existing.remove();
+          }
+        }
+
+        function syncVisualState() {
+          buttons.forEach(({ btn, index }) => {
+            const selected = !!q.answers?.[index]?.selected;
+            btn.setAttribute("aria-checked", String(selected));
+            btn.classList.toggle("is-selected", selected);
+          });
+
+          if (otherBtn) {
+            const selected = !!q?.other?.selected;
+            otherBtn.setAttribute("aria-checked", String(selected));
+            otherBtn.classList.toggle("is-selected", selected);
+          }
+
+          syncOtherInput();
+        }
+
+        function finishOptionUpdate() {
+          syncVisualState();
+          syncPayloadExposure();
+          requestAnimationFrame(triggerConditionals);
+        }
+
+        (q.answers || []).forEach((a, idx) => {
+          const label = safeText(a.value);
+          const checked = !!a.selected;
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "es-cardOpt";
+          btn.setAttribute("aria-checked", String(checked));
+          if (checked) btn.classList.add("is-selected");
+
+          btn.innerHTML = `
+          <div class="es-optIc" aria-hidden="true"><i class="fa-solid ${iconFor(label, "checkbox")}"></i></div>
+          <div class="es-optText"><div class="es-optLabel">${escapeHtml(label)}</div></div>
+        `;
+
+          btn.addEventListener("click", () => {
+            q.answers[idx].selected = !q.answers[idx].selected;
+            finishOptionUpdate();
+          });
+
+          buttons.push({ btn, index: idx });
+          wrap.appendChild(btn);
+        });
+
+        if (q?.other?.enabled) {
+          const otherSelected = !!q?.other?.selected;
+          otherBtn = document.createElement("button");
+          otherBtn.type = "button";
+          otherBtn.className = "es-cardOpt";
+          otherBtn.setAttribute("aria-checked", String(otherSelected));
+          if (otherSelected) otherBtn.classList.add("is-selected");
+
+          otherBtn.innerHTML = `
+          <div class="es-optIc" aria-hidden="true"><i class="fa-solid ${iconFor("Other", "checkbox")}"></i></div>
+          <div class="es-optText"><div class="es-optLabel">Other</div></div>
+        `;
+
+          otherBtn.addEventListener("click", () => {
+            if (!q.other || typeof q.other !== "object") {
+              q.other = { enabled: true, selected: true, value: "" };
+            } else {
+              q.other.enabled = true;
+              q.other.selected = !q.other.selected;
+              if (!q.other.selected) q.other.value = "";
+            }
+
+            finishOptionUpdate();
+          });
+
+          wrap.appendChild(otherBtn);
+          syncOtherInput();
+        }
+
+        return wrap;
+      }
+
+      function renderTextField(q) {
+        const wrap = document.createElement("div");
+        wrap.className = "es-field";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "es-textInput";
+        input.value = q.answer || "";
+
+        input.addEventListener("input", () => {
+          q.answer = input.value;
+          syncPayloadExposure();
+        });
+
+        wrap.appendChild(input);
+        return wrap;
+      }
+
+      function renderTextarea(q) {
+        const wrap = document.createElement("div");
+        wrap.className = "es-field";
+
+        const ta = document.createElement("textarea");
+        ta.className = "es-textarea";
+        ta.value = q.answer || "";
+
+        ta.addEventListener("input", () => {
+          q.answer = ta.value;
+          syncPayloadExposure();
+        });
+
+        wrap.appendChild(ta);
+        return wrap;
+      }
+
+      function renderSectionStep(step) {
+        const card = document.createElement("div");
+        card.className = "es-stepCard";
+
+        const body = document.createElement("div");
+        body.className = "es-stepBody";
+
+        const sec = state.answers.content.sections[step.sectionIndex];
+
+        const descRaw = sec?.description || "";
+        const descStripped = stripHtml(descRaw);
+
+        if (descStripped) {
+          const desc = document.createElement("div");
+          desc.className = "es-sectionDesc";
+
+          // If it looks like HTML, render as HTML (sanitized).
+          // Otherwise render as plain text.
+          if (looksLikeHtml(descRaw)) {
+            desc.innerHTML = sanitizeHtmlBasic(descRaw);
+          } else {
+            desc.textContent = descStripped;
+          }
+
+          body.appendChild(desc);
+        }
+
+
+        (sec?.questions || []).forEach((q) => {
+          const block = document.createElement("div");
+          block.className = "inputGroup es-group";
+
+          block.appendChild(renderGroupTitle(q.name, q.required));
+
+          if (q.type === "radiobuttons") block.appendChild(renderRadioCards(q));
+          else if (q.type === "checkboxes") block.appendChild(renderCheckboxCards(q));
+          else if (q.type === "paragraph" || q.type === "textarea") block.appendChild(renderTextarea(q));
+          else block.appendChild(renderTextField(q));
+
+          body.appendChild(block);
+        });
+
+        card.appendChild(body);
+        return card;
+      }
+
+      function prettifyPatientKey(k) {
+        const key = String(k || "").toLowerCase();
+        if (key === "address_1") return "Address";
+        if (key === "address_2") return "Address continuation";
+        if (key === "medicare_mode") return "Medicare status";
+        if (key === "medicare") return "Medicare number";
+        if (key === "medicare_reference_number") return "IRN";
+        if (key === "medicare_provider") return "Provider";
+        if (key === "health_identifier_number") return "Health Identifier Number (HIN)";
+
+        return String(k || "")
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+
+      function inputTypeForPatientKey(key) {
+        const k = String(key || "").toLowerCase();
+        if (k.includes("email")) return "email";
+        if (k.includes("phone")) return "tel";
+        if (k === "date_of_birth") return "text";
+        return "text";
+      }
+
+      function isPostcodeKey(key) {
+        const k = String(key || "").toLowerCase();
+        return k === "post_code" || k === "postcode" || k === "postal_code";
+      }
+
+      function shouldHidePatientKey(key) {
+        return (
+          key === "appointment_start" ||
+          key === "practitioner_id" ||
+          key === "appointment_date" ||
+          key === "address_2"
+        );
+      }
+
+      function formatPhoneAU(raw) {
+        const d = onlyDigits(raw);
+        if (!d) return "";
+        let x = d;
+        if (x.startsWith("61")) x = "0" + x.slice(2);
+
+        if (x.startsWith("04")) {
+          const a = x.slice(0, 4);
+          const b = x.slice(4, 7);
+          const c = x.slice(7, 10);
+          return [a, b, c].filter(Boolean).join(" ").trim();
+        }
+
+        const a = x.slice(0, 2);
+        const b = x.slice(2, 6);
+        const c = x.slice(6, 10);
+        return [a, b, c].filter(Boolean).join(" ").trim();
+      }
+
+      function formatMedicare10(raw) {
+        const d = onlyDigits(raw).slice(0, 10);
+        const a = d.slice(0, 4);
+        const b = d.slice(4, 9);
+        const c = d.slice(9, 10);
+        return [a, b, c].filter(Boolean).join(" ").trim();
+      }
+
+      function formatMedicareRef(raw) {
+        return onlyDigits(raw).slice(0, 1);
+      }
+
+      function formatPostcodeAU(raw) {
+        return onlyDigits(raw).slice(0, 4);
+      }
+
+      function toDisplayDob(raw) {
+        const ymd = normalizeDateYmd(raw);
+        if (ymd) return ymdToDisplayDob(ymd);
+        return formatDobInput(raw);
+      }
+
+      function toRawByKey(key, value) {
+        switch (key) {
+          case "phone": {
+            let d = onlyDigits(value);
+            if (d.startsWith("61")) d = "0" + d.slice(2);
+            return d.slice(0, 10);
+          }
+          case "medicare":
+            return onlyDigits(value).slice(0, 10);
+          case "medicare_reference_number":
+            return onlyDigits(value).slice(0, 1);
+          case "medicare_provider":
+            return String(value || "").trim();
+          case "health_identifier_number":
+            return formatHealthIdentifierNumber(value);
+          case "post_code":
+          case "postcode":
+          case "postal_code":
+            return onlyDigits(value).slice(0, 4);
+          case "date_of_birth":
+            return normalizeDateYmd(value);
+          default:
+            return String(value || "");
+        }
+      }
+
+      function applyMaskByKey(key, value) {
+        switch (key) {
+          case "phone":
+            return formatPhoneAU(value);
+          case "medicare":
+            return formatMedicare10(value);
+          case "medicare_reference_number":
+            return formatMedicareRef(value);
+          case "medicare_provider":
+            return String(value || "").trim();
+          case "health_identifier_number":
+            return formatHealthIdentifierNumber(value);
+          case "post_code":
+          case "postcode":
+          case "postal_code":
+            return formatPostcodeAU(value);
+          case "date_of_birth":
+            return formatDobInput(value);
+          default:
+            return value;
+        }
+      }
+
+      function placeholderByKey(key) {
+        switch (key) {
+          case "phone":
+            return "04xx xxx xxx";
+          case "medicare":
+            return "1234 56789 0";
+          case "medicare_reference_number":
+            return "0";
+          case "medicare_provider":
+            return "Select a provider";
+          case "health_identifier_number":
+            return "Enter 16-digit HIN";
+          case "post_code":
+          case "postcode":
+          case "postal_code":
+            return "4 digits";
+          case "date_of_birth":
+            return "DD/MM/YYYY";
+          default:
+            return "";
+        }
+      }
+
+      function medicarePreviewNumber(patient) {
+        const number = formatMedicare10(patient?.medicare || "");
+        return number || "0000 00000 0";
+      }
+
+      function medicarePreviewIrn(patient) {
+        const ref = formatMedicareRef(patient?.medicare_reference_number || "");
+        if (ref) {
+          return ref;
+        }
+
+        const medicareDigits = onlyDigits(patient?.medicare || "").slice(0, 10);
+        if (medicareDigits.length === 10) {
+          return medicareDigits.slice(9, 10);
+        }
+
+        return "0";
+      }
+
+      function medicarePreviewCardholderName(patient) {
+        const first = String(patient?.first_name || "").trim();
+        const last = String(patient?.last_name || "").trim();
+        const full = `${first} ${last}`.trim();
+        return full ? full.toUpperCase() : "CARDHOLDER NAME";
+      }
+
+      function medicarePreviewDob(patient) {
+        const ymd = normalizeDateYmd(patient?.date_of_birth || "");
+        return ymd ? ymdToDisplayDob(ymd) : "--/--/----";
+      }
+
+      function createMedicarePreview() {
+        const wrap = document.createElement("div");
+        wrap.className = "es-medicareHint";
+
+        const applyCardTheme = (theme = HEALTH_CARD_THEMES.medicare) => {
+          const rootTheme = theme || HEALTH_CARD_THEMES.medicare;
+          wrap.style.setProperty("--es-card-bg-1", rootTheme.bg1);
+          wrap.style.setProperty("--es-card-bg-2", rootTheme.bg2);
+          wrap.style.setProperty("--es-card-bg-3", rootTheme.bg3);
+          wrap.style.setProperty("--es-card-ink", rootTheme.ink);
+          wrap.style.setProperty("--es-card-muted", rootTheme.muted);
+          wrap.style.setProperty("--es-card-accent", rootTheme.accent);
+          wrap.style.setProperty("--es-card-badge-bg", rootTheme.badgeBg);
+          wrap.style.setProperty("--es-card-badge-text", rootTheme.badgeText);
+          wrap.style.setProperty("--es-card-chip-bg", rootTheme.chipBg);
+          wrap.style.setProperty("--es-card-chip-text", rootTheme.chipText);
+          wrap.style.setProperty("--es-card-glow", rootTheme.cardGlow);
+        };
+
+        const renderMedicareCard = (patient) => {
+          applyCardTheme(HEALTH_CARD_THEMES.medicare);
+          wrap.innerHTML = `
+          <div class="es-medicarePreview" role="presentation" aria-label="Medicare card preview">
+            <span class="es-medicarePreview__logoBox">medicare</span>
+            <div class="es-medicarePreview__stack">
+              <div class="es-medicarePreview__field es-medicarePreview__field--number">
+                <span class="es-medicarePreview__label">Medicare number</span>
+                <span class="es-medicarePreview__value es-medicarePreview__number" data-es-medicare-number>0000 00000 0</span>
+              </div>
+              <div class="es-medicarePreview__field es-medicarePreview__field--name">
+                <span class="es-medicarePreview__label">IRN / cardholder name</span>
+                <span class="es-medicarePreview__value es-medicarePreview__value--name">
+                  <span class="es-medicarePreview__irn" data-es-medicare-irn>0</span>
+                  <span class="es-medicarePreview__cardholder" data-es-medicare-name-text>CARDHOLDER NAME</span>
+                </span>
+              </div>
+            </div>
+            <div class="es-medicarePreview__field es-medicarePreview__field--dob">
+              <span class="es-medicarePreview__label">DOB</span>
+              <span class="es-medicarePreview__value es-medicarePreview__value--dob" data-es-medicare-dob>--/--/----</span>
+            </div>
+          </div>
+        `;
+
+          const numberEl = wrap.querySelector("[data-es-medicare-number]");
+          const irnEl = wrap.querySelector("[data-es-medicare-irn]");
+          const nameEl = wrap.querySelector("[data-es-medicare-name-text]");
+          const dobEl = wrap.querySelector("[data-es-medicare-dob]");
+
+          if (numberEl) numberEl.textContent = medicarePreviewNumber(patient);
+          if (irnEl) irnEl.textContent = medicarePreviewIrn(patient);
+          if (nameEl) nameEl.textContent = medicarePreviewCardholderName(patient);
+          if (dobEl) dobEl.textContent = medicarePreviewDob(patient);
+        };
+
+        const renderProviderCard = (patient) => {
+          const providerValue = String(patient?.medicare_provider || "").trim();
+          const providerOption = getMedicareProviderOption(providerValue);
+          const theme = getMedicareProviderTheme(providerValue);
+          applyCardTheme(theme);
+
+          const providerLabel = providerOption?.label || (providerValue ? providerValue : "Select a provider");
+          const providerBadge = getMedicareProviderBadgeLabel(providerLabel);
+          const hin = formatHealthIdentifierNumber(patient?.health_identifier_number || "") || "HIN";
+          const status = providerValue && providerLabel === "Other" ? "Other provider" : "No Medicare";
+          const name = medicarePreviewCardholderName(patient);
+
+          wrap.innerHTML = `
+          <div class="es-healthPreview es-healthPreview--provider" role="presentation" aria-label="Health card preview">
+            <div class="es-healthPreview__grain"></div>
+            <div class="es-healthPreview__top">
+              <div class="es-healthPreview__brandWrap">
+                <span class="es-healthPreview__brandPill">${escapeHtml(providerBadge)}</span>
+                <span class="es-healthPreview__subline">${escapeHtml(providerLabel)}</span>
+              </div>
+              <span class="es-healthPreview__status">${escapeHtml(status)}</span>
+            </div>
+
+            <div class="es-healthPreview__hero">
+              <span class="es-healthPreview__label">${escapeHtml(theme.numberLabel)}</span>
+              <span class="es-healthPreview__number" data-es-provider-hin>${escapeHtml(hin)}</span>
+            </div>
+
+            <div class="es-healthPreview__meta">
+              <div class="es-healthPreview__metaBlock es-healthPreview__metaBlock--full">
+                <span class="es-healthPreview__value es-healthPreview__value--meta es-healthPreview__value--name" data-es-provider-holder>${escapeHtml(name)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        };
+
+        const update = () => {
+          const patient = state.answers.patient || {};
+          const mode = getMedicareMode(patient);
+          if (mode === MEDICARE_MODE_NONE) {
+            renderProviderCard(patient);
+            return;
+          }
+
+          renderMedicareCard(patient);
+        };
+
+        update();
+        return { wrap, update };
+      }
+
+      function ensurePatientStepStyles() {
+        if (document.getElementById("es-patient-layout-styles")) return;
+
+        const style = document.createElement("style");
+        style.id = "es-patient-layout-styles";
+        style.textContent = `
+        .es-stepCard--patient {
+          --es-theme-primary: var(--e-global-color-primary, #1976d2);
+          --es-theme-text: var(--e-global-color-text, #101828);
+          --es-theme-muted: #848a88;
+          --es-theme-border: var(--calendar-nav-bg);
+          --es-theme-surface: #fff;
+        }
+
+        .es-stepCard--patient .es-patientLayout {
+          display: grid;
+          gap: 16px;
+        }
+
+        .es-stepCard--patient .es-patientCard {
+          border: 1px solid var(--cal-border, rgba(31, 44, 59, 0.14));
+          border-radius: 12px;
+          padding: 14px;
+          background: var(--es-theme-surface);
+        }
+
+        .es-stepCard--patient .es-patientCardTitle {
+          margin: 0 0 12px;
+          font-size: 15px;
+          font-weight: 600;
+          letter-spacing: .01em;
+          color: var(--es-theme-text);
+        }
+
+        .es-stepCard--patient .es-patientFields {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+
+        .es-stepCard--patient .es-field {
+          position: relative;
+        }
+
+        .es-stepCard--patient .es-field .es-textInput {
+          width: 100%;
+          border: 1px solid var(--es-theme-border);
+          border-radius: 10px;
+          background: var(--es-theme-surface);
+          font-size: 14px;
+          line-height: 1.35;
+          padding: 20px 12px 8px;
+          transition: border-color .2s ease, box-shadow .2s ease;
+        }
+
+        .es-stepCard--patient .es-field .es-textInput:focus {
+          outline: none;
+          border-color: var(--es-theme-primary);
+          box-shadow: 0 0 0 3px rgba(25, 118, 210, .14);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--es-theme-primary) 18%, transparent);
+        }
+
+        /* DOB: editable DD/MM/YYYY field + native date picker on the calendar icon. */
+        .es-stepCard--patient .es-field--date_of_birth .es-dateDisplayInput {
+          padding-right: 48px;
+          text-align: left;
+          -webkit-text-fill-color: currentColor;
+          opacity: 1;
+        }
+
+        .es-stepCard--patient .es-field--date_of_birth .es-datePickerIcon {
+          position: absolute;
+          right: 15px;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 3;
+          pointer-events: none;
+          color: var(--es-theme-text-muted, #68727d);
+          font-size: 16px;
+          line-height: 1;
+        }
+
+        /*
+         * Keep a genuine input[type=date] over ONLY the calendar icon.
+         * The text field remains editable, while clicking/tapping the icon area
+         * opens the platform's native date picker on iOS, Android and desktop.
+         */
+        .es-stepCard--patient .es-field--date_of_birth .es-nativeDatePicker {
+          position: absolute;
+          top: 0;
+          right: 0;
+          width: 48px;
+          height: 100%;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          opacity: 0;
+          z-index: 4;
+          cursor: pointer;
+          appearance: auto;
+          -webkit-appearance: auto;
+        }
+
+        .es-stepCard--patient .es-field--date_of_birth .es-floatLabel {
+          z-index: 2;
+        }
+
+        .es-stepCard--patient .es-field--date_of_birth:focus-within .es-dateDisplayInput {
+          outline: none;
+          border-color: var(--es-theme-primary);
+          box-shadow: 0 0 0 3px rgba(25, 118, 210, .14);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--es-theme-primary) 18%, transparent);
+        }
+
+        .es-stepCard--patient .es-field--date_of_birth:focus-within .es-floatLabel {
+          top: 0;
+          transform: translateY(-50%);
+          color: var(--es-theme-primary);
+          font-size: 12px;
+          font-weight: 500;
+        }
+
+        .es-stepCard--patient .es-hinHelpLink {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 7px;
+          font-size: 12px;
+          line-height: 1.4;
+          color: var(--es-theme-primary);
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+
+        .es-stepCard--patient .es-hinHelpLink:hover,
+        .es-stepCard--patient .es-hinHelpLink:focus-visible {
+          color: var(--es-theme-primary-dark, var(--es-theme-primary));
+          text-decoration-thickness: 2px;
+        }
+
+        .es-stepCard--patient .es-field .es-floatLabel {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          padding: 0 4px;
+          background: var(--es-theme-surface);
+          color: var(--es-theme-muted);
+          font-size: 14px;
+          line-height: 1;
+          pointer-events: none;
+          transition: all .18s ease;
+        }
+
+        .es-stepCard--patient .es-field .es-textInput:focus + .es-floatLabel,
+        .es-stepCard--patient .es-field .es-textInput:not(:placeholder-shown) + .es-floatLabel,
+        .es-stepCard--patient .es-field .es-textInput:-webkit-autofill + .es-floatLabel {
+          top: 0;
+          transform: translateY(-50%);
+          color: var(--es-theme-primary);
+          font-size: 12px;
+          font-weight: 500;
+        }
+
+        .es-stepCard--patient .es-medicareHint {
+          margin-bottom: 12px;
+          display: flex;
+          justify-content: center;
+        }
+
+        .es-stepCard--patient .es-medicarePreview {
+          position: relative;
+          width: min(100%, 360px);
+          aspect-ratio: 85.6 / 53.98; /* CR80 ratio */
+          border-radius: 12px;
+          border: 1px solid color-mix(in srgb, #0d7c4f 22%, #93c789);
+          background: #93c789;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 8px 22px rgba(13, 124, 79, .16);
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          overflow: hidden;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__logoBox {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 76px;
+          aspect-ratio: 4 / 2;
+          border-radius: 7px;
+          background: #0d7c4f;
+          color: #f3d64a;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.05;
+          text-transform: lowercase;
+          display: grid;
+          place-items: center;
+          text-align: center;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__stack {
+          display: grid;
+          gap: 6px;
+          padding-top: 22px;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__field {
+          border: 1px solid rgba(211, 47, 47, .7);
+          border-radius: 9px;
+          background: rgba(255, 255, 255, .16);
+          padding: 3px 5px 2px;
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+        }
+
+        .es-stepCard--patient .es-medicarePreview__field--number {
+          padding-bottom: 6px;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__field--name {
+          margin-top: 0;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__field--dob {
+          margin-top: auto;
+          align-self: flex-end;
+          min-width: 42%;
+          max-width: 58%;
+          text-align: right;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__label {
+          display: block;
+          margin-bottom: 3px;
+          font-size: 10px;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+          color: #8a1f1f;
+          font-weight: 800;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__value {
+          color: #153824;
+          font-weight: 700;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__number {
+          font-variant-numeric: tabular-nums;
+          font-size: clamp(19px, 3.2vw, 27px);
+          line-height: 1.05;
+          letter-spacing: .06em;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__value--name {
+          display: flex;
+          align-items: baseline;
+          gap: 6px;
+          font-size: 13px;
+          line-height: 1.25;
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
+          margin-top: 1px;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__irn {
+          flex: 0 0 auto;
+          min-width: 1ch;
+          color: #8a1f1f;
+          font-weight: 800;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__cardholder {
+          flex: 1 1 auto;
+          min-width: 0;
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+
+        .es-stepCard--patient .es-medicarePreview__value--dob {
+          display: block;
+          font-size: 12px;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+
+        .es-stepCard--patient .es-field--select .es-selectLabel {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: .03em;
+          color: var(--es-theme-muted);
+        }
+
+        .es-stepCard--patient .es-field--select .es-selectInput {
+          width: 100%;
+          border: 1px solid var(--es-theme-border);
+          border-radius: 10px;
+          background-color: var(--es-theme-surface);
+          font-size: 14px;
+          line-height: 1.35;
+          padding: 14px 40px 14px 12px;
+          appearance: none;
+          -webkit-appearance: none;
+          background-image:
+            linear-gradient(45deg, transparent 50%, var(--es-theme-muted) 50%),
+            linear-gradient(135deg, var(--es-theme-muted) 50%, transparent 50%);
+          background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+          background-size: 6px 6px, 6px 6px;
+          background-repeat: no-repeat;
+          transition: border-color .2s ease, box-shadow .2s ease;
+        }
+
+        .es-stepCard--patient .es-field--select .es-selectInput:focus {
+          outline: none;
+          border-color: var(--es-theme-primary);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--es-theme-primary) 18%, transparent);
+        }
+
+        .es-stepCard--patient .es-medicareModeSwitchRow {
+          display: flex;
+          justify-content: flex-start;
+          margin: 0 0 12px;
+        }
+
+        .es-stepCard--patient .es-medicareSwitch {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          cursor: pointer;
+          user-select: none;
+          color: var(--es-theme-text);
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.2;
+        }
+
+        .es-stepCard--patient .es-medicareSwitch__input {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+          border: 0;
+        }
+
+        .es-stepCard--patient .es-medicareSwitch__track {
+          position: relative;
+          width: 46px;
+          height: 28px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--es-theme-muted) 20%, white 80%);
+          border: 1px solid color-mix(in srgb, var(--es-theme-muted) 28%, white 72%);
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, .08);
+          transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+          flex: 0 0 auto;
+        }
+
+        .es-stepCard--patient .es-medicareSwitch__thumb {
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #fff;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+          transition: transform .18s ease;
+        }
+
+        .es-stepCard--patient .es-medicareSwitch__input:checked + .es-medicareSwitch__track {
+          background: var(--es-theme-primary);
+          border-color: var(--es-theme-primary);
+        }
+
+        .es-stepCard--patient .es-medicareSwitch__input:checked + .es-medicareSwitch__track .es-medicareSwitch__thumb {
+          transform: translateX(18px);
+        }
+
+        .es-stepCard--patient .es-medicareSwitch__input:focus-visible + .es-medicareSwitch__track {
+          outline: 2px solid color-mix(in srgb, var(--es-theme-primary) 42%, white 58%);
+          outline-offset: 2px;
+        }
+
+        .es-stepCard--patient .es-medicareSwitch__text {
+          color: var(--es-theme-muted);
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: .02em;
+        }
+
+        .es-stepCard--patient .es-healthPreview {
+          position: relative;
+          width: min(100%, 360px);
+          aspect-ratio: 85.6 / 53.98;
+          border-radius: 14px;
+          border: 1px solid color-mix(in srgb, var(--es-card-accent) 34%, white 66%);
+          background:
+            radial-gradient(circle at 18% 16%, rgba(255, 255, 255, .28), transparent 34%),
+            radial-gradient(circle at 82% 18%, rgba(255, 255, 255, .16), transparent 28%),
+            linear-gradient(135deg, var(--es-card-bg-1), var(--es-card-bg-2) 54%, var(--es-card-bg-3));
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, .48),
+            0 14px 30px var(--es-card-glow);
+          padding: 14px;
+          overflow: hidden;
+          color: var(--es-card-ink);
+        }
+
+        .es-stepCard--patient .es-healthPreview__grain {
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(rgba(255, 255, 255, .14) 1px, transparent 1px);
+          background-size: 12px 12px;
+          opacity: .28;
+          pointer-events: none;
+          mix-blend-mode: soft-light;
+        }
+
+        .es-stepCard--patient .es-healthPreview__top,
+        .es-stepCard--patient .es-healthPreview__hero,
+        .es-stepCard--patient .es-healthPreview__meta {
+          position: relative;
+          z-index: 1;
+        }
+
+        .es-stepCard--patient .es-healthPreview__top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .es-stepCard--patient .es-healthPreview__brandWrap {
+          display: grid;
+          gap: 6px;
+          min-width: 0;
+        }
+
+        .es-stepCard--patient .es-healthPreview__brandPill {
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          max-width: 100%;
+          padding: .38em .72em;
+          border-radius: 999px;
+          background: var(--es-card-badge-bg);
+          color: var(--es-card-badge-text);
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: .05em;
+          text-transform: uppercase;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          box-shadow: 0 8px 18px rgba(0, 0, 0, .10);
+        }
+
+        .es-stepCard--patient .es-healthPreview__subline {
+          font-size: 12px;
+          line-height: 1.3;
+          font-weight: 700;
+          color: color-mix(in srgb, var(--es-card-ink) 82%, white 18%);
+          opacity: .92;
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+
+        .es-stepCard--patient .es-healthPreview__status {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          padding: .34em .7em;
+          background: rgba(255, 255, 255, .18);
+          color: var(--es-card-ink);
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: .04em;
+          text-transform: uppercase;
+          white-space: nowrap;
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+        }
+
+        .es-stepCard--patient .es-healthPreview__hero {
+          display: grid;
+          gap: 6px;
+          margin-top: 18px;
+        }
+
+        .es-stepCard--patient .es-healthPreview__label {
+          font-size: 10px;
+          font-weight: 800;
+          line-height: 1.1;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+          color: color-mix(in srgb, var(--es-card-muted) 70%, black 30%);
+        }
+
+        .es-stepCard--patient .es-healthPreview__number {
+          font-variant-numeric: tabular-nums;
+          font-size: clamp(19px, 3.6vw, 31px);
+          line-height: 1.05;
+          letter-spacing: .08em;
+          font-weight: 800;
+          color: var(--es-card-ink);
+          word-break: break-word;
+        }
+
+        .es-stepCard--patient .es-healthPreview__meta {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 12px;
+        }
+
+        .es-stepCard--patient .es-healthPreview__metaBlock {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          min-height: 56px;
+          padding: 12px;
+          border-radius: 12px;
+          background: var(--es-card-chip-bg);
+          border: 1px solid color-mix(in srgb, var(--es-card-accent) 28%, white 72%);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34);
+          min-width: 0;
+        }
+
+        .es-stepCard--patient .es-healthPreview__metaBlock--full {
+          grid-column: 1 / -1;
+          min-height: 0;
+          padding: 0;
+          background: transparent;
+          border: 0;
+          box-shadow: none;
+        }
+
+        .es-stepCard--patient .es-healthPreview__value {
+          display: block;
+          margin-top: 0;
+          font-size: 13px;
+          line-height: 1.3;
+          font-weight: 800;
+          color: var(--es-card-ink);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .es-stepCard--patient .es-healthPreview__value--meta {
+          font-size: 14px;
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+
+        .es-stepCard--patient .es-healthPreview__value--name {
+          white-space: normal;
+          overflow-wrap: anywhere;
+          font-size: 15px;
+          line-height: 1.2;
+        }
+
+        @media (min-width: 992px) {
+          .es-stepCard--patient .es-patientLayout {
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+          }
+
+          .es-stepCard--patient .es-patientCard--personal {
+            grid-column: span 7;
+          }
+
+          .es-stepCard--patient .es-patientCard--medicare {
+            grid-column: span 5;
+          }
+
+          .es-stepCard--patient .es-patientCard--address,
+          .es-stepCard--patient .es-patientCard--other {
+            grid-column: span 12;
+          }
+
+          .es-stepCard--patient .es-patientCard--personal .es-patientFields {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .es-stepCard--patient .es-patientCard--medicare .es-patientFields {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .es-stepCard--patient .es-patientCard--medicare .es-medicareFieldsSet--none {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .es-stepCard--patient .es-patientCard--address .es-patientFields {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .es-stepCard--patient .es-patientCard--other .es-patientFields {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .es-stepCard--patient .es-field--email {
+            grid-column: span 2;
+          }
+
+          .es-stepCard--patient .es-field--address_1 {
+            grid-column: span 3;
+          }
+
+
+          .es-stepCard--patient .es-field--country {
+            grid-column: span 3;
+          }
+        }
+      `;
+        document.head.appendChild(style);
+      }
+
+      function buildPatientField(key, patient, onPatientChange = null, fieldRefs = null) {
+        const field = document.createElement("div");
+        field.className = `es-field es-field--${key}`;
+
+        const inputId = `es-patient-${key}-${Math.random().toString(36).slice(2, 8)}`;
+
+        const label = document.createElement("label");
+        label.className = "es-floatLabel";
+        label.setAttribute("for", inputId);
+        label.textContent = prettifyPatientKey(key);
+
+        if (key === "date_of_birth") {
+          field.classList.add("es-field--nativeDate");
+
+          // Editable visible value: always DD/MM/YYYY on every browser.
+          const displayInput = document.createElement("input");
+          displayInput.id = inputId;
+          displayInput.type = "text";
+          displayInput.className = "es-textInput es-dateDisplayInput";
+          displayInput.placeholder = " ";
+          displayInput.dataset.patientKey = key;
+          displayInput.autocomplete = "bday";
+          displayInput.inputMode = "numeric";
+          displayInput.maxLength = 10;
+          displayInput.setAttribute("aria-label", "Date of birth, DD/MM/YYYY");
+
+          // Genuine native date input. It only covers the calendar-icon area,
+          // leaving the visible DD/MM/YYYY field completely editable.
+          const pickerInput = document.createElement("input");
+          pickerInput.type = "date";
+          pickerInput.className = "es-nativeDatePicker";
+          pickerInput.autocomplete = "bday";
+          pickerInput.setAttribute("aria-label", "Open date of birth calendar");
+
+          const pickerIcon = document.createElement("span");
+          pickerIcon.className = "es-datePickerIcon";
+          pickerIcon.setAttribute("aria-hidden", "true");
+          pickerIcon.innerHTML = '<i class="fa-solid fa-calendar-days"></i>';
+
+          const initialYmd = normalizeDateYmd(patient[key] || "");
+          pickerInput.value = initialYmd;
+          displayInput.value = initialYmd ? ymdToDisplayDob(initialYmd) : "";
+
+          if (REQUIRED_PATIENT_FIELDS.has(key)) {
+            displayInput.setAttribute("required", "required");
+            displayInput.setAttribute("aria-required", "true");
+          }
+
+          if (fieldRefs && typeof fieldRefs === "object") {
+            fieldRefs[key] = displayInput;
+          }
+
+          let lastSyncedYmd = initialYmd;
+
+          const publishDob = (ymd) => {
+            const normalized = normalizeDateYmd(ymd || "");
+
+            if (
+              normalized === lastSyncedYmd &&
+              String(state.answers.patient[key] || "") === normalized
+            ) {
+              return;
+            }
+
+            lastSyncedYmd = normalized;
+            state.answers.patient[key] = normalized;
+            syncPayloadExposure();
+            if (typeof onPatientChange === "function") onPatientChange();
+          };
+
+          const syncDobFromDisplay = ({ normalizeDisplay = false } = {}) => {
+            const masked = formatDobInput(displayInput.value);
+            if (displayInput.value !== masked) {
+              displayInput.value = masked;
+            }
+
+            const ymd = displayDobToYmd(masked);
+
+            // Keep the native picker synchronized whenever the typed date is valid.
+            // While the user is still typing (or the date is invalid), its value is blank.
+            if (pickerInput.value !== ymd) {
+              pickerInput.value = ymd;
+            }
+
+            if (normalizeDisplay && ymd) {
+              displayInput.value = ymdToDisplayDob(ymd);
+            }
+
+            publishDob(ymd);
+          };
+
+          const syncDobFromPicker = () => {
+            const ymd = normalizeDateYmd(pickerInput.value || "");
+            displayInput.value = ymd ? ymdToDisplayDob(ymd) : "";
+            publishDob(ymd);
+          };
+
+          displayInput.addEventListener("input", () => {
+            syncDobFromDisplay();
+          });
+
+          displayInput.addEventListener("blur", () => {
+            syncDobFromDisplay({ normalizeDisplay: true });
+          });
+
+          // On desktop Chromium/Edge, explicitly open the picker from the icon hit area.
+          // Safari/iOS still falls back to the native input[type=date] click behaviour.
+          pickerInput.addEventListener("pointerdown", () => {
+            if (typeof pickerInput.showPicker === "function") {
+              try {
+                pickerInput.showPicker();
+              } catch (_) {
+                // Ignore and let the browser's native click behaviour handle it.
+              }
+            }
+          });
+
+          pickerInput.addEventListener("input", syncDobFromPicker);
+          pickerInput.addEventListener("change", syncDobFromPicker);
+
+          field.appendChild(displayInput);
+          field.appendChild(label);
+          field.appendChild(pickerIcon);
+          field.appendChild(pickerInput);
+          return field;
+        }
+
+        const input = document.createElement("input");
+        input.id = inputId;
+        input.type = inputTypeForPatientKey(key);
+        input.className = "es-textInput";
+        input.placeholder = " ";
+        input.dataset.patientKey = key;
+
+        if (key === "date_of_birth") {
+          input.autocomplete = "bday";
+          input.inputMode = "numeric";
+          input.maxLength = 10;
+          input.placeholder = "DD/MM/YYYY";
+          input.setAttribute("aria-label", "Date of birth, DD/MM/YYYY");
+        } else if (
+          key === "phone" ||
+          key === "medicare" ||
+          key === "medicare_reference_number" ||
+          key === "health_identifier_number" ||
+          isPostcodeKey(key)
+        ) {
+          input.inputMode = "numeric";
+        }
+
+        if (key === "health_identifier_number") {
+          input.maxLength = 16;
+          input.pattern = "\\d{16}";
+        }
+
+        if (REQUIRED_PATIENT_FIELDS.has(key)) {
+          input.setAttribute("required", "required");
+        }
+
+        if (fieldRefs && typeof fieldRefs === "object") {
+          fieldRefs[key] = input;
+        }
+
+        input.value = applyMaskByKey(key, patient[key] || "");
+
+        input.addEventListener("input", () => {
+          if (key === "date_of_birth") {
+            const masked = formatDobInput(input.value);
+            if (input.value !== masked) input.value = masked;
+
+            // Keep the payload in YYYY-MM-DD while the field shows DD/MM/YYYY.
+            state.answers.patient[key] = displayDobToYmd(masked);
+            syncPayloadExposure();
+            if (typeof onPatientChange === "function") onPatientChange();
+            return;
+          }
+
+          const raw = toRawByKey(key, input.value);
+          const masked = applyMaskByKey(key, raw);
+          if (input.value !== masked) input.value = masked;
+
+          state.answers.patient[key] = raw;
+          syncPayloadExposure();
+          if (typeof onPatientChange === "function") onPatientChange();
+        });
+
+        input.addEventListener("blur", () => {
+          if (key === "date_of_birth") {
+            const ymd = displayDobToYmd(input.value);
+
+            if (ymd) {
+              input.value = ymdToDisplayDob(ymd);
+            } else {
+              input.value = formatDobInput(input.value);
+            }
+
+            state.answers.patient[key] = ymd;
+            syncPayloadExposure();
+            if (typeof onPatientChange === "function") onPatientChange();
+            return;
+          }
+
+          const raw = toRawByKey(key, input.value);
+          const masked = applyMaskByKey(key, raw);
+          input.value = masked;
+
+          state.answers.patient[key] = raw;
+          syncPayloadExposure();
+          if (typeof onPatientChange === "function") onPatientChange();
+        });
+
+        field.appendChild(input);
+        field.appendChild(label);
+
+        if (key === "health_identifier_number") {
+          const helpLink = document.createElement("a");
+          helpLink.className = "es-hinHelpLink";
+          helpLink.href = "https://www.easyscripts.com.au/info/how-to-get-health-identifier-number";
+          helpLink.target = "_blank";
+          helpLink.rel = "noopener noreferrer";
+          helpLink.textContent = "How to Get Your Individual Healthcare Identifier (IHI)";
+          helpLink.setAttribute(
+            "aria-label",
+            "How to Get Your Individual Healthcare Identifier (IHI) — opens in a new tab"
+          );
+          field.appendChild(helpLink);
+        }
+
+        return field;
+      }
+
+      function buildSelectField(key, patient, onPatientChange = null, fieldRefs = null, opts = {}) {
+        const field = document.createElement("div");
+        field.className = `es-field es-field--${key} es-field--select`;
+
+        const inputId = `es-patient-${key}-${Math.random().toString(36).slice(2, 8)}`;
+        const label = document.createElement("label");
+        label.className = "es-selectLabel";
+        label.setAttribute("for", inputId);
+        label.textContent = String(opts.label || prettifyPatientKey(key));
+
+        const select = document.createElement("select");
+        select.id = inputId;
+        select.className = "es-textInput es-selectInput";
+        select.dataset.patientKey = key;
+
+        const currentValue = String(patient[key] || "").trim();
+        const options = Array.isArray(opts.options) ? opts.options : [];
+        const hasCurrentValue = options.some((option) => String(option?.value ?? option?.label ?? "").trim() === currentValue);
+
+        if (!opts.hidePlaceholder) {
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = String(opts.placeholder || `Select ${String(opts.label || prettifyPatientKey(key)).toLowerCase()}`);
+          placeholder.disabled = !!opts.required;
+          placeholder.selected = !currentValue;
+          select.appendChild(placeholder);
+        }
+
+        options.forEach((option) => {
+          const opt = document.createElement("option");
+          opt.value = String(option?.value ?? option?.label ?? "").trim();
+          opt.textContent = String(option?.label ?? option?.value ?? "").trim();
+          if (opt.value === currentValue) {
+            opt.selected = true;
+          }
+          select.appendChild(opt);
+        });
+
+        if (currentValue && !hasCurrentValue) {
+          const fallback = document.createElement("option");
+          fallback.value = currentValue;
+          fallback.textContent = currentValue;
+          fallback.selected = true;
+          select.appendChild(fallback);
+        }
+
+        if (opts.required) {
+          select.setAttribute("required", "required");
+        }
+
+        if (fieldRefs && typeof fieldRefs === "object") {
+          fieldRefs[key] = select;
+        }
+
+        select.value = currentValue;
+
+        const syncValue = () => {
+          state.answers.patient[key] = String(select.value || "").trim();
+          syncPayloadExposure();
+          if (typeof onPatientChange === "function") onPatientChange();
+        };
+
+        select.addEventListener("change", syncValue);
+        select.addEventListener("input", syncValue);
+
+        field.appendChild(label);
+        field.appendChild(select);
+        return field;
+      }
+
+      function renderPatientStep() {
+        ensurePatientStepStyles();
+
+        const card = document.createElement("div");
+        card.className = "es-stepCard es-stepCard--patient";
+
+        const body = document.createElement("div");
+        body.className = "es-stepBody";
+
+        const layout = document.createElement("div");
+        layout.className = "es-patientLayout";
+
+        const patient = state.answers.patient || {};
+        const hidden = new Set(["appointment_start", "practitioner_id", "appointment_date", "address_2"]);
+
+        const groups = [
+          {
+            key: "personal",
+            title: "Personal Details",
+            className: "es-patientCard--personal",
+            fields: ["first_name", "last_name", "phone", "date_of_birth", "email"],
+          },
+          {
+            key: "medicare",
+            title: "Medicare",
+            className: "es-patientCard--medicare",
+            fields: [
+              "medicare_mode",
+              "medicare",
+              "medicare_reference_number",
+              "medicare_provider",
+              "health_identifier_number",
+            ],
+          },
+          {
+            key: "address",
+            title: "Address",
+            className: "es-patientCard--address",
+            fields: [
+              "address_1",
+              "city",
+              "state",
+              "post_code",
+              "postcode",
+              "postal_code",
+              "country",
+            ],
+          },
+        ];
+
+        const configured = new Set();
+        groups.forEach((g) => g.fields.forEach((f) => configured.add(f)));
+
+        const extras = Object.keys(patient).filter((k) => {
+          if (hidden.has(k) || configured.has(k)) return false;
+          if (k === "custom_fields") return false;
+
+          const value = patient[k];
+          if (value && typeof value === "object") {
+            return false;
+          }
+
+          return true;
+        });
+
+        const finalGroups = groups
+          .map((g) => ({
+            ...g,
+            fields: g.fields.filter((f) => Object.prototype.hasOwnProperty.call(patient, f)),
+          }))
+          .filter((g) => g.fields.length > 0);
+
+        if (extras.length > 0) {
+          finalGroups.push({
+            key: "other",
+            title: "Additional Details",
+            className: "es-patientCard--other",
+            fields: extras,
+          });
+        }
+
+        if (!finalGroups.length) {
+          const empty = document.createElement("div");
+          empty.className = "es-error";
+          empty.textContent = "No patient fields available in submission template.";
+          body.appendChild(empty);
+          card.appendChild(body);
+          return card;
+        }
+
+        let updateMedicarePreview = null;
+        const patientFieldRefs = {};
+        let medicareModeSwitchInput = null;
+        let medicareHaveFieldsWrap = null;
+        let medicareAlternativeFieldsWrap = null;
+
+        const handlePatientFieldChange = () => {
+          if (typeof updateMedicarePreview === "function") {
+            updateMedicarePreview();
+          }
+        };
+
+        const syncMedicareModeUI = () => {
+          const current = state.answers.patient || {};
+          const mode = getMedicareMode(current);
+
+          if (medicareModeSwitchInput) {
+            medicareModeSwitchInput.checked = mode === MEDICARE_MODE_NONE;
+            medicareModeSwitchInput.setAttribute("aria-checked", String(mode === MEDICARE_MODE_NONE));
+          }
+
+          if (medicareHaveFieldsWrap) {
+            medicareHaveFieldsWrap.style.display =
+              mode === MEDICARE_MODE_NONE ? "none" : "grid";
+          }
+
+          if (medicareAlternativeFieldsWrap) {
+            medicareAlternativeFieldsWrap.style.display =
+              mode === MEDICARE_MODE_NONE ? "grid" : "none";
+          }
+
+          if (typeof updateMedicarePreview === "function") {
+            updateMedicarePreview();
+          }
+        };
+
+        const setMedicareMode = (nextMode, opts = {}) => {
+          const normalized = normalizeMedicareMode(nextMode, state.answers.patient || {});
+          if (!state.answers.patient || typeof state.answers.patient !== "object") {
+            state.answers.patient = {};
+          }
+
+          state.answers.patient.medicare_mode = normalized;
+
+          if (normalized === MEDICARE_MODE_NONE) {
+            state.answers.patient.medicare = "";
+            state.answers.patient.medicare_reference_number = "";
+          } else {
+            state.answers.patient.medicare_provider = "";
+            state.answers.patient.health_identifier_number = "";
+          }
+
+          syncPayloadExposure();
+          syncMedicareModeUI();
+          if (typeof handlePatientFieldChange === "function") {
+            handlePatientFieldChange();
+          }
+
+          if (opts.focus !== false) {
+            requestAnimationFrame(() => {
+              const target =
+                normalized === MEDICARE_MODE_NONE
+                  ? patientFieldRefs.medicare_provider
+                  : patientFieldRefs.medicare;
+              if (target && typeof target.focus === "function") {
+                target.focus();
+              }
+            });
+          }
+        };
+
+        finalGroups.forEach((group) => {
+          const groupCard = document.createElement("section");
+          groupCard.className = `es-patientCard ${group.className}`;
+
+          const title = document.createElement("h4");
+          title.className = "es-patientCardTitle";
+          title.textContent = group.title;
+
+          const fieldsWrap = document.createElement("div");
+          fieldsWrap.className = "es-patientFields";
+
+          if (group.key !== "medicare") {
+            group.fields.forEach((key) => {
+              if (hidden.has(key)) return;
+              fieldsWrap.appendChild(
+                buildPatientField(key, patient, handlePatientFieldChange, patientFieldRefs)
+              );
+            });
+          }
+
+          groupCard.appendChild(title);
+          if (group.key === "medicare") {
+            const switchRow = document.createElement("div");
+            switchRow.className = "es-medicareModeSwitchRow";
+
+            const switchLabel = document.createElement("label");
+            switchLabel.className = "es-medicareSwitch";
+            switchLabel.setAttribute("for", "es-medicareModeSwitch");
+            switchLabel.innerHTML = `
+              <input
+                id="es-medicareModeSwitch"
+                type="checkbox"
+                class="es-medicareSwitch__input"
+                role="switch"
+                aria-label="I don't have a medicare"
+              />
+              <span class="es-medicareSwitch__track" aria-hidden="true">
+                <span class="es-medicareSwitch__thumb"></span>
+              </span>
+              <span class="es-medicareSwitch__text">I don't have a medicare card</span>
+            `;
+
+            medicareModeSwitchInput = switchLabel.querySelector(".es-medicareSwitch__input");
+            if (medicareModeSwitchInput) {
+              medicareModeSwitchInput.checked = getMedicareMode(patient) === MEDICARE_MODE_NONE;
+              medicareModeSwitchInput.addEventListener("change", () => {
+                setMedicareMode(
+                  medicareModeSwitchInput.checked ? MEDICARE_MODE_NONE : MEDICARE_MODE_HAVE
+                );
+              });
+            }
+
+            switchRow.appendChild(switchLabel);
+            groupCard.appendChild(switchRow);
+
+            const preview = createMedicarePreview();
+            updateMedicarePreview = preview.update;
+            groupCard.appendChild(preview.wrap);
+
+            medicareHaveFieldsWrap = document.createElement("div");
+            medicareHaveFieldsWrap.className = "es-patientFields es-medicareFieldsSet es-medicareFieldsSet--have";
+            medicareHaveFieldsWrap.appendChild(
+              buildPatientField("medicare", patient, handlePatientFieldChange, patientFieldRefs)
+            );
+            medicareHaveFieldsWrap.appendChild(
+              buildPatientField(
+                "medicare_reference_number",
+                patient,
+                handlePatientFieldChange,
+                patientFieldRefs
+              )
+            );
+            groupCard.appendChild(medicareHaveFieldsWrap);
+
+            medicareAlternativeFieldsWrap = document.createElement("div");
+            medicareAlternativeFieldsWrap.className =
+              "es-patientFields es-medicareFieldsSet es-medicareFieldsSet--none";
+            medicareAlternativeFieldsWrap.appendChild(
+              buildSelectField(
+                "medicare_provider",
+                patient,
+                handlePatientFieldChange,
+                patientFieldRefs,
+                {
+                  label: "Provider",
+                  placeholder: "Select a provider",
+                  options: MEDICARE_PROVIDER_OPTIONS,
+                }
+              )
+            );
+            medicareAlternativeFieldsWrap.appendChild(
+              buildPatientField(
+                "health_identifier_number",
+                patient,
+                handlePatientFieldChange,
+                patientFieldRefs
+              )
+            );
+            groupCard.appendChild(medicareAlternativeFieldsWrap);
+          }
+          if (group.key !== "medicare") {
+            groupCard.appendChild(fieldsWrap);
+          }
+          layout.appendChild(groupCard);
+        });
+
+        body.appendChild(layout);
+        card.appendChild(body);
+        syncMedicareModeUI();
+        return card;
+      }
+
+      function renderStep(step) {
+        if (step.type === "section") return renderSectionStep(step);
+        if (step.type === "appointmentSelection") return renderAppointmentSelectionStep();
+        if (step.type === "patientDetails") return renderPatientStep();
+
+        const card = document.createElement("div");
+        card.className = "es-stepCard";
+        card.innerHTML = `<div class="es-stepBody"><div class="es-error">Unknown step.</div></div>`;
+        return card;
+      }
+
+      function hasSelectedOption(q) {
+        const selectedAnswers = (q.answers || []).filter((a) => !!a.selected).length;
+        const otherSelected = q?.other?.enabled && q?.other?.selected ? 1 : 0;
+        return selectedAnswers + otherSelected;
+      }
+
+      function validateCurrentStep() {
+        const step = state.steps[state.index];
+        if (!step) return true;
+
+        if (step.type === "appointmentSelection") {
+          const p = state.answers.patient || {};
+          if (!String(p.practitioner_id || "").trim()) {
+            alert("Please select a practitioner.");
+            return false;
+          }
+          if (!String(p.appointment_start || "").trim()) {
+            alert("Please select an appointment time.");
+            return false;
+          }
+          if (p.appointment_date && !isValidDateYmd(String(p.appointment_date))) {
+            alert("Appointment date must be YYYY-MM-DD.");
+            return false;
+          }
+          return true;
+        }
+
+        if (step.type === "section") {
+          const sec = state.answers.content.sections[step.sectionIndex];
+          for (const q of sec.questions || []) {
+            if (!q.required) continue;
+
+            if (q.type === "checkboxes" || q.type === "radiobuttons") {
+              const total = hasSelectedOption(q);
+              if (total === 0) {
+                alert(`Please select at least one option for: ${q.name}`);
+                return false;
+              }
+              if (q.type === "radiobuttons" && total > 1) {
+                alert(`Please select only one option for: ${q.name}`);
+                return false;
+              }
+              if (q?.other?.enabled && q.other.selected && !String(q.other.value || "").trim()) {
+                alert(`Please provide "Other" value for: ${q.name}`);
+                return false;
+              }
+            } else {
+              if (!String(q.answer || "").trim()) {
+                alert(`Please answer: ${q.name}`);
+                return false;
+              }
+            }
+          }
+          return true;
+        }
+
+        if (step.type === "patientDetails") {
+          const p = normalizePatientForBackend(state.answers.patient || {});
+
+          for (const field of REQUIRED_PATIENT_FIELDS) {
+            if (!String(p[field] || "").trim()) {
+              alert(`${prettifyPatientKey(field)} is required.`);
+              return false;
+            }
+          }
+
+          if (!EMAIL_RE.test(String(p.email || ""))) {
+            alert("Please enter a valid email.");
+            return false;
+          }
+
+          const medicareMode = getMedicareMode(p);
+          if (medicareMode === MEDICARE_MODE_NONE) {
+            if (!String(p.medicare_provider || "").trim()) {
+              alert("Please select a provider.");
+              return false;
+            }
+
+            if (!/^\d{16}$/.test(String(p.health_identifier_number || ""))) {
+              alert("HIN must contain exactly 16 numbers.");
+              return false;
+            }
+          } else {
+            if (!/^\d{10}$/.test(String(p.medicare || ""))) {
+              alert("Medicare must contain exactly 10 digits (e.g. 1234 56789 0).");
+              return false;
+            }
+
+            if (!/^\d$/.test(String(p.medicare_reference_number || ""))) {
+              alert("IRN must be one digit from 0 to 9.");
+              return false;
+            }
+          }
+
+          if (p.date_of_birth && !isValidDateYmd(String(p.date_of_birth))) {
+            alert("Date of birth must be a valid date.");
+            return false;
+          }
+
+          if (isNextAvailableMode()) {
+            // In next_available mode, appointment fields are resolved asynchronously.
+            const hasPractitioner = !!String(p.practitioner_id || "").trim();
+            const hasAppointmentStart = !!String(p.appointment_start || "").trim();
+            if ((!hasPractitioner || !hasAppointmentStart) && state._nextAvailableAuto?.status === "error") {
+              const detail =
+                state._nextAvailableAuto?.error?.message ||
+                "Unable to auto-select next available time.";
+              alert(detail);
+              return false;
+            }
+          }
+
+          if (!getCurrentModuleId()) {
+            alert("Module ID is missing.");
+            return false;
+          }
+
+          if (!getCurrentPatientFormTemplateId()) {
+            alert("Patient form template ID is missing.");
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      function isPatientDetailsStep(step) {
+        return step?.type === "patientDetails";
+      }
+
+      function isPaymentSubmissionStep(step) {
+        if (isNextAvailableMode()) {
+          return isPatientDetailsStep(step);
+        }
+
+        return step?.type === "appointmentSelection";
+      }
+
+      async function renderWithTransition(opts) {
+        const animate = !!opts?.animate;
+
+        if (state.isRendering) return;
+        state.isRendering = true;
+
+        if (state.paymentActive) {
+          syncShellVisibility();
+          state.isRendering = false;
+          return;
+        }
+
+        if (!state.steps.length) {
+          ui.root.innerHTML = `<div class="es-stepCard"><div class="es-error">No steps found.</div></div>`;
+          state.isRendering = false;
+          return;
+        }
+
+        state.index = Math.max(0, Math.min(state.index, state.steps.length - 1));
+        const step = state.steps[state.index];
+        applyCurrentStepData(step);
+
+        setShellHeaderTitle(step?.title || "");
+
+        const existing = ui.root.querySelector(".es-stepCard");
+        const doAnim = animate && !prefersReducedMotion;
+
+        if (doAnim && existing) {
+          existing.classList.add("es-step-exit");
+          await sleep(160);
+        }
+
+        ui.root.innerHTML = "";
+        const card = renderStep(step);
+        if (card?.dataset) {
+          card.dataset.esStep = String(step?.key || step?.type || "");
+          card.dataset.esStepKey = String(step?.key || "");
+          card.dataset.esStepType = String(step?.type || "");
+          card.dataset.esStepIndex = String(state.index);
+        }
+
+        if (doAnim) card.classList.add("es-step-enter");
+        ui.root.appendChild(card);
+
+        if (doAnim) {
+          requestAnimationFrame(() => card.classList.add("es-step-enter-active"));
+          setTimeout(() => {
+            card.classList.remove("es-step-enter");
+            card.classList.remove("es-step-enter-active");
+          }, 240);
+        }
+
+        setProgress(state.index, state.steps.length);
+
+        ui.back.disabled = state.index === 0;
+
+        const isLast = state.index === state.steps.length - 1;
+        ui.next.classList.toggle("es-hidden", isLast);
+        ui.submit.classList.toggle("es-hidden", !isLast);
+        ui.submit.textContent = isLast && isPaymentSubmissionStep(step) ? "Continue to payment" : "Submit";
+
+        syncShellVisibility();
+        state.isRendering = false;
+        requestAnimationFrame(triggerConditionals);
+      }
+
+      function render(animate) {
+        return renderWithTransition({ animate: !!animate });
+      }
+
+      function clampStepIndex(index) {
+        const maxIndex = Math.max(0, state.steps.length - 1);
+        const numeric = Number(index);
+        if (!Number.isFinite(numeric)) return state.index;
+        return Math.max(0, Math.min(Math.round(numeric), maxIndex));
+      }
+
+      function getFirstSectionStepIndex() {
+        const index = state.steps.findIndex((step) => step?.type === "section");
+        return index >= 0 ? index : 0;
+      }
+
+      function getAppointmentSelectionStepIndex() {
+        return state.steps.findIndex((step) => step?.type === "appointmentSelection");
+      }
+
+      function getPatientDetailsStepIndex() {
+        return state.steps.findIndex((step) => step?.type === "patientDetails");
+      }
+
+      function getPreferredRetrievedDataStepIndex() {
+        const appointmentIndex = getAppointmentSelectionStepIndex();
+        if (appointmentIndex >= 0) return appointmentIndex;
+
+        const patientIndex = getPatientDetailsStepIndex();
+        if (patientIndex >= 0) return patientIndex;
+
+        return getFirstSectionStepIndex();
+      }
+
+      function rebuildShellSteps() {
+        state.steps = buildStepsFromTemplate(state.answers, {
+          appointmentMode: state.appointmentMode,
+        });
+      }
+
+      function getBridgeState() {
+        return {
+          index: state.index,
+          paymentActive: !!state.paymentActive,
+          step: deepClone(state.steps[state.index] || null),
+          steps: deepClone(state.steps || []),
+          answers: deepClone(state.answers || {}),
+          payload: buildPayload(state),
+        };
+      }
+
+      async function goToStepIndex(targetIndex, opts = {}) {
+        const animate = opts?.animate !== false;
+        const shouldScroll = opts?.scroll !== false;
+
+        if (state.paymentActive) {
+          hidePayment();
+        }
+
+        if (shouldScroll) scrollStepRootToTop();
+        state.index = clampStepIndex(targetIndex);
+        await render(animate);
+        if (shouldScroll) {
+          scrollStepRootToTop();
+          setTimeout(() => scrollStepRootToTop(), 120);
+        }
+
+        return state.index;
+      }
+
+      function setPatientAnswers(patientPatch = {}, opts = {}) {
+        if (!state.answers.patient || typeof state.answers.patient !== "object") {
+          state.answers.patient = {};
+        }
+
+        state.answers.patient = {
+          ...state.answers.patient,
+          ...deepClone(patientPatch || {}),
+        };
+
+        if (opts?.sync !== false) {
+          syncPayloadExposure();
+        }
+
+        return deepClone(state.answers.patient);
+      }
+
+      function setFormSections(sections = [], opts = {}) {
+        if (!state.answers.content || typeof state.answers.content !== "object") {
+          state.answers.content = { sections: [] };
+        }
+
+        state.answers.content.sections = Array.isArray(sections)
+          ? deepClone(sections)
+          : [];
+
+        rebuildShellSteps();
+
+        if (opts?.sync !== false) {
+          syncPayloadExposure();
+        }
+
+        return deepClone(state.answers.content.sections);
+      }
+
+      async function setFormTemplate(templateId, opts = {}) {
+        const normalized = String(templateId || "").trim();
+        if (!normalized) return false;
+
+        state.answers.patient_form_template_id = normalized;
+        if (window.formHandlerData && typeof window.formHandlerData === "object") {
+          window.formHandlerData.patient_form_template_id = normalized;
+        }
+
+        if (
+          window.ClinikoHeadlessCalendar &&
+          typeof window.ClinikoHeadlessCalendar.updateFormtemplate === "function"
+        ) {
+          try {
+            await window.ClinikoHeadlessCalendar.updateFormtemplate(normalized);
+          } catch (err) {
+            console.error("[ES Headless] Failed to update form template.", err);
+            return false;
+          }
+        }
+
+        if (opts?.sync !== false) {
+          syncPayloadExposure();
+        }
+
+        return true;
+      }
+
+      async function applyRetrievedData(data, opts = {}) {
+        const payload = data?.prefill || null;
+        if (!payload || typeof payload !== "object") {
+          return { ok: false, message: "Invalid retrieved data." };
+        }
+
+        const mode = String(opts?.mode || "use").trim().toLowerCase() === "update"
+          ? "update"
+          : "use";
+        const shouldNavigate = opts?.navigate !== false;
+        const animate = opts?.animate !== false;
+
+        const currentModuleId = String(window.formHandlerData?.module_id || "").trim();
+        const historyModuleId = String(payload?.history?.appointment_type_id || "").trim();
+        const latestFormTemplateId = String(data?.latest_form?.patient_form_template_id || "").trim();
+
+        const patientPatch =
+          payload?.patient && typeof payload.patient === "object"
+            ? deepClone(payload.patient)
+            : {};
+
+        if (historyModuleId && currentModuleId && historyModuleId !== currentModuleId) {
+          patientPatch.practitioner_id = "";
+        }
+
+        patientPatch.appointment_start = "";
+        patientPatch.appointment_date = "";
+
+        if (latestFormTemplateId) {
+          const changed = await setFormTemplate(latestFormTemplateId, { sync: false });
+          if (!changed) {
+            return { ok: false, message: "Unable to update form template." };
+          }
+        }
+
+        setPatientAnswers(patientPatch, { sync: false });
+        setFormSections(payload?.content?.sections || [], { sync: false });
+        syncPayloadExposure();
+
+        let targetStepIndex = state.index;
+        if (shouldNavigate) {
+          targetStepIndex =
+            mode === "update"
+              ? getFirstSectionStepIndex()
+              : getPreferredRetrievedDataStepIndex();
+          await goToStepIndex(targetStepIndex, { animate, scroll: true });
+        }
+
+        return {
+          ok: true,
+          mode,
+          targetStepIndex,
+          payload: buildPayload(state),
+        };
+      }
+
+      async function enterPaymentStep(opts = {}) {
+        if (opts?.validate !== false && !validateCurrentStep()) {
+          return { ok: false, reason: "validation_failed" };
+        }
+
+        if (opts?.sync !== false) {
+          syncPayloadExposure();
+        }
+
+        if (opts?.scroll !== false) {
+          scrollStepRootToTop(true);
+        }
+
+        showPayment();
+
+        if (opts?.scroll !== false) {
+          setTimeout(() => scrollStepRootToTop(true), 120);
+        }
+
+        return { ok: true };
+      }
+
+      function installHeadlessBridge() {
+        window.ClinikoHeadlessBridge = {
+          getState: () => getBridgeState(),
+          syncPayload: () => {
+            syncPayloadExposure();
+            return buildPayload(state);
+          },
+          render: (animate = false) => render(!!animate),
+          goToStep: (index, opts = {}) => goToStepIndex(index, opts),
+          goToFirstStep: (opts = {}) => goToStepIndex(getFirstSectionStepIndex(), opts),
+          goToAppointmentStep: (opts = {}) => goToStepIndex(getPreferredRetrievedDataStepIndex(), opts),
+          showShell: () => {
+            state.shellSuppressed = false;
+            syncShellVisibility();
+            return true;
+          },
+          hideShell: () => {
+            state.shellSuppressed = true;
+            syncShellVisibility();
+            return true;
+          },
+          showPayment: () => {
+            showPayment();
+            return true;
+          },
+          hidePayment: () => {
+            hidePayment();
+            return true;
+          },
+          enterPaymentStep: (opts = {}) => enterPaymentStep(opts),
+          setFormTemplate: (templateId, opts = {}) => setFormTemplate(templateId, opts),
+          setPatientAnswers: (patientPatch, opts = {}) => setPatientAnswers(patientPatch, opts),
+          setFormSections: (sections, opts = {}) => setFormSections(sections, opts),
+          applyRetrievedData: (data, opts = {}) => applyRetrievedData(data, opts),
+        };
+
+        document.dispatchEvent(
+          new CustomEvent("es:headless:bridge-ready", {
+            detail: { bridge: window.ClinikoHeadlessBridge },
+          })
+        );
+      }
+
+      async function goNext() {
+        if (!validateCurrentStep()) return;
+
+        const nextIndex = Math.min(state.index + 1, state.steps.length - 1);
+        const nextStep = state.steps[nextIndex];
+        if (nextStep?.type === "patientDetails" && isNextAvailableMode()) {
+          // Start fetching in background to avoid blocking Next navigation.
+          void ensureAutoNextAvailableSelection({ forceRefresh: true, silent: true });
+        }
+
+        scrollStepRootToTop();
+        state.index = nextIndex;
+        await render(true);
+        scrollStepRootToTop();
+        setTimeout(() => scrollStepRootToTop(), 120);
+      }
+
+      async function goBack() {
+        scrollStepRootToTop();
+        state.index = Math.max(state.index - 1, 0);
+        await render(true);
+        scrollStepRootToTop();
+        setTimeout(() => scrollStepRootToTop(), 120);
+      }
+
+      function onSubmitClick() {
+        const step = state.steps[state.index];
+
+        (async () => {
+          if (state.index === state.steps.length - 1 && isPaymentSubmissionStep(step)) {
+            if (isNextAvailableMode()) {
+              // Refresh in background; submitBookingForm wrapper enforces readiness before booking.
+              void ensureAutoNextAvailableSelection({ forceRefresh: true, silent: true });
+            }
+
+            if (!validateCurrentStep()) return;
+            syncPayloadExposure();
+            // Always use window top scroll before entering payment (desktop and mobile).
+            scrollStepRootToTop(true);
+            showPayment();
+            setTimeout(() => scrollStepRootToTop(true), 120);
+            return;
+          }
+
+          console.log("Headless payload:", window.clinikoGetHeadlessPayload());
+        })();
+      }
+
+      ui.back.addEventListener("click", goBack);
+      ui.next.addEventListener("click", goNext);
+      ui.submit.addEventListener("click", onSubmitClick);
+
+      installHeadlessBridge();
+      syncShellVisibility();
+      render(false);
+    }
+  })();
+</script>
+
+<style>
+/*IOS INPUT PATCH*/
+@media (max-width: 768px) {
+    .es-shellWrap input:not([type]),
+    .es-shellWrap input[type="text"],
+    .es-shellWrap input[type="email"],
+    .es-shellWrap input[type="tel"],
+    .es-shellWrap input[type="number"],
+    .es-shellWrap input[type="search"],
+    .es-shellWrap input[type="url"],
+    .es-shellWrap input[type="password"],
+    .es-shellWrap input[type="date"],
+    .es-shellWrap textarea,
+    .es-shellWrap select {
+        font-size: 16px !important;
+    }
+}
+</style>
