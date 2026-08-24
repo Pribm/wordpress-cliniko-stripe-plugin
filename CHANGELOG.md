@@ -1,3 +1,10 @@
+## [1.6.16] - 2026-08-24
+### Changed
+- Headless calendar and available-time requests now bypass browser and frontend response caches, and their REST endpoints explicitly return no-store headers.
+
+### Fixed
+- Booking preflight now validates Cliniko appointment timestamps using the clinic timezone and compares equivalent appointment instants, preventing valid morning slots from being checked against the previous UTC date.
+
 ## [1.6.15] - 2026-06-30
 ### Added
 - Added per-widget custom-form webhooks for `booking.preflighted`, `payment.verified`, `booking.completed`, and `booking.failed` events.

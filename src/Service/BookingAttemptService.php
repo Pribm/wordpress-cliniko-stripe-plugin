@@ -724,8 +724,13 @@ class BookingAttemptService
      */
     private function validateSelectedAppointmentTime(string $practitionerId, string $appointmentStart, string $moduleId, $client): ?array
     {
-        $dateKey = substr($appointmentStart, 0, 10);
-        if ($dateKey === '') {
+        try {
+            $selectedAppointment = new DateTimeImmutable($appointmentStart);
+            $clinicTimezone = function_exists('wp_timezone')
+                ? wp_timezone()
+                : new DateTimeZone('UTC');
+            $dateKey = $selectedAppointment->setTimezone($clinicTimezone)->format('Y-m-d');
+        } catch (\Throwable $exception) {
             return $this->errorResponse(
                 422,
                 'Appointment date is invalid.',
@@ -784,9 +789,18 @@ class BookingAttemptService
             );
         }
 
+        $selectedTimestamp = $selectedAppointment->getTimestamp();
         do {
-            if (in_array($appointmentStart, $page->getAppointmentStartStrings(), true)) {
-                return null;
+            foreach ($page->getAppointmentStartStrings() as $availableStart) {
+                try {
+                    $availableTimestamp = (new DateTimeImmutable($availableStart))->getTimestamp();
+                } catch (\Throwable $exception) {
+                    continue;
+                }
+
+                if ($availableTimestamp === $selectedTimestamp) {
+                    return null;
+                }
             }
             $page = $page->getNextPage();
         } while ($page);
