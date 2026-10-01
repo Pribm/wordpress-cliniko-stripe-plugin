@@ -1,7 +1,7 @@
 <?php
 namespace App\Widgets\ClinikoForm;
 
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Settings\Credentials;
 use Elementor\Plugin;
 if (!defined('ABSPATH'))
   exit;
@@ -11,6 +11,7 @@ use App\Model\PatientFormTemplate;
 use App\Model\AppointmentType;
 use App\Service\PatientAccessTokenService;
 use App\Service\PatientCustomFieldService;
+use App\Service\PatientLinkService;
 use Elementor\Widget_Base;
 
 class Widget extends Widget_Base
@@ -460,6 +461,18 @@ class Widget extends Widget_Base
   public function render()
   {
     $asset_version = defined('WP_CLINIKO_PLUGIN_VERSION') ? WP_CLINIKO_PLUGIN_VERSION : null;
+    $stripe_asset_path = __DIR__ . '/assets/js/stripe.js';
+    $stripe_asset_version = file_exists($stripe_asset_path)
+      ? (string) filemtime($stripe_asset_path)
+      : $asset_version;
+    $form_handler_asset_path = __DIR__ . '/assets/js/form-handler.js';
+    $form_handler_asset_version = file_exists($form_handler_asset_path)
+      ? (string) filemtime($form_handler_asset_path)
+      : $asset_version;
+    $tyro_asset_path = __DIR__ . '/assets/js/tyrohealth.js';
+    $tyro_asset_version = file_exists($tyro_asset_path)
+      ? (string) filemtime($tyro_asset_path)
+      : $asset_version;
 
     wp_enqueue_style(
       'font-awesome-5',
@@ -492,6 +505,56 @@ class Widget extends Widget_Base
 
     $is_editor = Plugin::$instance->editor->is_edit_mode();
     $form_template_id = $settings['cliniko_form_template_id'] ?? null;
+
+    $appointment_source = (string) ($settings['appointment_source'] ?? '');
+    $use_patient_data_if_logged_in =
+      $appointment_source === 'custom_form'
+      && (($settings['use_patient_data_if_logged_in'] ?? '') === 'yes');
+
+    // This is deliberately only a capability boolean. Patient data is never
+    // resolved or serialized into the page while rendering the widget.
+    $authenticated_patient_booking_active = false;
+    if ($use_patient_data_if_logged_in && is_user_logged_in()) {
+      try {
+        $authenticated_patient_booking_active = (new PatientLinkService())->isVerifiedUser((int) get_current_user_id());
+      } catch (\Throwable $e) {
+        // Fail closed: a user without a verified patient link uses the normal
+        // guest form and cannot trigger the authenticated booking endpoint.
+        $authenticated_patient_booking_active = false;
+      }
+    }
+    if ($authenticated_patient_booking_active) {
+      if (!defined('DONOTCACHEPAGE')) {
+        define('DONOTCACHEPAGE', true);
+      }
+      if (function_exists('nocache_headers') && !headers_sent()) {
+        nocache_headers();
+      }
+    }
+    $authenticated_booking_module_id = preg_replace('/[^0-9]/', '', (string) ($settings['module_id'] ?? '')) ?: '';
+    $authenticated_booking_template_id = preg_replace('/[^0-9]/', '', (string) ($form_template_id ?? '')) ?: '';
+    $authenticated_booking_action = 'cliniko_form_authenticated_booking_'
+      . $authenticated_booking_module_id
+      . '_'
+      . $authenticated_booking_template_id;
+    $authenticated_booking_nonce = $authenticated_patient_booking_active
+      ? wp_create_nonce($authenticated_booking_action)
+      : '';
+    $settings['authenticated_patient_booking_active'] = $authenticated_patient_booking_active;
+    $show_patient_details_review =
+      $authenticated_patient_booking_active
+      && (($settings['show_patient_details_review'] ?? '') === 'yes');
+    $settings['show_patient_details_review_active'] = $show_patient_details_review;
+
+    if ($show_patient_details_review) {
+      $patient_review_style_path = __DIR__ . '/assets/css/patient-details-review.css';
+      wp_enqueue_style(
+        'cliniko-form-patient-details-review',
+        plugin_dir_url(__FILE__) . 'assets/css/patient-details-review.css',
+        [],
+        file_exists($patient_review_style_path) ? (string) filemtime($patient_review_style_path) : $asset_version
+      );
+    }
 
 
     wp_enqueue_script(
@@ -533,11 +596,14 @@ class Widget extends Widget_Base
       'form-handler-js',
       plugin_dir_url(__FILE__) . 'assets/js/form-handler.js',
       [],
-      $asset_version,
+      $form_handler_asset_version,
       []
     );
 
-    $save_on_exit_enabled = ($settings['save_on_exit'] ?? '') === 'yes' && !$is_headless;
+    $save_on_exit_enabled =
+      ($settings['save_on_exit'] ?? '') === 'yes'
+      && !$is_headless
+      && !$authenticated_patient_booking_active;
     if ($save_on_exit_enabled) {
       wp_enqueue_script(
         'save-on-exit',
@@ -548,7 +614,6 @@ class Widget extends Widget_Base
       );
     }
 
-    $appointment_source = $settings['appointment_source'] ?? '';
     if ($appointment_source === 'custom_form' && $settings['enable_payment'] === 'yes') {
 
       // elementor control stores lowercase values; normalize for comparisons
@@ -567,7 +632,7 @@ class Widget extends Widget_Base
           'cliniko-stripe-js',
           plugin_dir_url(__FILE__) . 'assets/js/stripe.js',
           ["jquery"],
-          $asset_version,
+          $stripe_asset_version,
           []
         );
       } elseif ($gateway === 'tyrohealth') {
@@ -583,7 +648,7 @@ class Widget extends Widget_Base
           'cliniko-tyrohealth-js',
           plugin_dir_url(__FILE__) . 'assets/js/tyrohealth.js',
           ['jquery', 'medipass-transaction-sdk'],
-          $asset_version,
+          $tyro_asset_version,
           ['strategy' => 'defer']
         );
 
@@ -621,7 +686,13 @@ class Widget extends Widget_Base
 
     $appearance = [
       'theme' => $settings['theme'] ?? 'flat',
-      'progress_type' => $settings['progress_type'],
+      'progress_type' => $settings['progress_type'] ?? 'bar',
+      'progress_type_tablet' => $settings['progress_type_tablet'] ?? '',
+      'progress_type_mobile' => $settings['progress_type_mobile'] ?? '',
+      'progress_label_mode' => $settings['progress_label_mode'] ?? 'none',
+      'progress_label_mode_tablet' => $settings['progress_label_mode_tablet'] ?? '',
+      'progress_label_mode_mobile' => $settings['progress_label_mode_mobile'] ?? '',
+      'buttons_show_disabled_prev' => ($settings['buttons_show_disabled_prev'] ?? '') === 'yes',
       'variables' => [
         'colorPrimary' => esc_attr($settings['color_primary'] ?? '#0073e6'),
         'colorText' => esc_attr($settings['color_text'] ?? '#333'),
@@ -678,7 +749,7 @@ class Widget extends Widget_Base
         'sections' => $sections ?? [],
         'submission_template' => $submission_template,
         'headless_patient_fields' => $headlessPatientFields,
-        'btn_bg' => esc_attr($settings['form_button_color'] ?? '#0073e6'),
+        'btn_bg' => esc_attr($settings['accent_color'] ?? $settings['form_button_color'] ?? '#0073e6'),
         'btn_text' => esc_attr($settings['form_button_text_color'] ?? '#ffffff'),
         'btn_pad' => $btn_pad,
         'border_radius' => esc_attr($settings['form_border_radius']['size'] ?? 6) . 'px',
@@ -699,9 +770,26 @@ class Widget extends Widget_Base
         'patient_form_template_url' => get_site_url() . '/wp-json/v1/patient-form-template',
         'appointment_calendar_url' => get_site_url() . '/wp-json/v1/appointment-calendar',
         'available_times_per_page' => 100,
+        'rest_nonce' => function_exists('is_user_logged_in') && is_user_logged_in()
+          ? wp_create_nonce('wp_rest')
+          : '',
         'cliniko_embeded_form_sync_patient_form_url' => get_site_url() . '/wp-json/v1/send-patient-form',
         'cliniko_embeded_host' => "https://" . Credentials::getEmbedHost(),
         'redirect_url' => get_site_url() . esc_url($settings['onpayment_success_redirect']),
+        'use_patient_data_if_logged_in' => $use_patient_data_if_logged_in,
+        'authenticated_patient_booking' => [
+          'enabled' => $authenticated_patient_booking_active,
+          'preflight_url' => $authenticated_patient_booking_active
+            ? get_site_url() . '/wp-json/v2/cliniko-form-booking-attempts/preflight'
+            : '',
+          'nonce' => $authenticated_booking_nonce,
+        ],
+        'patient_details_review' => [
+          'enabled' => $show_patient_details_review,
+          'patient_url' => $show_patient_details_review
+            ? get_site_url() . '/wp-json/v2/patient/me'
+            : '',
+        ],
         'appearance' => $appearance,
         'logo_url' => $logo_url,
         'cliniko_embed' => $settings['appointment_source'],

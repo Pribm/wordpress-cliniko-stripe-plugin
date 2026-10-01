@@ -14,4 +14,9 @@ class Practitioner extends AbstractModel
     {
         return new static($dto, $client);
     }
+
+    public function getDisplayName(): string
+    {
+        return (string) $this->dto->displayName;
+    }
 }

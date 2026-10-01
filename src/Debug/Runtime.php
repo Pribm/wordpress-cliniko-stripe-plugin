@@ -80,6 +80,35 @@ class Runtime
     }
 
     /**
+     * Record an exception for administrators without exposing its details to
+     * the caller of a public endpoint.
+     *
+     * @param array<string,mixed> $context
+     */
+    public static function logException(string $event, \Throwable $error, array $context = []): void
+    {
+        $context['exception_class'] = get_class($error);
+        $context['exception_code'] = $error->getCode();
+        $context['exception_file'] = basename($error->getFile());
+        $context['exception_line'] = $error->getLine();
+        $context['exception_trace'] = $error->getTraceAsString();
+
+        self::logEvent([
+            'trace_id' => TraceContext::currentTraceId(),
+            'channel' => 'application',
+            'level' => 'error',
+            'event' => $event,
+            'method' => TraceContext::currentMethod(),
+            'route' => TraceContext::currentRoute(),
+            'target' => TraceContext::currentRoute(),
+            'request_kind' => 'rest',
+            'status_code' => 500,
+            'message' => $error->getMessage(),
+            'context' => $context,
+        ]);
+    }
+
+    /**
      * @param mixed $response
      * @param array<string,mixed> $handler
      * @return mixed

@@ -1,0 +1,184 @@
+.cliniko-account-closure {
+  max-width: 720px;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #fff;
+  color: #1d2939;
+  box-shadow: 0 8px 28px rgba(16, 24, 40, 0.06);
+}
+
+.cliniko-account-closure__header h2 {
+  margin: 4px 0 18px;
+  color: #101828;
+}
+
+.cliniko-account-closure__eyebrow {
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cliniko-account-closure__warning {
+  padding: 18px 20px;
+  border: 1px solid #fecdca;
+  border-radius: 10px;
+  background: #fffbfa;
+}
+
+.cliniko-account-closure__warning h3 {
+  margin: 0 0 8px;
+  color: #912018;
+}
+
+.cliniko-account-closure__warning p,
+.cliniko-account-closure__warning ul {
+  margin: 8px 0 0;
+}
+
+.cliniko-account-closure__form {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.cliniko-account-closure__acknowledgement {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+}
+
+.cliniko-account-closure__acknowledgement input {
+  margin-top: 4px;
+}
+
+.cliniko-account-closure__button {
+  justify-self: start;
+  padding: 11px 18px;
+  border: 1px solid #b42318;
+  border-radius: 8px;
+  background: #b42318;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cliniko-account-closure__button:hover,
+.cliniko-account-closure__button:focus-visible {
+  background: #912018;
+}
+
+.cliniko-account-closure__button.is-danger {
+  background: #7a271a;
+}
+
+.cliniko-account-closure__message {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f2f4f7;
+}
+
+.cliniko-account-closure__message.is-success {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.cliniko-account-closure__message.is-error {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.cliniko-account-closure__trigger {
+  padding: 10px 16px;
+  border: 1px solid #b42318;
+  border-radius: 8px;
+  background: transparent;
+  color: #b42318;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cliniko-account-closure__trigger:hover,
+.cliniko-account-closure__trigger:focus-visible {
+  background: #fef3f2;
+}
+
+.cliniko-account-closure-modal[hidden] {
+  display: none !important;
+}
+
+.cliniko-account-closure-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.cliniko-account-closure-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.68);
+}
+
+.cliniko-account-closure-modal__dialog {
+  position: relative;
+  z-index: 1;
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: auto;
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(16, 24, 40, 0.32);
+}
+
+.cliniko-account-closure.is-modal {
+  max-width: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.cliniko-account-closure-modal__close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 2;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f2f4f7;
+  color: #344054;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+body.cliniko-account-closure-modal-open {
+  overflow: hidden;
+}
+
+@media (max-width: 600px) {
+  .cliniko-account-closure-modal {
+    align-items: end;
+    padding: 0;
+  }
+
+  .cliniko-account-closure-modal__dialog,
+  .cliniko-account-closure.is-modal {
+    border-radius: 14px 14px 0 0;
+  }
+
+  .cliniko-account-closure-modal__dialog {
+    width: 100%;
+    max-height: 92vh;
+  }
+}

@@ -1,0 +1,82 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** @var array<string,mixed> $module */
+/** @var array{items:array<int,array<string,mixed>>,page:int,per_page:int,has_more:bool} $result */
+/** @var string $pageParameter */
+/** @var string $detailsPageUrl */
+$dateFormat = (string) ($module['date_format'] ?? 'short') === 'long'
+    ? 'l, j F Y ' . (string) get_option('time_format')
+    : (string) get_option('date_format') . ' ' . (string) get_option('time_format');
+$formatValue = static function (string $key, $value) use ($dateFormat): string {
+    if (($key === 'starts_at' || $key === 'ends_at') && is_string($value) && $value !== '') {
+        $timestamp = strtotime($value);
+        return $timestamp ? wp_date($dateFormat, $timestamp) : $value;
+    }
+    if ($key === 'duration' && $value !== null && $value !== '') {
+        return (string) $value . ' minutes';
+    }
+    if ($key === 'price' && $value !== null && $value !== '' && is_numeric($value)) {
+        return '$' . number_format(((float) $value) / 100, 2);
+    }
+    if (is_bool($value)) {
+        return $value ? 'Yes' : 'No';
+    }
+    return is_scalar($value) ? (string) $value : '';
+};
+$items = $result['items'];
+$columns = is_array($module['columns'] ?? null) ? $module['columns'] : [];
+?>
+<section class="cliniko-dashboard-module cliniko-dashboard-table-module cliniko-component cliniko-component-list">
+    <?php if ((string) ($module['title'] ?? '') !== '') : ?><h2><?php echo esc_html((string) $module['title']); ?></h2><?php endif; ?>
+    <?php if ($items === []) : ?>
+        <p><?php echo esc_html((string) ($module['empty_message'] ?? 'No appointments found.')); ?></p>
+    <?php else : ?>
+        <div class="cliniko-dashboard-table-scroll">
+            <table class="cliniko-dashboard-table">
+                <thead><tr>
+                    <?php foreach ($columns as $column) : if (!is_array($column)) continue; ?><th><?php echo esc_html((string) ($column['alias'] ?? '')); ?></th><?php endforeach; ?>
+                    <?php if (!empty($module['show_details_button'])) : ?><th><span class="screen-reader-text">Actions</span></th><?php endif; ?>
+                </tr></thead>
+                <tbody>
+                <?php foreach ($items as $item) : ?>
+                    <tr>
+                        <?php foreach ($columns as $column) :
+                            if (!is_array($column)) continue;
+                            $key = sanitize_key((string) ($column['key'] ?? ''));
+                            $columnLabel = (string) ($column['alias'] ?? $key);
+                            $value = $key === 'patient_form_field'
+                                ? (($item['patient_form_fields'] ?? [])[(string) ($column['field'] ?? '')] ?? '')
+                                : ($item[$key] ?? '');
+                            ?>
+                            <td data-label="<?php echo esc_attr($columnLabel); ?>">
+                                <?php if ($key === 'telehealth_url' && is_string($value) && $value !== '') : ?>
+                                    <a href="<?php echo esc_url($value); ?>" target="_blank" rel="noopener">Join telehealth</a>
+                                <?php else : ?>
+                                    <?php echo esc_html($formatValue($key, $value)); ?>
+                                <?php endif; ?>
+                            </td>
+                        <?php endforeach; ?>
+                        <?php if (!empty($module['show_details_button'])) : ?><td data-label="Actions">
+                            <?php if ($detailsPageUrl !== '' && (string) ($item['id'] ?? '') !== '') : ?>
+                                <?php $buttonUrl = str_replace('{appointment_id}', rawurlencode((string) $item['id']), $detailsPageUrl); if ($buttonUrl === $detailsPageUrl) { $buttonUrl = add_query_arg('appointment_id', (string) $item['id'], $detailsPageUrl); } ?>
+                                <a class="cliniko-dashboard-details-button" href="<?php echo esc_url($buttonUrl); ?>"><?php echo esc_html((string) ($module['details_button_label'] ?? 'View details')); ?></a>
+                            <?php endif; ?>
+                        </td><?php endif; ?>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+    <?php if (!empty($module['show_pagination']) && ($result['page'] > 1 || $result['has_more'])) : ?>
+        <nav class="cliniko-dashboard-pagination" aria-label="Appointment pages">
+            <?php if ($result['page'] > 1) : ?><a href="<?php echo esc_url(add_query_arg($pageParameter, $result['page'] - 1)); ?>">Previous</a><?php endif; ?>
+            <span>Page <?php echo esc_html((string) $result['page']); ?></span>
+            <?php if ($result['has_more']) : ?><a href="<?php echo esc_url(add_query_arg($pageParameter, $result['page'] + 1)); ?>">Next</a><?php endif; ?>
+        </nav>
+    <?php endif; ?>
+</section>

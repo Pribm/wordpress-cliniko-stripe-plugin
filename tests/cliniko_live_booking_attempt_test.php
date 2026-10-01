@@ -166,14 +166,6 @@ try {
     archive_if_present('patient', $patientId, static function (string $id) use ($client): void {
         Patient::delete($id, $client);
     });
-
-    archive_if_present('patient form template', $patientFormTemplateId, static function (string $id) use ($client): void {
-        PatientFormTemplate::delete($id, $client);
-    });
-
-    archive_if_present('appointment type', $appointmentTypeId, static function (string $id) use ($client): void {
-        AppointmentType::delete($id, $client);
-    });
 }
 
 function load_integration_env(): void

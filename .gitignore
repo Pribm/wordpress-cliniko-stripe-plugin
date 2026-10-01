@@ -9,3 +9,4 @@ node_modules/
 .env.integration.local
 *.zip
 dist
+custom_codes/

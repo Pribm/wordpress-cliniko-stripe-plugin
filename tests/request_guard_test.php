@@ -244,6 +244,48 @@ function test_public_read_without_guard_token(): void
     assert_true($allowed === true, 'Expected public read route to pass without a guard token');
 }
 
+function test_patient_access_request_is_rate_limited(): void
+{
+    $guard = new PublicRequestGuard(new BookingAttemptStore());
+    $request = new WP_REST_Request('POST', '/v2/patient-access/request');
+
+    for ($attempt = 1; $attempt <= 5; $attempt++) {
+        assert_true(
+            $guard->allowPatientAccessRequest($request) === true,
+            "Expected patient access request {$attempt} to pass"
+        );
+    }
+
+    $denied = $guard->allowPatientAccessRequest($request);
+    assert_true($denied instanceof WP_Error, 'Expected the sixth patient access request to be denied');
+    assert_true($denied->get_error_data()['status'] === 429, 'Expected a 429 rate-limit response');
+}
+
+function test_patient_access_verify_is_rate_limited_without_limiting_status_polling(): void
+{
+    $guard = new PublicRequestGuard(new BookingAttemptStore());
+    $verify = new WP_REST_Request('POST', '/v2/patient-access/verify');
+
+    for ($attempt = 1; $attempt <= 15; $attempt++) {
+        assert_true(
+            $guard->allowPatientAccessRequest($verify) === true,
+            "Expected patient access verification {$attempt} to pass the endpoint rate limit"
+        );
+    }
+
+    $denied = $guard->allowPatientAccessRequest($verify);
+    assert_true($denied instanceof WP_Error, 'Expected the sixteenth verification request to be denied');
+    assert_true($denied->get_error_data()['status'] === 429, 'Expected a 429 verification rate-limit response');
+
+    $status = new WP_REST_Request('GET', '/v2/patient-access/request-status');
+    for ($poll = 1; $poll <= 200; $poll++) {
+        assert_true(
+            $guard->allowPatientAccessRequest($status) === true,
+            'Expected patient access status polling to retain its existing behavior'
+        );
+    }
+}
+
 function run_test(string $name, callable $test): bool
 {
     reset_guard_state();
@@ -262,6 +304,8 @@ $tests = [
     'public_mutation_without_guard_token' => 'test_public_mutation_without_guard_token',
     'attempt_mutation_requires_matching_attempt_token' => 'test_attempt_mutation_requires_matching_attempt_token',
     'public_read_without_guard_token' => 'test_public_read_without_guard_token',
+    'patient_access_request_is_rate_limited' => 'test_patient_access_request_is_rate_limited',
+    'patient_access_verify_is_rate_limited_without_limiting_status_polling' => 'test_patient_access_verify_is_rate_limited_without_limiting_status_polling',
 ];
 
 $passed = 0;

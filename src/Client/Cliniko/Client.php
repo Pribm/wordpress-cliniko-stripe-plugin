@@ -137,8 +137,19 @@ class Client implements ApiClientInterface
     {
         return [
             'Authorization' => $this->authHeader,
-            'Accept' => 'application/json'
+            'Accept' => 'application/json',
+            'User-Agent' => self::userAgent(),
         ];
+    }
+
+    private static function userAgent(): string
+    {
+        $version = defined('WP_CLINIKO_PLUGIN_VERSION')
+            ? (string) constant('WP_CLINIKO_PLUGIN_VERSION')
+            : 'unknown';
+
+        return 'WordPress-Cliniko-Stripe-Plugin/' . $version
+            . ' (https://github.com/Pribm/wordpress-cliniko-stripe-plugin)';
     }
 
     private function requestTimeout(): float

@@ -86,6 +86,17 @@ class PublicRequestGuard
             return $this->deny('Forbidden origin.');
         }
 
+        $route = rtrim((string) $request->get_route(), '/');
+        if (substr($route, -23) === '/patient-access/request') {
+            if (!$this->consumeRateLimit('patient-access-request', 5, 600)) {
+                return $this->deny('Too many requests. Please wait a moment and try again.', 429);
+            }
+        } elseif (substr($route, -22) === '/patient-access/verify') {
+            if (!$this->consumeRateLimit('patient-access-verify', 15, 600)) {
+                return $this->deny('Too many requests. Please wait a moment and try again.', 429);
+            }
+        }
+
         return true;
     }
 
@@ -111,6 +122,16 @@ class PublicRequestGuard
         }
 
         return true;
+    }
+
+    /**
+     * Patient profile mutations use the same token and origin checks as reads.
+     *
+     * @return bool|mixed
+     */
+    public function allowPatientAccessMutation(WP_REST_Request $request)
+    {
+        return $this->allowPatientAccessRead($request);
     }
 
     /**

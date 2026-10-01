@@ -438,7 +438,7 @@ function test_cleanup_worker_archives_orphans_for_abandoned_attempt(): void
 
     /** @var AttemptFakeApiClient $client */
     $client = $GLOBALS['__attempt_fake_client'];
-    assert_true(in_array('POST patient_forms/pf_1/archive', $client->calls, true), 'Expected orphan patient form archive');
+    assert_true(in_array('POST patient_forms/pf_1/archive', $client->calls, true), 'Expected backend orphan patient form archive');
     assert_true(in_array('POST patients/patient_1/archive', $client->calls, true), 'Expected orphan patient archive');
 }
 

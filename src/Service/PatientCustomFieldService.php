@@ -2,7 +2,7 @@
 
 namespace App\Service;
 
-use App\Admin\Modules\Credentials;
+use App\Model\PublicSettings;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -20,6 +20,8 @@ class PatientCustomFieldService
         'number',
         'select',
         'radio',
+        'radiobuttons',
+        'paragraph',
         'checkbox',
         'checkboxes',
         'multi_checkbox',
@@ -42,6 +44,45 @@ class PatientCustomFieldService
 
     /** @var array{loaded:bool,sections:array<int,array<string,mixed>>}|null */
     private static ?array $clinikoCustomFieldSettingsCache = null;
+
+    /**
+     * Return the active patient custom fields currently configured in Cliniko.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    public static function getPatientFieldDefinitions(): array
+    {
+        $definitions = [];
+        $settings = self::getClinikoCustomFieldSettings();
+
+        foreach ($settings['sections'] as $section) {
+            foreach ($section['fields'] as $field) {
+                $token = trim((string) ($field['token'] ?? ''));
+                if ($token === '') {
+                    continue;
+                }
+
+                $key = 'custom_' . sanitize_key($token);
+                $definitions[$key] = [
+                    'property' => $key,
+                    'label' => trim((string) ($field['name'] ?? $token)),
+                    'type' => self::normalizeFormType((string) ($field['type'] ?? 'text')),
+                    'api_field' => 'custom_fields',
+                    'editable' => true,
+                    'custom' => true,
+                    'path' => 'custom_fields.' . $key,
+                    'cliniko_section_name' => (string) ($section['name'] ?? ''),
+                    'cliniko_section_token' => (string) ($section['token'] ?? ''),
+                    'cliniko_field_name' => (string) ($field['name'] ?? $token),
+                    'cliniko_field_token' => $token,
+                    'cliniko_field_type' => (string) ($field['type'] ?? 'text'),
+                    'options' => is_array($field['options'] ?? null) ? $field['options'] : [],
+                ];
+            }
+        }
+
+        return $definitions;
+    }
 
     /**
      * @param mixed $definitions
@@ -270,6 +311,7 @@ class PatientCustomFieldService
     {
         $normalizedDefinitions = self::normalizeDefinitions($definitions);
         $existingSections = self::normalizeSections(self::extractExistingSections($patient['custom_fields'] ?? null));
+        $existingSections = self::filterExistingSections($existingSections, $normalizedDefinitions);
         $generatedSections = self::buildSectionsFromDefinitions($patient, $normalizedDefinitions);
 
         $sections = $existingSections;
@@ -369,6 +411,7 @@ class PatientCustomFieldService
         $validationRaw = is_array($definition['validation'] ?? null) ? $definition['validation'] : [];
         $options = [];
         $rawOptions = $definition['options'] ?? ($definition['field_options'] ?? []);
+        $clinikoOptions = self::normalizeOptionDefinitions($rawOptions);
         if (is_array($rawOptions)) {
             foreach ($rawOptions as $option) {
                 if (is_array($option)) {
@@ -445,6 +488,7 @@ class PatientCustomFieldService
             'placeholder' => trim((string) ($definition['placeholder'] ?? '')),
             'help_text' => trim((string) ($definition['help_text'] ?? '')),
             'options' => $options,
+            'cliniko_options' => $clinikoOptions,
             'default' => $defaultValue,
             'validation' => $validation,
             'cliniko_section_name' => $clinikoSectionName,
@@ -716,64 +760,40 @@ class PatientCustomFieldService
         }
 
         try {
-            $client = cliniko_client(true, Credentials::getClinikoApiCacheTtl());
-            $response = $client->get('settings');
-            if (!$response->isSuccessful()) {
-                self::$clinikoCustomFieldSettingsCache = $cached;
-                return $cached;
-            }
-
-            $data = $response->data ?? null;
-            if (!is_array($data)) {
-                self::$clinikoCustomFieldSettingsCache = $cached;
-                return $cached;
-            }
-
-            $definition = $data['patient_custom_fields_definition'] ?? null;
-            if (!is_array($definition)) {
-                $cached['loaded'] = true;
-                self::$clinikoCustomFieldSettingsCache = $cached;
-                return $cached;
-            }
-
-            $rawSections = $definition['sections'] ?? [];
-            if (!is_array($rawSections)) {
-                $cached['loaded'] = true;
+            // Patient custom-field definitions are configuration, not lookup
+            // data. Always read the current Cliniko definitions so renamed,
+            // recreated, archived, or moved fields do not leave stale tokens
+            // in the Profile form builder or patient update payload.
+            $settings = PublicSettings::fetch(cliniko_client(false));
+            $definition = $settings?->getPublicSettingsDTO()?->patientCustomFieldsDefinition;
+            if ($definition === null) {
                 self::$clinikoCustomFieldSettingsCache = $cached;
                 return $cached;
             }
 
             $sections = [];
-            foreach ($rawSections as $section) {
-                if (!is_array($section) || !empty($section['archived'])) {
+            foreach ($definition->sections as $section) {
+                if ($section->archived) {
                     continue;
                 }
 
                 $fields = [];
-                $rawFields = $section['fields'] ?? [];
-                if (is_array($rawFields)) {
-                    foreach ($rawFields as $field) {
-                        if (!is_array($field) || !empty($field['archived'])) {
-                            continue;
-                        }
-
-                        $fieldName = trim((string) ($field['name'] ?? ''));
-                        $fieldToken = trim((string) ($field['token'] ?? ''));
-                        if ($fieldName === '' && $fieldToken === '') {
-                            continue;
-                        }
-
-                        $fields[] = [
-                            'name' => $fieldName,
-                            'token' => $fieldToken,
-                            'type' => trim((string) ($field['type'] ?? 'text')),
-                        ];
+                foreach ($section->fields as $field) {
+                    if ($field->archived || $field->token === '') {
+                        continue;
                     }
+
+                    $fields[] = [
+                        'name' => $field->name,
+                        'token' => $field->token,
+                        'type' => trim($field->type),
+                        'options' => $field->options,
+                    ];
                 }
 
                 $sections[] = [
-                    'name' => trim((string) ($section['name'] ?? '')),
-                    'token' => trim((string) ($section['token'] ?? '')),
+                    'name' => $section->name,
+                    'token' => $section->token,
                     'fields' => $fields,
                 ];
             }
@@ -786,6 +806,71 @@ class PatientCustomFieldService
             self::$clinikoCustomFieldSettingsCache = $cached;
             return $cached;
         }
+    }
+
+    private static function normalizeFormType(string $type): string
+    {
+        $type = strtolower(trim($type));
+        return match ($type) {
+            'radiobuttons', 'radio', 'select' => 'select',
+            'paragraph', 'textarea' => 'textarea',
+            'checkboxes', 'checkbox' => 'checkbox',
+            'date' => 'date',
+            default => 'text',
+        };
+    }
+
+    /** @param array<string,mixed> $field @return array<int,string> */
+    private static function fieldOptions(array $field): array
+    {
+        foreach (['options', 'choices', 'values'] as $key) {
+            if (!is_array($field[$key] ?? null)) {
+                continue;
+            }
+
+            return array_values(array_filter(array_map(
+                static fn($option): string => is_array($option)
+                    ? trim((string) ($option['label'] ?? $option['name'] ?? $option['value'] ?? ''))
+                    : trim((string) $option),
+                $field[$key]
+            )));
+        }
+
+        return [];
+    }
+
+    /** @param mixed $rawOptions @return array<int,array{name:string,token?:string}> */
+    private static function normalizeOptionDefinitions($rawOptions): array
+    {
+        if (is_string($rawOptions)) {
+            $rawOptions = preg_split('/[\r\n,]+/', $rawOptions) ?: [];
+        }
+        if (!is_array($rawOptions)) {
+            return [];
+        }
+
+        $options = [];
+        foreach ($rawOptions as $option) {
+            if (is_array($option)) {
+                $name = trim((string) ($option['name'] ?? $option['value'] ?? $option['label'] ?? ''));
+                $token = trim((string) ($option['token'] ?? ''));
+            } else {
+                $name = trim((string) $option);
+                $token = '';
+            }
+
+            if ($name === '') {
+                continue;
+            }
+
+            $normalized = ['name' => $name];
+            if ($token !== '') {
+                $normalized['token'] = $token;
+            }
+            $options[] = $normalized;
+        }
+
+        return $options;
     }
 
     /**
@@ -971,11 +1056,27 @@ class PatientCustomFieldService
                 $fieldToken = trim((string) ($field['token'] ?? ''));
                 $fieldKey = $fieldToken !== '' ? 'token:' . strtolower($fieldToken) : 'name:' . strtolower($fieldName !== '' ? $fieldName : 'field:' . (string) $fieldIndex);
 
+                $fieldType = strtolower(trim((string) ($field['type'] ?? 'text')));
+                $isChoiceField = in_array($fieldType, ['radiobuttons', 'checkboxes'], true);
+                $options = $isChoiceField
+                    ? self::normalizeSelectedOptions(is_array($field['options'] ?? null) ? $field['options'] : [])
+                    : [];
                 $entry = [
                     'name' => $fieldName !== '' ? $fieldName : $fieldKey,
-                    'type' => trim((string) ($field['type'] ?? 'text')),
+                    'type' => $fieldType,
                     'value' => self::toStringValue($field['value'] ?? ''),
                 ];
+
+                if ($isChoiceField) {
+                    $entry['options'] = $options;
+                    $entry['value'] = self::selectedOptionsValue($options);
+                }
+
+                // Cliniko stores empty fields without a value property. Do
+                // not send value="" because Cliniko rejects that shape.
+                if ($entry['value'] === '') {
+                    unset($entry['value']);
+                }
 
                 if ($fieldToken !== '') {
                     $entry['token'] = $fieldToken;
@@ -990,6 +1091,55 @@ class PatientCustomFieldService
         }
 
         return $out;
+    }
+
+    /**
+     * Remove patient fields that no longer belong to the current Cliniko
+     * patient-field definition. Cliniko rejects stale field UUIDs instead of
+     * ignoring them, which can otherwise make an unrelated patient update
+     * fail.
+     *
+     * @param array<string,array{name:string,token?:string,fields:array<string,array<string,mixed>>,archived?:bool}> $sections
+     * @param array<int,array<string,mixed>> $definitions
+     * @return array<string,array{name:string,token?:string,fields:array<string,array<string,mixed>>,archived?:bool}>
+     */
+    private static function filterExistingSections(array $sections, array $definitions): array
+    {
+        $allowedFields = [];
+        foreach ($definitions as $definition) {
+            $resolved = self::resolveClinikoCustomFieldDefinition($definition);
+            if ($resolved === null) {
+                continue;
+            }
+
+            $fieldToken = strtolower(trim((string) ($resolved['cliniko_field_token'] ?? '')));
+            $sectionToken = strtolower(trim((string) ($resolved['cliniko_section_token'] ?? '')));
+            if ($fieldToken !== '' && $sectionToken !== '') {
+                $allowedFields[$fieldToken] = $sectionToken;
+            }
+        }
+
+        foreach ($sections as $sectionKey => &$section) {
+            $sectionToken = strtolower(trim((string) ($section['token'] ?? '')));
+            foreach ($section['fields'] as $fieldKey => $field) {
+                $fieldToken = strtolower(trim((string) ($field['token'] ?? '')));
+                if (
+                    $fieldToken === '' ||
+                    !isset($allowedFields[$fieldToken]) ||
+                    $sectionToken === '' ||
+                    $allowedFields[$fieldToken] !== $sectionToken
+                ) {
+                    unset($section['fields'][$fieldKey]);
+                }
+            }
+
+            if ($section['fields'] === []) {
+                unset($sections[$sectionKey]);
+            }
+        }
+        unset($section);
+
+        return $sections;
     }
 
     /**
@@ -1036,12 +1186,24 @@ class PatientCustomFieldService
 
             $fieldKey = 'token:' . strtolower($fieldToken);
 
-            $sections[$sectionKey]['fields'][$fieldKey] = [
+            $fieldPayload = [
                 'name' => $fieldName !== '' ? $fieldName : (string) ($field['label'] ?? $field['key'] ?? $field['path'] ?? 'Field'),
                 'type' => in_array(strtolower($fieldType), self::ALLOWED_FIELD_TYPES, true) ? strtolower($fieldType) : 'text',
                 'value' => $formattedValue,
                 'token' => $fieldToken,
             ];
+
+            if (in_array(strtolower($fieldType), ['radiobuttons', 'checkboxes'], true)) {
+                $fieldPayload['options'] = self::buildSelectedOptions(
+                    is_array($field['cliniko_options'] ?? null)
+                        ? $field['cliniko_options']
+                        : (is_array($field['options'] ?? null) ? $field['options'] : []),
+                    $value
+                );
+                unset($fieldPayload['value']);
+            }
+
+            $sections[$sectionKey]['fields'][$fieldKey] = $fieldPayload;
         }
 
         return $sections;
@@ -1080,6 +1242,61 @@ class PatientCustomFieldService
         return $candidate !== '' ? $candidate : null;
     }
 
+    /** @param array<int,mixed> $options @return array<int,array{name:string,token?:string,selected?:bool}> */
+    private static function normalizeSelectedOptions(array $options): array
+    {
+        $normalized = [];
+        foreach ($options as $option) {
+            if (is_array($option)) {
+                $name = trim((string) ($option['name'] ?? $option['value'] ?? ''));
+                $token = trim((string) ($option['token'] ?? ''));
+                $selected = !empty($option['selected']);
+            } else {
+                $name = trim((string) $option);
+                $token = '';
+                $selected = false;
+            }
+
+            if ($name !== '') {
+                $normalizedOption = ['name' => $name];
+                if ($token !== '') {
+                    $normalizedOption['token'] = $token;
+                }
+                if ($selected) {
+                    $normalizedOption['selected'] = true;
+                }
+                $normalized[] = $normalizedOption;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /** @param array<int,array{name:string,token?:string,selected?:bool}> $options */
+    private static function selectedOptionsValue(array $options): string
+    {
+        return implode(', ', array_values(array_filter(
+            array_map(static fn(array $option): string => !empty($option['selected']) ? $option['name'] : '', $options),
+            static fn(string $value): bool => $value !== ''
+        )));
+    }
+
+    /** @param array<int,mixed> $definitions @param mixed $value @return array<int,array{name:string,token?:string,selected?:bool}> */
+    private static function buildSelectedOptions(array $definitions, $value): array
+    {
+        $selectedValues = is_array($value)
+            ? array_map('strval', $value)
+            : array_values(array_filter(array_map('trim', explode(',', (string) $value)), static fn(string $item): bool => $item !== ''));
+        $options = self::normalizeSelectedOptions($definitions);
+
+        foreach ($options as &$option) {
+            $option['selected'] = in_array($option['name'], $selectedValues, true);
+        }
+        unset($option);
+
+        return $options;
+    }
+
     /**
      * @param array<string,array{name:string,token?:string,fields:array<string,array<string,mixed>>,archived?:bool}> $sections
      * @return array<string,mixed>
@@ -1089,7 +1306,14 @@ class PatientCustomFieldService
         $payload = ['sections' => []];
 
         foreach ($sections as $section) {
-            $fields = array_values($section['fields']);
+            $fields = array_values(array_map(static function (array $field): array {
+                if (in_array(strtolower((string) ($field['type'] ?? '')), ['radiobuttons', 'checkboxes'], true)) {
+                    unset($field['value']);
+                } else {
+                    unset($field['options']);
+                }
+                return $field;
+            }, $section['fields']));
             if (empty($fields)) {
                 continue;
             }

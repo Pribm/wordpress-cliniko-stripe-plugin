@@ -1,0 +1,19 @@
+<?php
+use App\Admin\Modules\AccountBuilders\Forms\ShortcodeFormInputRules;
+if (!defined('ABSPATH')) exit; /** @var array<string,mixed> $module */
+$descriptionRules = is_array($descriptionRules ?? null) ? $descriptionRules : [];
+$descriptionOptions = (array) ($descriptionRules['select_options'] ?? []);
+?>
+<section class="cliniko-dashboard-module cliniko-patient-attachments-module cliniko-component cliniko-component-form-fields" data-cliniko-attachment-upload-module data-endpoint="<?php echo esc_url($endpoint); ?>" data-nonce="<?php echo esc_attr($nonce); ?>">
+    <?php if ((string) ($module['title'] ?? '') !== '') : ?><h2><?php echo esc_html((string) $module['title']); ?></h2><?php endif; ?>
+    <?php if ((string) ($module['description'] ?? '') !== '') : ?><p><?php echo esc_html((string) $module['description']); ?></p><?php endif; ?>
+    <form data-cliniko-attachment-form>
+        <label><span><?php echo esc_html((string) ($module['file_label'] ?? 'Choose a document')); ?></span><input type="file" required accept="<?php echo esc_attr((string) ($module['accept'] ?? '')); ?>" data-cliniko-attachment-file></label>
+        <label><span><?php echo esc_html((string) ($module['description_label'] ?? 'Description (optional)')); ?></span>
+            <?php if (($descriptionRules['input_type'] ?? '') === 'select' && $descriptionOptions !== []) : ?><select data-cliniko-attachment-description><option value="">Select</option><?php foreach ($descriptionOptions as $option) : ?><option value="<?php echo esc_attr((string) $option); ?>"><?php echo esc_html((string) $option); ?></option><?php endforeach; ?></select><?php else : ?><input type="text" data-cliniko-attachment-description<?php echo ShortcodeFormInputRules::inputAttributes($descriptionRules); ?>><?php endif; ?>
+            <?php $hint = ShortcodeFormInputRules::hint($descriptionRules); if ($hint !== '') : ?><small class="cliniko-shortcode-input-hint"><?php echo esc_html($hint); ?></small><?php endif; ?>
+        </label>
+        <button type="submit"><?php echo esc_html((string) ($module['button_label'] ?? 'Upload document')); ?></button>
+    </form>
+    <p class="cliniko-dashboard-module__message cliniko-component-feedback" data-cliniko-attachment-message aria-live="polite"></p>
+</section>

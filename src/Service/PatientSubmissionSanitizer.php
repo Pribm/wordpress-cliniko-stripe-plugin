@@ -9,6 +9,47 @@ if (!defined('ABSPATH')) {
 class PatientSubmissionSanitizer
 {
     /**
+     * Resolve a country name or ISO 3166-1 alpha-2 code to an ISO code.
+     *
+     * Cliniko accepts the display country separately, but country_code must
+     * contain the two-letter ISO code. Keep this deliberately dependency-free
+     * so it also works on hosts without the intl extension.
+     */
+    public static function countryCode($value): ?string
+    {
+        $country = strtoupper(trim((string) $value));
+        if ($country === '') {
+            return null;
+        }
+
+        if (preg_match('/^[A-Z]{2}$/', $country) === 1) {
+            return $country;
+        }
+
+        $codes = require dirname(__DIR__) . '/Config/CountryCodes.php';
+        foreach ($codes as $code => $name) {
+            if (strtoupper($name) === $country) {
+                return $code;
+            }
+        }
+
+        // Common aliases not used as the canonical ISO country name.
+        $aliases = [
+            'UNITED STATES OF AMERICA' => 'US',
+            'GREAT BRITAIN' => 'GB',
+            'ENGLAND' => 'GB',
+            'CZECH REPUBLIC' => 'CZ',
+            'IVORY COAST' => 'CI',
+            'SOUTH KOREA' => 'KR',
+            'NORTH KOREA' => 'KP',
+            'TURKEY' => 'TR',
+            'VATICAN CITY' => 'VA',
+        ];
+
+        return $aliases[$country] ?? null;
+    }
+
+    /**
      * @param array<string,mixed> $patient
      * @return array<string,mixed>
      */

@@ -1,7 +1,7 @@
 <?php
 namespace App\Service;
 
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Settings\Credentials;
 
 if (!defined('ABSPATH')) {
     exit;

@@ -1,15 +1,19 @@
 <?php
 
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Settings\Credentials;
 use App\Model\AppointmentType;
 use App\Exception\ApiException;
 use App\Model\PatientFormTemplate;
 
 if (!defined('ABSPATH')) exit;
 
+if (!function_exists('hex2rgb')) {
 function hex2rgb($hex)
 {
   $hex = str_replace('#', '', $hex);
+  if (!preg_match('/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/', $hex)) {
+    return '0, 115, 230';
+  }
   if (strlen($hex) === 3) {
     $r = hexdec(str_repeat($hex[0], 2));
     $g = hexdec(str_repeat($hex[1], 2));
@@ -21,8 +25,9 @@ function hex2rgb($hex)
   }
   return "$r, $g, $b";
 }
+}
 
-$settings = $this->get_settings();
+$settings = is_array($settings ?? null) ? $settings : [];
 $form_template_id = $settings['cliniko_form_template_id'] ?? null;
 $sections_loaded = isset($sections_loaded) ? (bool)$sections_loaded : false;
 $cliniko_cache_ttl = isset($cliniko_cache_ttl) ? (int)$cliniko_cache_ttl : 21600;
@@ -76,8 +81,9 @@ if (empty($sections)) {
 // ---------- UI Settings ----------
 $form_type = $settings['form_type'] ?? 'multi';
 $form_type = in_array($form_type, ['multi', 'single', 'unstyled'], true) ? $form_type : 'multi';
-$is_single_form = ($form_type === 'single' || $form_type === 'unstyled');
-$is_unstyled_form = ($form_type === 'unstyled');
+$isShortcodeUnstyled = !empty($settings['shortcode_unstyled']);
+$is_single_form = ($form_type === 'single');
+$is_unstyled_form = ($form_type === 'unstyled' || $isShortcodeUnstyled);
 
 $bg           = esc_attr($settings['form_background_color'] ?? '#ffffff');
 $text         = esc_attr($settings['form_text_color'] ?? '#000000');
@@ -87,7 +93,7 @@ $input_border = esc_attr($settings['form_input_border'] ?? '1px solid #ccc');
 $border_radius= esc_attr(($settings['form_border_radius']['size'] ?? 6) . ($settings['form_border_radius']['unit'] ?? 'px'));
 
 $titles_color = esc_attr($settings['titles_color'] ?? '#000000');
-$btn_bg       = esc_attr($settings['form_button_color'] ?? '#0073e6');
+$btn_bg       = esc_attr($settings['accent_color'] ?? $settings['form_button_color'] ?? '#0073e6');
 $btn_text     = esc_attr($settings['form_button_text_color'] ?? '#ffffff');
 $btn_bg_rgb   = hex2rgb($btn_bg);
 
@@ -103,7 +109,9 @@ $alignment     = $settings['form_button_alignment'] ?? 'center';
 $icon_prev     = $settings['form_button_icon_prev']['value'] ?? '';
 $icon_next     = $settings['form_button_icon_next']['value'] ?? '';
 $icon_position = $settings['form_button_icon_position'] ?? 'before';
-$icon_spacing  = isset($settings['form_button_icon_spacing']['size']) ? $settings['form_button_icon_spacing']['size'] . 'px' : '8px';
+$icon_spacing  = isset($settings['form_button_icon_spacing']['size'])
+  ? $settings['form_button_icon_spacing']['size'] . ($settings['form_button_icon_spacing']['unit'] ?? 'px')
+  : '8px';
 
 $container_flex_direction = $layout === 'row' ? 'row' : 'column';
 
@@ -148,22 +156,85 @@ if ($hasEmbedStep) {
 $customFormPayment = strtolower($settings['custom_form_payment'] ?? '');
 $paymentEnabled = ($settings['enable_payment'] ?? '') === 'yes';
 $appointmentTimeSelection = strtolower($settings['appointment_time_selection'] ?? 'calendar');
+$isShortcodeBooking = !empty($settings['shortcode_booking']);
 $showTimeStep = (($settings['appointment_source'] ?? '') === 'custom_form')
-  && $paymentEnabled
+  && ($paymentEnabled || $isShortcodeBooking)
   && in_array($customFormPayment, ['stripe', 'tyrohealth'], true)
   && $appointmentTimeSelection === 'calendar';
 $showPractitionerSelect = (($settings['appointment_source'] ?? '') === 'custom_form')
-  && $paymentEnabled
+  && ($paymentEnabled || $isShortcodeBooking)
   && in_array($customFormPayment, ['stripe', 'tyrohealth'], true);
+$authenticated_patient_booking_active = !empty($settings['authenticated_patient_booking_active']);
+$showPatientDetailsReview =
+  $authenticated_patient_booking_active
+  && !empty($settings['show_patient_details_review_active']);
 
 // ---------- Step Indexing ----------
-// Order: [all template sections] -> [optional Available Times step] -> [Patient step] -> [optional Cliniko embed step]
+// Order: [all template sections] -> [optional Available Times step] ->
+// [optional Patient step] -> [optional Patient Details review] -> [optional Cliniko embed step]
 $numSectionSteps   = count($sections);
 $timeStepIndex     = $numSectionSteps;
 $patientStepIndex  = $numSectionSteps + ($showTimeStep ? 1 : 0);
-$embedStepIndex    = $patientStepIndex + 1;
-$totalSteps        = $numSectionSteps + 1 + ($showTimeStep ? 1 : 0) + ($hasEmbedStep ? 1 : 0);
+$reviewStepIndex   = $patientStepIndex + ($authenticated_patient_booking_active ? 0 : 1);
+$embedStepIndex    = $reviewStepIndex + ($showPatientDetailsReview ? 1 : 0);
+$totalSteps        = $numSectionSteps
+  + ($showTimeStep ? 1 : 0)
+  + ($authenticated_patient_booking_active ? 0 : 1)
+  + ($showPatientDetailsReview ? 1 : 0)
+  + ($hasEmbedStep ? 1 : 0);
 $currentStep       = 1; // your JS can update this as the user navigates
+$allowedProgressTypes = ['none', 'bar', 'dots', 'steps', 'fraction', 'percentage'];
+$allowedProgressLabels = ['none', 'percentage', 'fraction', 'step_text'];
+$progressType      = $settings['progress_type'] ?? 'bar';
+$progressType = in_array($progressType, $allowedProgressTypes, true)
+  ? $progressType
+  : 'bar';
+$progressTypeTablet = $settings['progress_type_tablet'] ?? '';
+$progressTypeTablet = in_array($progressTypeTablet, $allowedProgressTypes, true)
+  ? $progressTypeTablet
+  : '';
+$progressTypeMobile = $settings['progress_type_mobile'] ?? '';
+$progressTypeMobile = in_array($progressTypeMobile, $allowedProgressTypes, true)
+  ? $progressTypeMobile
+  : '';
+$progressLabelMode = $settings['progress_label_mode'] ?? 'none';
+$progressLabelMode = in_array($progressLabelMode, $allowedProgressLabels, true)
+  ? $progressLabelMode
+  : 'none';
+$progressLabelModeTablet = $settings['progress_label_mode_tablet'] ?? '';
+$progressLabelModeTablet = in_array($progressLabelModeTablet, $allowedProgressLabels, true)
+  ? $progressLabelModeTablet
+  : '';
+$progressLabelModeMobile = $settings['progress_label_mode_mobile'] ?? '';
+$progressLabelModeMobile = in_array($progressLabelModeMobile, $allowedProgressLabels, true)
+  ? $progressLabelModeMobile
+  : '';
+$progressStepLabels = [];
+foreach ($sections as $section) {
+  $progressStepLabels[] = trim((string) ($section->name ?? '')) ?: 'Step ' . (count($progressStepLabels) + 1);
+}
+if ($showTimeStep) {
+  $progressStepLabels[] = 'Appointment Time';
+}
+if (!$authenticated_patient_booking_active) {
+  $progressStepLabels[] = $useClinikoEmbed ? 'Confirm Details' : 'Patient Details';
+}
+if ($showPatientDetailsReview) {
+  $progressStepLabels[] = 'Personal Details';
+}
+if ($hasEmbedStep) {
+  $progressStepLabels[] = 'Booking';
+}
+$initialProgressPercent = $totalSteps > 0 ? round(($currentStep / $totalSteps) * 100) : 0;
+$initialProgressText = match ($progressLabelMode) {
+  'percentage' => $initialProgressPercent . '%',
+  'fraction' => $currentStep . '/' . $totalSteps,
+  'step_text' => 'Step ' . $currentStep . ' of ' . $totalSteps,
+  default => '',
+};
+$initialProgressLabel = $progressStepLabels[$currentStep - 1] ?? 'Step ' . $currentStep;
+$showProgressStepLabels = ($settings['progress_steps_show_labels'] ?? '') === 'yes';
+$showDisabledPrevButton = ($settings['buttons_show_disabled_prev'] ?? '') === 'yes';
 
 $patientHistoryAccessEnabled =
   ($settings['appointment_source'] ?? '') === 'custom_form'
@@ -414,11 +485,16 @@ $renderPatientHistoryAccessForQuestion = static function (
   .other-input-wrap { margin: 6px 0 0 28px; }
 </style>
 <?php endif; ?>
+<?php if ($isShortcodeUnstyled): ?>
+<style>
+  #prepayment-form .calendar-day:not(.is-blank):not(.is-disabled) { cursor: pointer; }
+</style>
+<?php endif; ?>
 
 <!-- External Libraries -->
-<?php if (empty($GLOBALS['cliniko_form_assets_printed'])): ?>
+  <?php if (empty($GLOBALS['cliniko_form_assets_printed'])): ?>
   <?php $GLOBALS['cliniko_form_assets_printed'] = true; ?>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
+  <?php if (!$isShortcodeUnstyled): ?><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" /><?php endif; ?>
   <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   <script src="https://unpkg.com/imask"></script>
   <script src="<?= esc_url($assets_url . 'js/input-masks.js' . ($js_ver ? '?ver=' . $js_ver : '')) ?>"></script>
@@ -431,7 +507,7 @@ $renderPatientHistoryAccessForQuestion = static function (
 <link rel="stylesheet" href="<?= esc_url($assets_url . 'css/multistep-form-style.css' . ($css_ver ? '?ver=' . $css_ver : '')) ?>">
     <?php endif; ?>
   <?php endif; ?>
-  <?php if ($is_unstyled_form): ?>
+  <?php if ($is_unstyled_form && !$isShortcodeUnstyled): ?>
     <?php if (empty($GLOBALS['cliniko_form_unstyled_css_printed'])): ?>
       <?php $GLOBALS['cliniko_form_unstyled_css_printed'] = true; ?>
 <link rel="stylesheet" href="<?= esc_url($assets_url . 'css/unstyled-calendar.css' . ($unstyled_css_ver ? '?ver=' . $unstyled_css_ver : '')) ?>">
@@ -445,28 +521,73 @@ $renderPatientHistoryAccessForQuestion = static function (
       data-practitioner-id="<?= esc_attr($practitionerID ?? '') ?>"
       data-business-id="<?= esc_attr($businessId ?? '') ?>"
       class="cliniko-form cliniko-form--<?= esc_attr($form_type) ?>">
+  <?php
+  $shellIntroTitle = trim((string) ($settings['shell_intro_title'] ?? ''));
+  $shellIntroSubtitle = trim((string) ($settings['shell_intro_subtitle'] ?? ''));
+  $shellIntroTitleSource = (string) ($settings['shell_intro_title_source'] ?? 'static');
+  $shellIntroTitleSource = in_array($shellIntroTitleSource, ['static', 'current_step', 'current_step_with_count'], true)
+    ? $shellIntroTitleSource
+    : 'static';
+  $dynamicShellIntroTitle = match ($shellIntroTitleSource) {
+    'current_step' => $initialProgressLabel,
+    'current_step_with_count' => 'Step ' . $currentStep . ' of ' . $totalSteps . ': ' . $initialProgressLabel,
+    default => $shellIntroTitle,
+  };
+  $renderShellIntroTitle = trim($dynamicShellIntroTitle) !== '' ? trim($dynamicShellIntroTitle) : $shellIntroTitle;
+  ?>
+  <?php if ($renderShellIntroTitle !== '' || $shellIntroSubtitle !== ''): ?>
+    <div class="cliniko-form-shell-intro"
+         data-title-source="<?= esc_attr($shellIntroTitleSource) ?>"
+         data-static-title="<?= esc_attr($shellIntroTitle) ?>"
+         data-step-labels="<?= esc_attr(wp_json_encode($progressStepLabels)) ?>">
+      <?php if ($renderShellIntroTitle !== ''): ?>
+        <div class="cliniko-form-shell-intro__title" data-shell-intro-title><?= esc_html($renderShellIntroTitle) ?></div>
+      <?php endif; ?>
+      <?php if ($shellIntroSubtitle !== ''): ?>
+        <div class="cliniko-form-shell-intro__subtitle"><?= esc_html($shellIntroSubtitle) ?></div>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+
   <!-- Progress -->
-  <?php $progressType = $settings['progress_type'] ?? 'bar'; ?>
   <?php if (!$is_single_form): ?>
-  <div id="form-progress-indicator" class="form-progress form-progress--<?= esc_attr($progressType) ?>">
-    <?php if ($progressType === 'bar'): ?>
+  <div id="form-progress-indicator"
+       class="form-progress form-progress--<?= esc_attr($progressType) ?> form-progress--label-<?= esc_attr($progressLabelMode) ?><?= $showProgressStepLabels ? ' form-progress--step-labels' : '' ?>"
+       data-progress-type="<?= esc_attr($progressType) ?>"
+       data-progress-type-tablet="<?= esc_attr($progressTypeTablet) ?>"
+       data-progress-type-mobile="<?= esc_attr($progressTypeMobile) ?>"
+       data-label-mode="<?= esc_attr($progressLabelMode) ?>"
+       data-label-mode-tablet="<?= esc_attr($progressLabelModeTablet) ?>"
+       data-label-mode-mobile="<?= esc_attr($progressLabelModeMobile) ?>"
+       data-step-labels="<?= esc_attr(wp_json_encode($progressStepLabels)) ?>">
+    <div class="progress-visual progress-visual--bar">
       <div class="progress-track">
         <div class="progress-fill" style="width: <?= ($totalSteps > 0 ? ($currentStep / $totalSteps) * 100 : 0) ?>%;"></div>
       </div>
-    <?php elseif ($progressType === 'dots'): ?>
+    </div>
+    <div class="progress-visual progress-visual--dots">
       <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
         <span class="progress-dot <?= $i === $currentStep ? 'is-active' : '' ?>"></span>
       <?php endfor; ?>
-    <?php elseif ($progressType === 'steps'): ?>
+    </div>
+    <div class="progress-visual progress-visual--steps">
       <?php for ($i = 1; $i <= $totalSteps; $i++): ?>
         <?php if ($i > 1): ?><div class="form-progress__divider"></div><?php endif; ?>
-        <div class="progress-step <?= $i === $currentStep ? 'is-active' : '' ?>"><?= $i ?></div>
+        <div class="progress-step <?= $i === $currentStep ? 'is-active' : '' ?>">
+          <span class="progress-step__number"><?= $i ?></span>
+          <?php if ($showProgressStepLabels): ?>
+            <span class="progress-step__label"><?= esc_html($progressStepLabels[$i - 1] ?? 'Step ' . $i) ?></span>
+          <?php endif; ?>
+        </div>
       <?php endfor; ?>
-    <?php elseif ($progressType === 'fraction'): ?>
-      <span class="progress-text"><?= $currentStep ?>/<?= $totalSteps ?></span>
-    <?php elseif ($progressType === 'percentage'): ?>
-      <span class="progress-text"><?= $totalSteps > 0 ? round(($currentStep / $totalSteps) * 100) : 0 ?>%</span>
-    <?php endif; ?>
+    </div>
+    <span class="progress-text progress-text--fraction"><?= $currentStep ?>/<?= $totalSteps ?></span>
+    <span class="progress-text progress-text--percentage"><?= $totalSteps > 0 ? round(($currentStep / $totalSteps) * 100) : 0 ?>%</span>
+    <span class="progress-status-text progress-status-text--plain"><?= esc_html($initialProgressText) ?></span>
+    <span class="progress-status-text progress-status-text--split">
+      <span class="progress-status-current"><?= esc_html($initialProgressText !== '' ? $initialProgressText : 'Step ' . $currentStep . ' of ' . $totalSteps) ?></span>
+      <span class="progress-status-label"><?= esc_html($initialProgressLabel) ?></span>
+    </span>
   </div>
   <?php endif; ?>
 
@@ -500,8 +621,13 @@ $renderPatientHistoryAccessForQuestion = static function (
               <?= esc_html($question->name) ?> <?php if ($is_required): ?><span class="req">*</span><?php endif; ?>
             </h4>
 
-            <?php switch ($question->type):
-              case 'paragraph': ?>
+            <?php switch (strtolower((string) $question->type)):
+              case 'paragraph':
+              case 'textarea':
+              case 'long_text':
+              case 'longtext':
+              case 'text_area':
+              case 'multiline': ?>
                 <textarea rows="6" name="<?= $input_name ?>" <?= $required ?> style="resize: vertical;"></textarea>
                 <?php break;
 
@@ -701,12 +827,13 @@ $renderPatientHistoryAccessForQuestion = static function (
       </div>
     <?php endif; ?>
 
-    <!-- Patient Step (always after sections) -->
+    <!-- Patient Step (omitted when the verified account is resolved server-side) -->
     <?php
     $patient_hidden = !$is_single_form;
     $patient_class = 'form-step' . ($patient_hidden ? ' is-hidden' : '');
     $patient_style = ($is_unstyled_form && $patient_hidden) ? ' style="display:none;"' : '';
     ?>
+    <?php if (!$authenticated_patient_booking_active): ?>
     <div class="<?= $patient_class ?>"
          data-step="<?= (int)$patientStepIndex ?>"
          <?= $hasEmbedStep ? '' : 'data-is-final="true"' ?><?= $patient_style ?>>
@@ -718,6 +845,12 @@ $renderPatientHistoryAccessForQuestion = static function (
         </p>
       <?php else: ?>
         <h3>Patient Details</h3>
+      <?php endif; ?>
+
+      <?php if (!empty($settings['shortcode_next_available_slot']) && is_array($settings['shortcode_next_available_slot'])): ?>
+        <input type="hidden" name="patient[practitioner_id]" value="<?= esc_attr((string) ($settings['shortcode_next_available_slot']['practitioner_id'] ?? '')) ?>">
+        <input type="hidden" name="patient[appointment_date]" value="<?= esc_attr((string) ($settings['shortcode_next_available_slot']['appointment_date'] ?? '')) ?>">
+        <input type="hidden" name="patient[appointment_start]" value="<?= esc_attr((string) ($settings['shortcode_next_available_slot']['appointment_start'] ?? '')) ?>">
       <?php endif; ?>
 
       <?php if ($showPractitionerSelect && !$showTimeStep): ?>
@@ -805,6 +938,11 @@ $renderPatientHistoryAccessForQuestion = static function (
         <?php endforeach; ?>
       </div>
     </div>
+    <?php endif; ?>
+
+    <?php if ($showPatientDetailsReview): ?>
+      <?php require __DIR__ . '/patient_details_review.phtml'; ?>
+    <?php endif; ?>
 
     <!-- Cliniko Embed Step (ONLY if configured) – always LAST -->
     <?php if ($hasEmbedStep && $embedSrc): ?>
@@ -827,10 +965,15 @@ $renderPatientHistoryAccessForQuestion = static function (
   </div>
 
   <div class="form-actions">
-    <button type="button" id="step-prev" class="multi-form-button prev-button is-hidden"<?= $is_unstyled_form ? ' style="display:none;"' : '' ?>>
-      <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
-      <span>Back</span>
+    <button
+      type="button"
+      id="step-prev"
+      class="multi-form-button prev-button<?= (!$showDisabledPrevButton || $is_single_form) ? ' is-hidden' : '' ?>"
+      <?= ($showDisabledPrevButton && !$is_single_form) ? ' disabled aria-disabled="true"' : '' ?>
+      <?= $is_unstyled_form ? ' style="display:none;"' : '' ?>>
       <?php if ($icon_prev && $icon_position === 'before'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
+      <span>Back</span>
+      <?php if ($icon_prev && $icon_position === 'after'): ?><i class="<?= esc_attr($icon_prev) ?>"></i><?php endif; ?>
     </button>
 
     <button type="button" id="step-next" class="multi-form-button next-button ">

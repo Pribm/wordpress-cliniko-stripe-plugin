@@ -16,9 +16,14 @@ class AppointmentType extends AbstractModel
     protected ?array $appointmentTypeBillableItems = null;
     protected ?array $practitioners = null;
 
-        protected static function newInstance(?object $dto, ApiClientInterface $client): static
+    protected static function newInstance(?object $dto, ApiClientInterface $client): static
     {
         return new static($dto, $client);
+    }
+
+    public static function delete(string $id, ApiClientInterface $client): bool
+    {
+        throw new \LogicException('Appointment types can only be archived or deleted in Cliniko.');
     }
 
     public function getDescription(): string
@@ -29,6 +34,11 @@ class AppointmentType extends AbstractModel
     public function getDurationInMinutes(): int
     {
         return $this->dto->durationInMinutes;
+    }
+
+    public function getCategory(): string
+    {
+        return (string) $this->dto->category;
     }
 
     /**

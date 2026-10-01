@@ -2,10 +2,10 @@
 
 namespace App\Service;
 
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Settings\Credentials;
+use App\Debug\Runtime;
 use App\DTO\CreatePatientDTO;
 use App\DTO\CreatePatientFormDTO;
-use App\Exception\ApiException;
 use App\Model\AppointmentType;
 use App\Model\AvailableTimes;
 use App\Model\Booking;
@@ -13,6 +13,8 @@ use App\Model\IndividualAppointment;
 use App\Model\Patient;
 use App\Model\PatientForm;
 use App\Model\PatientFormTemplate;
+use App\Support\Auth;
+use App\Exception\ApiException;
 use App\Validator\AppointmentRequestValidator;
 use App\Validator\PatientFormValidator;
 use App\Widgets\ClinikoForm\Webhooks\WebhookDispatchService;
@@ -44,7 +46,7 @@ class BookingAttemptService
      * @param array<string,mixed> $body
      * @return array<string,mixed>
      */
-    public function preflight(array $body): array
+    public function preflight(array $body, ?array $authenticatedPatientData = null, int $authenticatedUserId = 0): array
     {
         $gateway = strtolower(trim((string) ($body['gateway'] ?? ($body['payment']['gateway'] ?? ''))));
         $moduleId = trim((string) ($body['moduleId'] ?? ''));
@@ -176,7 +178,17 @@ class BookingAttemptService
         $patientForm = null;
 
         try {
-            [$resolvedPatient, $patientCreated] = $this->findOrCreatePatient($patient, $client);
+            if (is_array($authenticatedPatientData)) {
+                $authenticatedPatientId = trim((string) ($authenticatedPatientData['id'] ?? ''));
+                $resolvedPatient = $authenticatedPatientId !== ''
+                    ? Patient::find($authenticatedPatientId, $client)
+                    : null;
+                if (!$resolvedPatient) {
+                    throw new \RuntimeException('The authenticated Cliniko patient could not be found.');
+                }
+            } else {
+                [$resolvedPatient, $patientCreated] = $this->findOrCreatePatient($patient, $client);
+            }
             $patientForm = $this->createDraftPatientForm(
                 $resolvedPatient->getId(),
                 $templateId,
@@ -189,13 +201,16 @@ class BookingAttemptService
                 $this->archivePatientSafely((string) $resolvedPatient->getId(), $client);
             }
 
+            Runtime::logException('booking_preflight_failed', $e, [
+                'module_id' => $moduleId,
+                'patient_form_template_id' => $templateId,
+            ]);
+
             return [
                 'ok' => false,
                 'status' => 422,
-                'message' => 'Cliniko rejected the booking data during preflight.',
+                'message' => 'We could not validate your booking details. Please review them and try again.',
                 'code' => 'cliniko_preflight_rejected',
-                'detail' => $this->describeThrowableForClient($e),
-                'errors' => $this->extractThrowableErrors($e),
                 'source' => 'cliniko',
             ];
         }
@@ -220,6 +235,8 @@ class BookingAttemptService
             'content' => $content,
             'patient_id' => (string) $resolvedPatient->getId(),
             'patient_was_created' => $patientCreated,
+            'patient_mode' => is_array($authenticatedPatientData) ? 'account' : 'guest',
+            'user_id' => $authenticatedUserId > 0 ? $authenticatedUserId : null,
             'patient_form_id' => (string) $patientForm->getId(),
             'attempt_token_hash' => PublicRequestGuard::hashAttemptToken($attemptToken),
             'invoice_reference' => $invoiceReference,
@@ -269,6 +286,127 @@ class BookingAttemptService
     }
 
     /**
+     * Authenticated shortcode preflight. The linked patient is resolved on the
+     * server; submitted identity fields are never used as the authority.
+     *
+     * @param array<string,mixed> $body
+     * @return array<string,mixed>
+     */
+    public function preflightAuthenticated(array $body): array
+    {
+        if (!function_exists('is_user_logged_in') || !is_user_logged_in()) {
+            return $this->errorResponse(403, 'You must be logged in.');
+        }
+
+        $bookingFormId = sanitize_key((string) ($body['booking_form_id'] ?? ''));
+        $bookingFormNonce = trim((string) ($body['booking_form_nonce'] ?? ''));
+        if ($bookingFormId === '' || $bookingFormNonce === '' || !wp_verify_nonce($bookingFormNonce, 'cliniko_patient_booking_form_' . $bookingFormId)) {
+            return $this->errorResponse(403, 'This booking form is no longer valid. Please reload the page.');
+        }
+
+        return $this->preflightWithAuthenticatedPatient($body);
+    }
+
+    /**
+     * Authenticated ClinikoForm widget preflight. The nonce is tied to the
+     * widget's appointment type and patient-form template, and is only
+     * generated when the widget's authenticated-patient setting is active.
+     *
+     * @param array<string,mixed> $body
+     * @return array<string,mixed>
+     */
+    public function preflightAuthenticatedWidget(array $body): array
+    {
+        if (!function_exists('is_user_logged_in') || !is_user_logged_in()) {
+            return $this->errorResponse(403, 'You must be logged in.');
+        }
+
+        $moduleId = preg_replace('/[^0-9]/', '', (string) ($body['moduleId'] ?? '')) ?: '';
+        $templateId = preg_replace('/[^0-9]/', '', (string) ($body['patient_form_template_id'] ?? '')) ?: '';
+        $nonce = trim((string) ($body['authenticated_booking_nonce'] ?? ''));
+        if (
+            $moduleId === ''
+            || $templateId === ''
+            || $nonce === ''
+            || !wp_verify_nonce($nonce, 'cliniko_form_authenticated_booking_' . $moduleId . '_' . $templateId)
+        ) {
+            return $this->errorResponse(403, 'This booking form is no longer valid. Please reload the page.');
+        }
+
+        return $this->preflightWithAuthenticatedPatient($body);
+    }
+
+    /**
+     * Resolve the linked patient on the server and retain only scheduling
+     * fields from the browser request. This keeps patient identity out of the
+     * authenticated headless/widget payload and prevents client data from
+     * becoming the patient authority.
+     *
+     * @param array<string,mixed> $body
+     * @return array<string,mixed>
+     */
+    private function preflightWithAuthenticatedPatient(array $body): array
+    {
+        $userId = (int) get_current_user_id();
+        try {
+            $patientData = Auth::patientData();
+        } catch (\Throwable $e) {
+            if ($e instanceof ApiException) {
+                return $this->errorResponse(
+                    503,
+                    'Cliniko is temporarily unavailable. Please try again shortly.',
+                    ['code' => 'cliniko_connection_unavailable']
+                );
+            }
+            return $this->errorResponse(
+                403,
+                'Your Cliniko patient account could not be resolved.',
+                ['code' => 'cliniko_patient_not_found']
+            );
+        }
+
+        if (!is_array($patientData) || trim((string) ($patientData['id'] ?? '')) === '') {
+            return $this->errorResponse(403, 'A verified Cliniko patient account is required.');
+        }
+
+        $serverPatient = [];
+        foreach ([
+            'first_name', 'last_name', 'email', 'phone', 'date_of_birth',
+            'medicare', 'medicare_reference_number', 'address_1', 'address_2',
+            'city', 'state', 'post_code', 'country', 'custom_fields',
+        ] as $key) {
+            if (array_key_exists($key, $patientData)) {
+                $serverPatient[$key] = $patientData[$key];
+            }
+        }
+        $submittedPatient = is_array($body['patient'] ?? null) ? $body['patient'] : [];
+        $body['patient'] = array_merge(
+            $serverPatient,
+            array_intersect_key($submittedPatient, array_flip([
+                'appointment_start',
+                'appointment_date',
+                'practitioner_id',
+                'patient_booked_time',
+            ]))
+        );
+
+        $renewalAppointmentId = preg_replace('/[^0-9]/', '', (string) ($body['renewal_appointment_id'] ?? '')) ?: '';
+        if ($renewalAppointmentId !== '') {
+            try {
+                (new PatientBookingRenewalService())->getAuthorizedPrefill(
+                    $renewalAppointmentId,
+                    trim((string) $patientData['id']),
+                    cliniko_client(false)
+                );
+            } catch (\Throwable $e) {
+                return $this->errorResponse(403, 'This appointment is not available for renewal.');
+            }
+        }
+
+        return $this->preflight($body, $patientData, $userId);
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function chargeStripe(string $attemptId, string $stripeToken): array
@@ -306,7 +444,16 @@ class BookingAttemptService
                 (string) ($patient['email'] ?? '')
             );
         } catch (\Throwable $e) {
-            return ['ok' => false, 'status' => 402, 'message' => 'Payment failed.', 'detail' => $e->getMessage()];
+            Runtime::logException('booking_stripe_payment_failed', $e, [
+                'attempt_id' => $attemptId,
+                'amount' => (int) ($attempt['amount'] ?? 0),
+            ]);
+
+            return [
+                'ok' => false,
+                'status' => 402,
+                'message' => 'Payment could not be completed. Please try again.',
+            ];
         }
 
         if (empty($charge->id)) {
@@ -368,11 +515,14 @@ class BookingAttemptService
                 return ['ok' => false, 'status' => 422, 'message' => 'Tyro payment could not be verified.'];
             }
         } catch (\Throwable $e) {
+            Runtime::logException('booking_tyro_payment_verification_failed', $e, [
+                'attempt_id' => $attemptId,
+            ]);
+
             return [
                 'ok' => false,
                 'status' => 422,
-                'message' => 'Tyro payment could not be verified.',
-                'detail' => $e->getMessage(),
+                'message' => 'Payment could not be verified. Please try again.',
             ];
         }
 
@@ -416,6 +566,7 @@ class BookingAttemptService
                     'booking' => $attempt['booking'] ?? [],
                     'payment' => $attempt['payment'] ?? [],
                     'patient_form_id' => $attempt['patient_form_id'] ?? null,
+                    'confirmation' => $this->buildConfirmationData($attempt),
                 ],
             ];
         }
@@ -498,11 +649,21 @@ class BookingAttemptService
             $finalAttempt = $this->store->update($attemptId, [
                 'status' => 'completed',
                 'progress' => ['code' => 'completed', 'message' => 'Appointment confirmed.'],
-                'booking' => ['appointment_id' => $appointmentId, 'attendee_id' => $attendeeId],
+                'booking' => [
+                    'appointment_id' => $appointmentId,
+                    'attendee_id' => $attendeeId,
+                    'starts_at' => $start->format(DATE_ATOM),
+                    'ends_at' => $end->format(DATE_ATOM),
+                ],
             ]);
 
             if ($finalAttempt) {
                 $this->webhooks()->queue('booking.completed', $finalAttempt);
+                if (($finalAttempt['patient_mode'] ?? $attempt['patient_mode'] ?? '') === 'account'
+                    && function_exists('cliniko_dashboard_cache_invalidate')
+                ) {
+                    cliniko_dashboard_cache_invalidate();
+                }
             }
 
             return [
@@ -512,29 +673,57 @@ class BookingAttemptService
                     'booking' => $finalAttempt['booking'] ?? [],
                     'payment' => $finalAttempt['payment'] ?? [],
                     'patient_form_id' => $patientFormId,
+                    'confirmation' => $this->buildConfirmationData($finalAttempt ?: $attempt),
                 ],
             ];
         } catch (\Throwable $e) {
+            Runtime::logException('booking_finalize_failed', $e, [
+                'attempt_id' => $attemptId,
+            ]);
+
             $failedAttempt = $this->store->update($attemptId, [
                 'status' => 'failed',
                 'progress' => ['code' => 'failed', 'message' => 'We could not complete your booking.'],
-                'error' => substr($e->getMessage(), 0, 500),
+                'error' => 'We could not complete your booking. Please try again.',
             ]);
 
             $this->refundAndCleanupFailedAttempt($failedAttempt ?: $attempt, $client);
             if ($failedAttempt) {
-                $this->webhooks()->queue('booking.failed', $failedAttempt, [
-                    'detail' => $e->getMessage(),
-                ]);
+                $this->webhooks()->queue('booking.failed', $failedAttempt);
             }
 
             return [
                 'ok' => false,
                 'status' => 500,
                 'message' => 'We could not complete your booking.',
-                'detail' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Return only the fields needed by the configured success page.
+     * The complete patient record remains server-side in the booking attempt.
+     *
+     * @param array<string,mixed> $attempt
+     * @return array<string,mixed>
+     */
+    private function buildConfirmationData(array $attempt): array
+    {
+        $patient = is_array($attempt['patient'] ?? null) ? $attempt['patient'] : [];
+        $booking = is_array($attempt['booking'] ?? null) ? $attempt['booking'] : [];
+        $firstName = trim((string) ($patient['first_name'] ?? ''));
+        $lastName = trim((string) ($patient['last_name'] ?? ''));
+
+        return [
+            'patient' => [
+                'name' => trim($firstName . ' ' . $lastName),
+                'email' => trim((string) ($patient['email'] ?? '')),
+            ],
+            'appointment' => [
+                'starts_at' => (string) ($booking['starts_at'] ?? ($patient['appointment_start'] ?? '')),
+                'ends_at' => (string) ($booking['ends_at'] ?? ''),
+            ],
+        ];
     }
 
     /**
@@ -645,6 +834,7 @@ class BookingAttemptService
         $dto->state = $patient['state'] ?? null;
         $dto->postCode = $patient['post_code'] ?? null;
         $dto->country = $patient['country'] ?? null;
+        $dto->countryCode = PatientSubmissionSanitizer::countryCode($patient['country'] ?? null);
         $dto->dateOfBirth = $patient['date_of_birth'] ?? null;
         $dto->medicare = $patient['medicare'] ?? null;
         $dto->medicareReferenceNumber = $patient['medicare_reference_number'] ?? null;
@@ -983,96 +1173,6 @@ class BookingAttemptService
         }
 
         return implode(' ', $parts);
-    }
-
-    /**
-     * @return array<int,array<string,mixed>>
-     */
-    private function extractThrowableErrors(\Throwable $e): array
-    {
-        if (!$e instanceof ApiException) {
-            return [];
-        }
-
-        $context = $e->getContext();
-        $responseErrors = $context['response_data']['errors'] ?? $context['errors'] ?? null;
-        return $this->normalizeApiErrors($responseErrors);
-    }
-
-    private function describeThrowableForClient(\Throwable $e): string
-    {
-        $errors = $this->extractThrowableErrors($e);
-        if (!empty($errors)) {
-            return $this->summarizeErrors($errors);
-        }
-
-        if ($e instanceof ApiException) {
-            $context = $e->getContext();
-            $statusCode = (int) ($context['status_code'] ?? 0);
-
-            if ($statusCode >= 500) {
-                return "Cliniko returned HTTP {$statusCode} while validating the form.";
-            }
-
-            $responseMessage = trim((string) ($context['response_data']['message'] ?? ''));
-            if ($responseMessage !== '') {
-                return $responseMessage;
-            }
-
-            $error = trim((string) ($context['error'] ?? ''));
-            if ($error !== '' && strpos($error, '<') === false) {
-                return $error;
-            }
-        }
-
-        return $e->getMessage();
-    }
-
-    /**
-     * @param mixed $errors
-     * @return array<int,array<string,mixed>>
-     */
-    private function normalizeApiErrors($errors, string $prefix = ''): array
-    {
-        if (!is_array($errors)) {
-            return [];
-        }
-
-        $normalized = [];
-        foreach ($errors as $field => $value) {
-            $currentField = trim($prefix . (string) $field, '.');
-
-            if (is_array($value)) {
-                $nested = $this->normalizeApiErrors($value, $currentField . '.');
-                if (!empty($nested)) {
-                    $normalized = array_merge($normalized, $nested);
-                    continue;
-                }
-
-                $encoded = json_encode($value, JSON_UNESCAPED_SLASHES);
-                $normalized[] = [
-                    'field' => $currentField,
-                    'label' => $this->humanizeField($currentField),
-                    'code' => 'invalid',
-                    'detail' => is_string($encoded) ? $encoded : 'Invalid value.',
-                ];
-                continue;
-            }
-
-            $detail = trim((string) $value);
-            if ($detail === '') {
-                continue;
-            }
-
-            $normalized[] = [
-                'field' => $currentField,
-                'label' => $this->humanizeField($currentField),
-                'code' => 'invalid',
-                'detail' => $detail,
-            ];
-        }
-
-        return $normalized;
     }
 
     private function humanizeField(string $field): string

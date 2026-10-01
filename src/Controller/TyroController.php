@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Settings\Credentials;
 use App\Model\AppointmentType;
 use App\Service\PatientFormPayloadSanitizer;
 use App\Service\SchedulingDispatchService;

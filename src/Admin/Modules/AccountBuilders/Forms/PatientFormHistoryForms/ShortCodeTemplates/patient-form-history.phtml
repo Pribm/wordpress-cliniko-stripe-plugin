@@ -1,0 +1,63 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** @var array<string,mixed> $configuration */
+/** @var array{items:array<int,array<string,mixed>>,page:int,per_page:int,has_more:bool} $result */
+/** @var string $pageKey */
+/** @var string $currentUrl */
+$items = $result['items'];
+$page = $result['page'];
+$showDates = !empty($configuration['show_dates']);
+?>
+<div class="cliniko-patient-form-history cliniko-component cliniko-component-list cliniko-component-data-review">
+    <?php if ($items === []) : ?>
+        <p class="cliniko-patient-form-history__message"><?php echo esc_html((string) ($configuration['empty_message'] ?? 'You have not completed any patient forms yet.')); ?></p>
+    <?php else : ?>
+        <?php foreach ($items as $form) : ?>
+            <details class="cliniko-patient-form-history__form">
+                <summary>
+                    <strong><?php echo esc_html((string) ($form['name'] ?? 'Patient form')); ?></strong>
+                    <?php if ($showDates) :
+                        $date = (string) ($form['completed_at'] ?: $form['created_at'] ?? '');
+                        ?>
+                        <span><?php echo $date !== '' ? esc_html(wp_date(get_option('date_format'), strtotime($date))) : ''; ?></span>
+                    <?php endif; ?>
+                </summary>
+                <div class="cliniko-patient-form-history__content">
+                    <?php if (($form['sections'] ?? []) === []) : ?>
+                        <p>No questions or answers were recorded for this form.</p>
+                    <?php else : foreach ((array) $form['sections'] as $section) : ?>
+                        <section class="cliniko-patient-form-history__section">
+                            <?php if ((string) ($section['name'] ?? '') !== '') : ?><h3><?php echo esc_html((string) $section['name']); ?></h3><?php endif; ?>
+                            <?php if ((string) ($section['description'] ?? '') !== '') : ?><div><?php echo wp_kses_post((string) $section['description']); ?></div><?php endif; ?>
+                            <?php foreach ((array) ($section['questions'] ?? []) as $question) :
+                                $selected = is_array($question['selected_answers'] ?? null) ? $question['selected_answers'] : [];
+                                $answer = $selected !== []
+                                    ? implode(', ', array_map('strval', $selected))
+                                    : (string) ($question['answer'] ?? '');
+                                ?>
+                                <div class="cliniko-patient-form-history__answer">
+                                    <strong><?php echo esc_html((string) ($question['name'] ?? '')); ?></strong>
+                                    <?php if (strtolower((string) ($question['type'] ?? '')) === 'paragraph') : ?>
+                                        <div><?php echo $answer !== '' ? wp_kses_post($answer) : '<em>No answer</em>'; ?></div>
+                                    <?php else : ?>
+                                        <div><?php echo $answer !== '' ? nl2br(esc_html($answer)) : '<em>No answer</em>'; ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </section>
+                    <?php endforeach; endif; ?>
+                </div>
+            </details>
+        <?php endforeach; ?>
+
+        <nav class="cliniko-patient-form-history__pagination" aria-label="Patient forms pagination">
+            <?php if ($page > 1) : ?><a href="<?php echo esc_url(add_query_arg($pageKey, $page - 1, $currentUrl)); ?>">Previous</a><?php endif; ?>
+            <span>Page <?php echo esc_html((string) $page); ?></span>
+            <?php if ($result['has_more']) : ?><a href="<?php echo esc_url(add_query_arg($pageKey, $page + 1, $currentUrl)); ?>">Next</a><?php endif; ?>
+        </nav>
+    <?php endif; ?>
+</div>

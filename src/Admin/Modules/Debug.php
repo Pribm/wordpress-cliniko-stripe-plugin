@@ -104,6 +104,44 @@ class Debug
                                 </td>
                             </tr>
                             <tr>
+                                <th scope="row">Mock Patient Rendering</th>
+                                <td>
+                                    <label>
+                                        <input
+                                            type="checkbox"
+                                            name="<?php echo esc_attr(DebugSettings::OPTION_KEY); ?>[mock_patient]"
+                                            value="yes"
+                                            <?php checked($settings['mock_patient'], 'yes'); ?>
+                                        />
+                                        Use mock patient data in patient rendering shortcodes.
+                                    </label>
+                                    <p class="description">Development-only preview. It is used only for administrators when enabled.</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Authentication Behaviour Switches</th>
+                                <td>
+                                    <p>Disable one authentication-related behaviour at a time while diagnosing unexpected admin logouts. All switches are enabled by default.</p>
+                                    <?php foreach (DebugSettings::authBehaviours() as $key => $label): ?>
+                                        <label style="display:block;margin:8px 0;">
+                                            <input
+                                                type="hidden"
+                                                name="<?php echo esc_attr(DebugSettings::OPTION_KEY); ?>[auth_behaviours][<?php echo esc_attr($key); ?>]"
+                                                value="no"
+                                            />
+                                            <input
+                                                type="checkbox"
+                                                name="<?php echo esc_attr(DebugSettings::OPTION_KEY); ?>[auth_behaviours][<?php echo esc_attr($key); ?>]"
+                                                value="yes"
+                                                <?php checked($settings['auth_behaviours'][$key] ?? 'yes', 'yes'); ?>
+                                            />
+                                            <?php echo esc_html($label); ?>
+                                        </label>
+                                    <?php endforeach; ?>
+                                    <p class="description">Uncheck exactly one switch, save, reproduce the problem, then re-enable it before testing the next behaviour.</p>
+                                </td>
+                            </tr>
+                            <tr>
                                 <th scope="row">Retention Days</th>
                                 <td>
                                     <input

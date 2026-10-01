@@ -1,3 +1,43 @@
+## [Unreleased]
+
+## [2.0.0] - 2026-10-01
+### Added
+- Added an Ultimate Member-backed patient-account system with Cliniko matching/creation, one-time email verification, configurable patient roles, pending-review handling, strict login protection, and Nextend Social Login compatibility.
+- Added public patient-verification pages with configurable redirects and optional automatic verification/login through a fresh, non-persistent WordPress session.
+- Added patient portal builders and shortcodes for profile editing, onboarding, appointment dashboards/details, patient-form history and submission, attachments, communications, unread counts, appointment counts, and patient variables.
+- Added guest, authenticated-patient, and renewal booking-form shortcodes with saved booking aliases, server-resolved patient identity, optional patient-details review, calendar/practitioner controls, Stripe or Tyro Health payment selection, and custom-code bundles.
+- Added protected patient REST APIs for profile and email changes, appointments, attachments, communications, patient linking, and authenticated booking preflight.
+- Added encrypted, patient-scoped dashboard caching for profile, appointment, attachment, communication, and patient-form reads, with versioned mutation-driven invalidation.
+- Added secure account-closure confirmation and receipt workflows with editable branded email templates and a final signed-in confirmation step.
+- Added an accessible global Cliniko connection notice for shortcode API failures and browser offline state.
+- Added reusable admin components, shortcode styling controls, expanded responsive booking-form styling, and configurable progress indicators.
+- Added an in-plugin User Guide and a machine-readable OpenAPI document at `docs/openapi.yaml`.
+
+### Changed
+- Reorganised the admin experience into API Credentials, Patient Accounts, Template Builder, Patient Booking Forms, Tools, Debug, and User Guide sections.
+- Split public, patient-link, authenticated-patient, and authenticated-booking routes into dedicated route registrars backed by explicit authorization policies.
+- Reorganised DTOs into appointment, form, patient, payment, and settings namespaces and added Composer classmap discovery for DTO hydration.
+- Expanded patient custom-field support for current Cliniko definitions, choice options, stale-field removal, conditional onboarding fields, and safer submission payloads.
+- Updated the Elementor booking widget to support authenticated patient booking without serialising patient details into the page, and disabled save-on-exit storage for authenticated flows.
+- Expanded the booking wizard with responsive layouts, configurable navigation states, patient-detail review, gateway-specific state handling, and file modification-time asset cache busting.
+- Improved Cliniko model pagination and booking-attempt handling for authenticated patients, existing appointments, renewal flows, and cache invalidation.
+
+### Security
+- Patient access now requires a configured role, a verified encrypted Cliniko link, a resolvable patient, and route-specific nonces/policies.
+- Linked accounts are suspended only after two consecutive live Cliniko `404` responses; transient failures do not revoke access, and restored verified patients can recover access safely.
+- Attachment uploads validate ownership, use TLS verification, restrict supported actions, and archive Cliniko resources instead of deleting clinical records.
+- Email-change and account-closure operations use expiring tokens, attempt limits, same-user checks, and session revocation where appropriate.
+
+### Fixed
+- Corrected PHPStan type contracts for debug settings, dashboard columns, custom-code bundles, redirects, and WordPress bootstrap constants.
+- Prevented stale or archived Cliniko custom fields from breaking unrelated patient updates.
+- Improved patient-form history pagination, communication read state, protected-page redirects, and Nextend/Ultimate Member redirect compatibility.
+
+### Upgrade Notes
+- Ultimate Member is now a required plugin dependency. Version 2.0.0 will not initialise its patient-account and booking features until Ultimate Member is active.
+- Review the new **Cliniko + Stripe &rarr; Patient Accounts** settings, configure the patient role and verification page, and test registration/login in a private browser before enabling the portal in production.
+- The former flat admin modules and DTO layout have been replaced by the new settings, builder, route, authorization, and domain DTO structure.
+
 ## [1.6.16] - 2026-08-24
 ### Changed
 - Headless calendar and available-time requests now bypass browser and frontend response caches, and their REST endpoints explicitly return no-store headers.

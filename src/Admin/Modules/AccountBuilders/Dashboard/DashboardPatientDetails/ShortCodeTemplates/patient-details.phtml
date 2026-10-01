@@ -1,0 +1,47 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** @var array<string,mixed> $module */
+/** @var array<string,mixed> $patient */
+$values = array_merge($patient, is_array($patient['custom_field_values'] ?? null) ? $patient['custom_field_values'] : []);
+$values['full_name'] = trim(implode(' ', array_filter([
+    (string) ($patient['first_name'] ?? ''),
+    (string) ($patient['last_name'] ?? ''),
+])));
+$columns = max(1, min(3, (int) ($module['columns'] ?? 2)));
+$emptyValue = (string) ($module['empty_value'] ?? '—');
+?>
+<section class="cliniko-dashboard-module cliniko-patient-details-module cliniko-component cliniko-component-data-review">
+    <?php if ((string) ($module['title'] ?? '') !== '') : ?><h2><?php echo esc_html((string) $module['title']); ?></h2><?php endif; ?>
+    <div class="cliniko-dashboard-details" style="--cliniko-detail-columns:<?php echo esc_attr((string) $columns); ?>">
+        <?php foreach ((array) ($module['fields'] ?? []) as $field) :
+            if (!is_array($field)) continue;
+            $key = sanitize_key((string) ($field['key'] ?? ''));
+            $value = $values[$key] ?? '';
+            if (is_bool($value)) {
+                $display = $value ? 'Yes' : 'No';
+            } elseif (is_array($value)) {
+                $display = implode(', ', array_map(static function ($item): string {
+                    if (is_array($item)) {
+                        return (string) ($item['number'] ?? $item['value'] ?? wp_json_encode($item));
+                    }
+                    return is_scalar($item) ? (string) $item : '';
+                }, $value));
+            } elseif (is_object($value)) {
+                $display = (string) wp_json_encode($value);
+            } else {
+                $display = (string) $value;
+            }
+            $display = trim($display);
+            if (!empty($module['hide_empty']) && $display === '') continue;
+            ?>
+            <div class="cliniko-dashboard-detail">
+                <?php if (!array_key_exists('show_labels', $module) || !empty($module['show_labels'])) : ?><strong><?php echo esc_html((string) ($field['alias'] ?? $key)); ?></strong><?php endif; ?>
+                <span><?php echo esc_html($display !== '' ? $display : $emptyValue); ?></span>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</section>

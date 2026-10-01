@@ -1,0 +1,941 @@
+openapi: 3.0.3
+info:
+  title: Cliniko WordPress Plugin REST API
+  description: |
+    REST API exposed by the Cliniko WordPress plugin. The API is hosted by
+    WordPress and uses the `v1` and `v2` namespaces. It is not the Cliniko
+    upstream API: these endpoints translate website requests into Cliniko
+    operations, Stripe payments, Tyro Health operations, and queued jobs.
+
+    Replace the server URL with the WordPress site URL. The WordPress REST
+    base is normally `/wp-json`, so a route such as `/v2/patient/me` is
+    requested from `/wp-json/v2/patient/me`.
+  version: 2.0.0
+servers:
+  - url: https://example.com/wp-json
+    description: Replace with the WordPress REST base URL
+tags:
+  - name: Booking metadata
+  - name: Legacy booking
+    description: Legacy v1 booking/payment endpoints retained for existing forms.
+  - name: Booking attempts
+    description: The preferred two-phase v2 booking flow.
+  - name: Patient access
+  - name: Patient account
+  - name: Attachments
+paths:
+  /v1/appointment-type:
+    get:
+      tags: [Booking metadata]
+      summary: Get Cliniko appointment type details and price
+      parameters:
+        - $ref: '#/components/parameters/AppointmentTypeId'
+        - $ref: '#/components/parameters/Refresh'
+      responses:
+        '200': { $ref: '#/components/responses/AppointmentTypeResponse' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v1/practitioners:
+    get:
+      tags: [Booking metadata]
+      summary: List online-bookable practitioners for an appointment type
+      parameters:
+        - $ref: '#/components/parameters/AppointmentTypeId'
+        - $ref: '#/components/parameters/Refresh'
+      responses:
+        '200': { $ref: '#/components/responses/PractitionersResponse' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v1/patient-form-template:
+    get:
+      tags: [Booking metadata]
+      summary: Get a Cliniko patient form template and submission skeleton
+      parameters:
+        - name: patient_form_template_id
+          in: query
+          required: true
+          schema: { type: string, pattern: '^\\d+$' }
+          description: Aliases `template_id` and `id` are also accepted.
+        - $ref: '#/components/parameters/Refresh'
+      responses:
+        '200': { $ref: '#/components/responses/PatientFormTemplateResponse' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v1/appointment-calendar:
+    get:
+      tags: [Booking metadata]
+      summary: Render the appointment calendar HTML grid
+      parameters:
+        - $ref: '#/components/parameters/AppointmentTypeId'
+        - name: practitioner_id
+          in: query
+          schema: { type: string }
+          description: Defaults to the first practitioner for the appointment type.
+        - name: month
+          in: query
+          schema: { type: string, pattern: '^\\d{4}-\\d{2}$', example: '2026-08' }
+          description: Month in YYYY-MM format; the calendar helper supplies the default when omitted.
+      responses:
+        '200': { $ref: '#/components/responses/AppointmentCalendarResponse' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v1/available-times:
+    get:
+      tags: [Booking metadata]
+      summary: List available appointment start times
+      parameters:
+        - $ref: '#/components/parameters/AppointmentTypeId'
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: practitioner_id, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 100, maximum: 100 } }
+      responses:
+        '200': { $ref: '#/components/responses/AvailableTimesResponse' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v1/next-available-times:
+    get:
+      tags: [Booking metadata]
+      summary: Find the next available time for each practitioner
+      parameters:
+        - $ref: '#/components/parameters/AppointmentTypeId'
+        - { name: from, in: query, schema: { type: string, format: date }, description: Defaults to today in the WordPress timezone. }
+        - { name: to, in: query, schema: { type: string, format: date }, description: Defaults to 90 days after from. }
+        - { name: practitioner_ids, in: query, schema: { type: string }, description: Comma-separated IDs; repeated array values are also accepted. }
+        - $ref: '#/components/parameters/Refresh'
+      responses:
+        '200': { $ref: '#/components/responses/NextAvailableTimesResponse' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v1/send-patient-form:
+    post:
+      tags: [Legacy booking]
+      summary: Queue a Cliniko patient form submission without payment
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PatientFormSubmission' } } }
+      responses:
+        '202': { $ref: '#/components/responses/QueuedPatientForm' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /v1/payments/charge:
+    post:
+      tags: [Legacy booking]
+      summary: Charge Stripe and queue the Cliniko booking
+      description: For a zero-price appointment, stripeToken is not required and payment.id is null.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LegacyPaymentRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/LegacyPaymentSuccess' }
+        '402': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/LegacyValidationError' }
+        '500': { $ref: '#/components/responses/ApiError' }
+  /v1/tyrohealth/sdk-token:
+    post:
+      tags: [Legacy booking]
+      summary: Mint a short-lived Tyro Health SDK token
+      responses:
+        '200':
+          description: Tyro token
+          content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } }
+        '500': { $ref: '#/components/responses/ApiError' }
+  /v1/tyrohealth/invoice:
+    post:
+      tags: [Legacy booking]
+      summary: Return Tyro pricing metadata for an appointment type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [moduleId]
+              properties: { moduleId: { $ref: '#/components/schemas/ClinikoId' } }
+      responses:
+        '200': { $ref: '#/components/responses/TyroInvoiceResponse' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '500': { $ref: '#/components/responses/ApiError' }
+  /v1/tyrohealth/charge:
+    post:
+      tags: [Legacy booking]
+      summary: Queue a booking after a Tyro Health transaction
+      description: For a zero-price appointment, the transaction ID is not required.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LegacyTyroChargeRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/LegacyTyroSuccess' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v2/booking-attempts/preflight:
+    post:
+      tags: [Booking attempts]
+      summary: Validate Cliniko data, create draft records, and issue a booking attempt token
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BookingPreflightRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/BookingPreflightResponse' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/BookingValidationError' }
+  /v2/patient-booking-attempts/preflight:
+    post:
+      tags: [Booking attempts]
+      summary: Create a booking attempt for the logged-in verified patient
+      description: booking_form_id and its WordPress nonce are required; patient identity is resolved server-side.
+      security: [{ wordpressCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthenticatedPreflightRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/BookingPreflightResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/BookingValidationError' }
+  /v2/booking-attempts/charge-stripe:
+    post:
+      tags: [Booking attempts]
+      summary: Verify Stripe payment for a booking attempt
+      security: [{ attemptToken: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/StripeAttemptPaymentRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/AttemptPaymentResponse' }
+        '402': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v2/booking-attempts/confirm-tyro:
+    post:
+      tags: [Booking attempts]
+      summary: Verify Tyro payment for a booking attempt
+      security: [{ attemptToken: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TyroAttemptPaymentRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/AttemptPaymentResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v2/booking-attempts/finalize:
+    post:
+      tags: [Booking attempts]
+      summary: Create the Cliniko appointment and attach the patient form
+      security: [{ attemptToken: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AttemptIdRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/BookingFinalizeResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+        '500': { $ref: '#/components/responses/ApiError' }
+  /v2/booking-attempts/status:
+    get:
+      tags: [Booking attempts]
+      summary: Read booking attempt progress
+      security: [{ attemptToken: [] }]
+      parameters:
+        - { name: attempt_id, in: query, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/AttemptTokenQuery' }
+      responses:
+        '200': { $ref: '#/components/responses/BookingStatusResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-access/request:
+    post:
+      tags: [Patient access]
+      summary: Email a patient access code and secure link
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PatientAccessRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/PatientAccessRequestResponse' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+        '502': { $ref: '#/components/responses/ApiError' }
+        '503': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-access/verify:
+    post:
+      tags: [Patient access]
+      summary: Verify the emailed six-digit patient access code
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PatientAccessVerifyRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/PatientAccessVerifyResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-access/request-status:
+    get:
+      tags: [Patient access]
+      summary: Read secure-link request state
+      parameters: [{ $ref: '#/components/parameters/RequestId' }]
+      responses:
+        '200': { $ref: '#/components/responses/PatientAccessRequestStatusResponse' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-access/request-complete:
+    post:
+      tags: [Patient access]
+      summary: Mark a secure-link request complete
+      security: [{ patientAccessToken: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PatientAccessCompleteRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/PatientAccessCompleteResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-access/appointments:
+    get:
+      tags: [Patient access]
+      summary: List completed appointments available to the patient
+      security: [{ patientAccessToken: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientAccessTokenQuery'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 10, default: 5 } }
+      responses:
+        '200': { $ref: '#/components/responses/PatientAccessAppointmentsResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-access/appointments/{booking_id}/prefill:
+    get:
+      tags: [Patient access]
+      summary: Get patient and form prefill from one completed appointment
+      security: [{ patientAccessToken: [] }]
+      parameters:
+        - { name: booking_id, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/PatientAccessTokenQuery'
+      responses:
+        '200': { $ref: '#/components/responses/PatientPrefillResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-access/latest:
+    get:
+      tags: [Patient access]
+      summary: Get prefill from the latest completed appointment
+      security: [{ patientAccessToken: [] }]
+      parameters: [{ $ref: '#/components/parameters/PatientAccessTokenQuery' }]
+      responses:
+        '200': { $ref: '#/components/responses/PatientPrefillResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-link/request:
+    post:
+      tags: [Patient account]
+      summary: Request Cliniko patient email verification
+      security: [{ wordpressCookie: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/PatientLinkResponse' }
+        '202': { $ref: '#/components/responses/PatientLinkResponse' }
+        '400': { $ref: '#/components/responses/ApiError' }
+  /v2/patient-link/status:
+    get:
+      tags: [Patient account]
+      summary: Get current Cliniko patient verification status
+      security: [{ wordpressCookie: [] }]
+      responses: { '200': { $ref: '#/components/responses/PatientLinkStatusResponse' } }
+  /v2/patient-link/verify:
+    get:
+      tags: [Patient account]
+      summary: Verify a Cliniko patient email link
+      parameters: [{ $ref: '#/components/parameters/VerificationUserId' }, { $ref: '#/components/parameters/VerificationToken' }]
+      responses:
+        '200': { $ref: '#/components/responses/VerificationResponse' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+        '410': { $ref: '#/components/responses/ApiError' }
+        '429': { $ref: '#/components/responses/ApiError' }
+        '503': { $ref: '#/components/responses/ApiError' }
+    post:
+      tags: [Patient account]
+      summary: Verify a Cliniko patient email link
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/VerificationRequest' } } }
+      responses: { '200': { $ref: '#/components/responses/VerificationResponse' } }
+  /v2/patient/email-change/verify:
+    get:
+      tags: [Patient account]
+      summary: Verify a patient email-change link
+      parameters: [{ $ref: '#/components/parameters/VerificationUserId' }, { $ref: '#/components/parameters/VerificationToken' }]
+      responses: { '200': { $ref: '#/components/responses/EmailChangeVerificationResponse' } }
+    post:
+      tags: [Patient account]
+      summary: Verify a patient email-change link
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/VerificationRequest' } } }
+      responses: { '200': { $ref: '#/components/responses/EmailChangeVerificationResponse' } }
+  /v2/patient/me:
+    get:
+      tags: [Patient account]
+      summary: Get the logged-in verified Cliniko patient
+      security: [{ wordpressCookie: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/PatientResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+    put:
+      tags: [Patient account]
+      summary: Update the logged-in patient in Cliniko
+      security: [{ wordpressCookie: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PatientUpdate' } } } }
+      responses: { '200': { $ref: '#/components/responses/PatientUpdateResponse' } }
+    patch:
+      tags: [Patient account]
+      summary: Partially update the logged-in patient in Cliniko
+      security: [{ wordpressCookie: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PatientUpdate' } } } }
+      responses: { '200': { $ref: '#/components/responses/PatientUpdateResponse' } }
+  /v2/patient/me/appointments:
+    get:
+      tags: [Patient account]
+      summary: List the logged-in patient's appointments
+      security: [{ wordpressCookie: [] }]
+      parameters:
+        - { name: appointment_type_id, in: query, required: true, schema: { type: string }, description: Use `all` to include all appointment types. }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 5 } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc], default: asc } }
+      responses: { '200': { $ref: '#/components/responses/PatientAppointmentsResponse' } }
+  /v2/patient/me/appointments/{appointment_id}:
+    get:
+      tags: [Patient account]
+      summary: Get one logged-in patient's appointment
+      security: [{ wordpressCookie: [] }]
+      parameters: [{ name: appointment_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { $ref: '#/components/responses/PatientAppointmentResponse' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /v2/patient/me/email-change:
+    post:
+      tags: [Patient account]
+      summary: Request a verified patient's email change
+      security: [{ wordpressCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties: { email: { type: string, format: email } }
+      responses:
+        '200': { $ref: '#/components/responses/EmailChangeResponse' }
+        '202': { $ref: '#/components/responses/EmailChangeResponse' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+        '429': { $ref: '#/components/responses/ApiError' }
+  /v2/patient/me/attachments:
+    get:
+      tags: [Attachments]
+      summary: List the logged-in patient's Cliniko attachments
+      security: [{ wordpressCookie: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, default: 20 } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+      responses: { '200': { $ref: '#/components/responses/AttachmentsResponse' } }
+    post:
+      tags: [Attachments]
+      summary: Create a Cliniko attachment record after an external upload
+      security: [{ wordpressCookie: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentCreate' } } } }
+      responses: { '200': { $ref: '#/components/responses/AttachmentResponse' } }
+  /v2/patient/me/attachments/presign:
+    post:
+      tags: [Attachments]
+      summary: Get a presigned upload payload for a Cliniko attachment
+      security: [{ wordpressCookie: [] }]
+      responses: { '200': { $ref: '#/components/responses/PresignResponse' } }
+  /v2/patient/me/attachments/upload:
+    post:
+      tags: [Attachments]
+      summary: Upload an attachment directly to Cliniko
+      security: [{ wordpressCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                description: { type: string }
+      responses: { '200': { $ref: '#/components/responses/AttachmentResponse' } }
+  /v2/patient/me/attachments/{attachment_id}:
+    patch:
+      tags: [Attachments]
+      summary: Update a patient attachment description
+      security: [{ wordpressCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AttachmentId' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentUpdate' } } } }
+      responses: { '200': { $ref: '#/components/responses/AttachmentResponse' } }
+    delete:
+      tags: [Attachments]
+      summary: Archive a patient attachment
+      security: [{ wordpressCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AttachmentId' }]
+      responses: { '200': { $ref: '#/components/responses/AttachmentArchivedResponse' } }
+components:
+  securitySchemes:
+    wordpressCookie:
+      type: apiKey
+      in: header
+      name: X-WP-Nonce
+      description: Requires the WordPress logged-in cookie as well as an X-WP-Nonce REST nonce.
+    attemptToken:
+      type: apiKey
+      in: header
+      name: X-ES-Attempt-Token
+      description: The same token may be supplied as attempt_token in the request body/query. attempt_id is also required.
+    patientAccessToken:
+      type: apiKey
+      in: header
+      name: X-ES-Patient-Access-Token
+      description: The same token may be supplied as patient_access_token or access_token in the request body/query.
+  parameters:
+    AppointmentTypeId:
+      name: appointment_type_id
+      in: query
+      required: true
+      schema: { type: string, pattern: '^\\d+$' }
+      description: Cliniko appointment type ID. Aliases `module_id` and `moduleId` are accepted.
+    Refresh:
+      name: refresh
+      in: query
+      schema: { type: string, enum: ['1', 'true', 'yes'] }
+      description: Bypass the plugin's Cliniko response cache.
+    AttemptTokenQuery:
+      name: attempt_token
+      in: query
+      schema: { type: string }
+    PatientAccessTokenQuery:
+      name: patient_access_token
+      in: query
+      schema: { type: string }
+    RequestId:
+      name: request_id
+      in: query
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{12,160}$' }
+    VerificationUserId:
+      name: user_id
+      in: query
+      required: true
+      schema: { type: integer, minimum: 1 }
+    VerificationToken:
+      name: token
+      in: query
+      required: true
+      schema: { type: string }
+    AttachmentId:
+      name: attachment_id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+  schemas:
+    ClinikoId: { type: string, pattern: '^\\d+$', example: '123' }
+    ApiError:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        success: { type: boolean, example: false }
+        status: { oneOf: [{ type: integer }, { type: string }] }
+        message: { type: string }
+        detail: { type: string }
+        code: { type: string }
+        source: { type: string }
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/FieldError' }
+    FieldError:
+      type: object
+      required: [field, label, code, detail]
+      properties:
+        field: { type: string, example: patient.email }
+        label: { type: string, example: Email }
+        code: { type: string, example: required }
+        detail: { type: string }
+    Patient:
+      type: object
+      required: [first_name, last_name, email, practitioner_id]
+      properties:
+        first_name: { type: string, minLength: 2 }
+        last_name: { type: string, minLength: 2 }
+        preferred_first_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        date_of_birth: { type: string, format: date }
+        practitioner_id: { $ref: '#/components/schemas/ClinikoId' }
+        appointment_start: { type: string, format: date-time }
+        appointment_date: { type: string, format: date }
+        patient_booked_time: { type: string, format: date-time }
+        address_1: { type: string }
+        address_2: { type: string }
+        address_3: { type: string }
+        city: { type: string }
+        state: { type: string }
+        post_code: { type: string }
+        country: { type: string }
+        gender: { type: string }
+        occupation: { type: string }
+        notes: { type: string }
+        medicare: { type: string, description: Ten digits; formatted Cliniko form is commonly `1234 56789 0`. }
+        medicare_reference_number: { type: string, pattern: '^\\d$' }
+        medicare_mode: { type: string, enum: [medicare, none] }
+        medicare_provider: { type: string }
+        health_identifier_number: { type: string }
+        custom_fields: { type: object, additionalProperties: true }
+    FormQuestion:
+      type: object
+      required: [name, type, required]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [text, textarea, checkboxes, radiobuttons] }
+        required: { type: boolean }
+        answer: { type: string }
+        answers:
+          type: array
+          items:
+            type: object
+            required: [value, selected]
+            properties: { value: { type: string }, selected: { type: boolean } }
+        other:
+          type: object
+          properties: { enabled: { type: boolean }, selected: { type: boolean }, value: { type: string } }
+      description: Signature questions are rejected by the plugin. Required text questions need answer; required choice questions need at least one selected answer.
+    FormSection:
+      type: object
+      required: [name, questions]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        questions: { type: array, items: { $ref: '#/components/schemas/FormQuestion' } }
+    FormContent:
+      type: object
+      required: [sections]
+      properties: { sections: { type: array, items: { $ref: '#/components/schemas/FormSection' } } }
+    PatientFormPatient:
+      type: object
+      required: [email, patient_booked_time]
+      properties:
+        email: { type: string, format: email }
+        patient_booked_time: { type: string, format: date-time, description: Must be an ISO UTC timestamp ending in Z. }
+      description: The legacy send-patient-form endpoint only validates these two patient fields.
+    PatientFormSubmission:
+      type: object
+      required: [moduleId, patient_form_template_id, patient, content]
+      properties:
+        moduleId: { $ref: '#/components/schemas/ClinikoId' }
+        patient_form_template_id: { $ref: '#/components/schemas/ClinikoId' }
+        patient: { $ref: '#/components/schemas/PatientFormPatient' }
+        content: { $ref: '#/components/schemas/FormContent' }
+    LegacyPaymentRequest:
+      allOf:
+        - $ref: '#/components/schemas/PatientFormSubmission'
+        - type: object
+          properties:
+            stripeToken: { type: string, pattern: '^(tok_|pm_)', description: Required when the appointment price is greater than zero. }
+            signature_attachment_id: { oneOf: [{ type: integer }, { type: string }], nullable: true }
+    LegacyTyroChargeRequest:
+      allOf:
+        - $ref: '#/components/schemas/PatientFormSubmission'
+        - type: object
+          properties:
+            tyroTransactionId: { type: string, description: Accepted name for the Tyro transaction ID. }
+            transactionId: { type: string, description: Alias for tyroTransactionId. }
+            invoiceReference: { type: string }
+            signature_attachment_id: { oneOf: [{ type: integer }, { type: string }], nullable: true }
+    BookingPreflightRequest:
+      type: object
+      required: [gateway, moduleId, patient_form_template_id, patient, content]
+      properties:
+        gateway: { type: string, enum: [stripe, tyrohealth], description: Required for priced appointment types; free appointments use free internally. }
+        moduleId: { $ref: '#/components/schemas/ClinikoId' }
+        patient_form_template_id: { $ref: '#/components/schemas/ClinikoId' }
+        patient: { $ref: '#/components/schemas/Patient' }
+        content: { $ref: '#/components/schemas/FormContent' }
+        submission_template: { type: object, additionalProperties: true }
+        headless_patient_fields: { type: array, items: { type: object, additionalProperties: true } }
+    AuthenticatedPreflightRequest:
+      allOf:
+        - $ref: '#/components/schemas/BookingPreflightRequest'
+        - type: object
+          required: [booking_form_id, booking_form_nonce]
+          properties:
+            booking_form_id: { type: string }
+            booking_form_nonce: { type: string }
+            renewal_appointment_id: { type: string }
+    StripeAttemptPaymentRequest:
+      type: object
+      required: [attempt_id, stripeToken]
+      properties:
+        attempt_id: { type: string }
+        attempt_token: { type: string }
+        stripeToken: { type: string, pattern: '^(tok_|pm_)' }
+    TyroAttemptPaymentRequest:
+      type: object
+      required: [attempt_id]
+      properties:
+        attempt_id: { type: string }
+        attempt_token: { type: string }
+        transactionId: { type: string }
+        tyroTransactionId: { type: string }
+    AttemptIdRequest:
+      type: object
+      required: [attempt_id]
+      properties: { attempt_id: { type: string }, attempt_token: { type: string } }
+    PatientAccessRequest:
+      type: object
+      required: [email, appointment_type_id]
+      properties:
+        email: { type: string, format: email }
+        appointment_type_id: { $ref: '#/components/schemas/ClinikoId' }
+        module_id: { $ref: '#/components/schemas/ClinikoId' }
+        return_url: { type: string, format: uri }
+        request_id: { type: string }
+    PatientAccessVerifyRequest:
+      type: object
+      required: [email, code, challenge_token]
+      properties:
+        email: { type: string, format: email }
+        code: { type: string, pattern: '^\\d{6}$' }
+        challenge_token: { type: string }
+    PatientAccessCompleteRequest:
+      type: object
+      required: [request_id]
+      properties: { request_id: { type: string }, patient_access_token: { type: string }, access_token: { type: string } }
+    VerificationRequest:
+      type: object
+      required: [user_id, token]
+      properties: { user_id: { type: integer }, token: { type: string } }
+    PatientUpdate:
+      type: object
+      description: Allowed fields are the editable Cliniko patient fields; unknown fields are discarded. Email changes are handled through the email-change flow.
+      additionalProperties: true
+      properties:
+        first_name: { type: string }
+        last_name: { type: string }
+        preferred_first_name: { type: string }
+        email: { type: string, format: email }
+        date_of_birth: { type: string, format: date }
+        gender_identity: { type: string }
+        phone: { type: string }
+        address_1: { type: string }
+        address_2: { type: string }
+        address_3: { type: string }
+        city: { type: string }
+        state: { type: string }
+        post_code: { type: string }
+        country: { type: string }
+        medicare: { type: string }
+        medicare_reference_number: { type: string }
+        notes: { type: string }
+        occupation: { type: string }
+        custom_fields: { type: object, additionalProperties: true }
+        patient_phone_numbers: { type: array, items: { type: object, additionalProperties: true } }
+    AttachmentCreate:
+      type: object
+      required: [upload_url]
+      properties: { upload_url: { type: string, format: uri }, description: { type: string } }
+    AttachmentUpdate:
+      type: object
+      properties: { description: { type: string } }
+    AppointmentType:
+      type: object
+      required: [appointment_type_id, name, duration_in_minutes, amount_cents, amount, currency, payment_required]
+      properties:
+        appointment_type_id: { $ref: '#/components/schemas/ClinikoId' }
+        name: { type: string }
+        description: { type: string }
+        duration_in_minutes: { type: integer }
+        amount_cents: { type: integer }
+        amount: { type: string, example: '125.00' }
+        currency: { type: string, example: aud }
+        payment_required: { type: boolean }
+    Practitioner: { type: object, required: [id, name], properties: { id: { type: string }, name: { type: string } } }
+    Progress: { type: object, properties: { code: { type: string }, message: { type: string } } }
+    Payment: { type: object, properties: { status: { type: string }, gateway: { type: string }, reference: { type: string, nullable: true }, receipt_url: { type: string, nullable: true }, amount: { type: integer }, currency: { type: string }, card_last4: { type: string, nullable: true }, brand: { type: string, nullable: true } } }
+    AppointmentRow:
+      type: object
+      properties:
+        id: { type: string }
+        starts_at: { type: string }
+        ends_at: { type: string }
+        service: { type: string }
+        appointment_type: { type: string }
+        status: { type: string, enum: [Completed, Upcoming] }
+        doctor: { type: string }
+        duration: { type: integer, nullable: true }
+        category: { type: string }
+        description: { type: string }
+        price: { type: integer, nullable: true }
+        telehealth_url: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        patient_form: { type: string }
+        patient_form_fields: { type: object, additionalProperties: { type: string } }
+    PatientDto:
+      type: object
+      properties:
+        id: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        preferredFirstName: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        dateOfBirth: { type: string, nullable: true }
+        gender: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        address1: { type: string, nullable: true }
+        address2: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        postCode: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        occupation: { type: string, nullable: true }
+        selfUrl: { type: string, nullable: true }
+        medicare: { type: string, nullable: true }
+        medicareReferenceNumber: { type: string, nullable: true }
+        patientApointmentsUrl: { type: string, nullable: true }
+    Attachment:
+      type: object
+      properties:
+        id: { type: string }
+        archived_at: { type: string, nullable: true }
+        category: { type: string }
+        content_type: { type: string }
+        created_at: { type: string, nullable: true }
+        description: { type: string }
+        filename: { type: string }
+        pinned_at: { type: string, nullable: true }
+        processed_at: { type: string, nullable: true }
+        processing_completed: { type: boolean }
+        size: { type: string }
+        updated_at: { type: string, nullable: true }
+  responses:
+    ApiError:
+      description: Error response. HTTP status is the authoritative status; some legacy responses also include a status string.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    ValidationError:
+      description: Validation failure from the legacy patient-form validator.
+      content: { application/json: { schema: { type: object, required: [success, message, errors], properties: { success: { type: boolean, example: false }, message: { type: string }, errors: { type: array, items: { $ref: '#/components/schemas/FieldError' } } } } } }
+    LegacyValidationError:
+      description: Validation failure from the legacy payment endpoint.
+      content: { application/json: { schema: { type: object, required: [status, message], properties: { status: { type: string, example: error }, message: { type: string }, errors: { type: array, items: { $ref: '#/components/schemas/FieldError' } } } } } }
+    AppointmentTypeResponse:
+      description: Appointment type details.
+      content: { application/json: { schema: { type: object, required: [success, data], properties: { success: { type: boolean }, data: { $ref: '#/components/schemas/AppointmentType' } } } } }
+    PractitionersResponse:
+      description: Practitioner list.
+      content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: object, properties: { appointment_type_id: { type: string }, practitioners: { type: array, items: { $ref: '#/components/schemas/Practitioner' } } } } } } } }
+    PatientFormTemplateResponse:
+      description: Normalized template and submission skeleton.
+      content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: object, properties: { patient_form_template_id: { type: string }, name: { type: string }, email_to_patient_on_completion: { type: boolean }, restricted_to_practitioner: { type: boolean }, sections: { type: array, items: { $ref: '#/components/schemas/FormSection' } }, submission_template: { type: object, additionalProperties: true } } } } } } }
+    AppointmentCalendarResponse:
+      description: Calendar grid HTML and its context.
+      content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: object, properties: { month_label: { type: string }, month_key: { type: string }, grid_html: { type: string }, practitioner_id: { type: string }, appointment_type_id: { type: string } } } } } } }
+    AvailableTimesResponse:
+      description: Paginated available times.
+      content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: object, properties: { available_times: { type: array, items: { type: object, properties: { appointment_start: { type: string } } } }, total_entries: { type: integer }, links: { type: object, properties: { self: { type: string, nullable: true }, next: { type: string, nullable: true }, previous: { type: string, nullable: true } } }, appointment_type_id: { type: string }, practitioner_id: { type: string }, from: { type: string, format: date }, to: { type: string, format: date } } } } } } }
+    NextAvailableTimesResponse:
+      description: Next slot for each selected/online-bookable practitioner.
+      content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: object, properties: { appointment_type_id: { type: string }, from: { type: string, format: date }, to: { type: string, format: date }, next_available_times: { type: array, items: { type: object, properties: { practitioner_id: { type: string }, practitioner_name: { type: string }, appointment_start: { type: string, nullable: true } } } } } } } } } }
+    QueuedPatientForm:
+      description: Patient form saved and queued for asynchronous Cliniko submission.
+      content: { application/json: { schema: { type: object, required: [success, message, queued], properties: { success: { type: boolean }, message: { type: string }, queued: { type: object, properties: { payload_key: { type: string }, status: { type: string, enum: [queued] } } } } } } }
+    LegacyPaymentSuccess:
+      description: Payment result and queued scheduling.
+      content: { application/json: { schema: { type: object, required: [status, payment, scheduling], properties: { status: { type: string, enum: [success] }, payment: { $ref: '#/components/schemas/Payment' }, scheduling: { type: object, properties: { status: { type: string, enum: [queued] } } } } } } }
+    LegacyTyroSuccess:
+      description: Tyro result and queued scheduling.
+      content: { application/json: { schema: { type: object, required: [status, payment, scheduling], properties: { status: { type: string, enum: [success] }, payment: { $ref: '#/components/schemas/Payment' }, scheduling: { type: object, properties: { status: { type: string, enum: [queued] } } } } } } }
+    TyroInvoiceResponse:
+      description: Tyro invoice metadata.
+      content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: object, properties: { chargeAmount: { type: string }, invoiceReference: { type: string }, providerNumber: { type: string, nullable: true } } } } } } }
+    BookingPreflightResponse:
+      description: Booking attempt and payment requirements.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, attempt: { type: object, properties: { id: { type: string }, status: { type: string, enum: [preflighted] }, token: { type: string } } }, payment: { type: object, properties: { required: { type: boolean }, gateway: { type: string }, amount: { type: integer }, currency: { type: string }, invoice_reference: { type: string, nullable: true } } }, booking: { type: object, properties: { appointment_label: { type: string }, patient_form_id: { type: string } } } } } } }
+    BookingValidationError:
+      description: Booking preflight validation or Cliniko rejection.
+      content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiError' }, { type: object, properties: { errors: { type: array, items: { $ref: '#/components/schemas/FieldError' } } } } ] } } }
+    AttemptPaymentResponse:
+      description: Payment verified or already verified.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, payment: { $ref: '#/components/schemas/Payment' } } } } }
+    BookingFinalizeResponse:
+      description: Completed booking result.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, result: { type: object, properties: { booking: { type: object, properties: { appointment_id: { type: string }, attendee_id: { type: string, nullable: true } } }, payment: { $ref: '#/components/schemas/Payment' }, patient_form_id: { type: string } } } } } } }
+    BookingStatusResponse:
+      description: Current attempt state.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, attempt: { type: object, properties: { id: { type: string }, status: { type: string }, progress: { $ref: '#/components/schemas/Progress' }, payment: { $ref: '#/components/schemas/Payment' }, booking: { type: object, additionalProperties: true }, error: { type: string, nullable: true } } } } } } }
+    PatientAccessRequestResponse:
+      description: Challenge issued and verification email sent.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, message: { type: string }, challenge_token: { type: string }, expires_in: { type: integer, example: 600 }, request_id: { type: string } } } } }
+    PatientAccessVerifyResponse:
+      description: Six-digit challenge accepted; access token is valid for 900 seconds.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, message: { type: string }, access_token: { type: string }, expires_in: { type: integer, example: 900 } } } } }
+    PatientAccessRequestStatusResponse:
+      description: Secure-link request state.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, request_id: { type: string }, state: { type: string, enum: [pending, completed, expired] }, expires_in: { type: integer }, last_seen_at: { type: integer }, completed_at: { type: integer }, access_token: { type: string }, access_token_expires_in: { type: integer } } } } }
+    PatientAccessCompleteResponse:
+      description: Secure-link request marked complete.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, request_id: { type: string }, state: { type: string, enum: [completed] }, completed_at: { type: integer }, expires_in: { type: integer } } } } }
+    PatientAccessAppointmentsResponse:
+      description: Authorized appointment history.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, appointments: { type: array, items: { type: object, additionalProperties: true } }, expires_in: { type: integer } } } } }
+    PatientPrefillResponse:
+      description: Appointment, forms, and submission-ready prefill.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { type: object, properties: { appointment: { type: object, additionalProperties: true }, forms: { type: array, items: { type: object, additionalProperties: true } }, latest_form: { type: object, nullable: true, additionalProperties: true }, prefill: { type: object, properties: { patient: { type: object, additionalProperties: true }, content: { $ref: '#/components/schemas/FormContent' }, history: { type: object, additionalProperties: true } } } } }, expires_in: { type: integer } } } } }
+    PatientLinkResponse:
+      description: Patient verification request result.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, status: { type: string, enum: [pending, verified, failed] }, message: { type: string }, redirect_url: { type: string, format: uri } } } } }
+    PatientLinkStatusResponse:
+      description: Current verification status.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { type: object, properties: { verified: { type: boolean }, status: { type: string }, verified_at: { type: string }, account_status: { type: string } } } } } } }
+    VerificationResponse:
+      description: Patient verification result.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, status: { type: string }, message: { type: string }, redirect_url: { type: string, format: uri } } } } }
+    EmailChangeVerificationResponse:
+      description: Email-change verification result.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, status: { type: string, enum: [completed, failed, conflict] }, message: { type: string }, redirect_url: { type: string, format: uri } } } } }
+    PatientResponse:
+      description: Current patient DTO.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { $ref: '#/components/schemas/PatientDto' } } } } }
+    PatientUpdateResponse:
+      description: Updated patient DTO and optional email-change state.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { $ref: '#/components/schemas/PatientDto' }, email_change: { type: object, nullable: true, properties: { ok: { type: boolean }, status: { type: string }, message: { type: string } } } } } } }
+    PatientAppointmentsResponse:
+      description: Paginated patient appointments.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/AppointmentRow' } }, page: { type: integer }, per_page: { type: integer }, has_more: { type: boolean } } } } } } }
+    PatientAppointmentResponse:
+      description: One patient appointment.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { $ref: '#/components/schemas/AppointmentRow' } } } } }
+    EmailChangeResponse:
+      description: Email-change request state.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, status: { type: string }, message: { type: string } } } } }
+    AttachmentsResponse:
+      description: Attachment list and pagination.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { type: object, properties: { attachments: { type: array, items: { $ref: '#/components/schemas/Attachment' } }, pagination: { type: object, additionalProperties: true } } } } } } }
+    AttachmentResponse:
+      description: Created or updated attachment.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { type: object, properties: { attachment: { $ref: '#/components/schemas/Attachment' } } } } } } }
+    AttachmentArchivedResponse:
+      description: Attachment archived.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { type: object, properties: { archived: { type: boolean, example: true } } } } } } }
+    PresignResponse:
+      description: Presigned upload data returned by the Cliniko attachment service.
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, data: { type: object, additionalProperties: true } } } } }

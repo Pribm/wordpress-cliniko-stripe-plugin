@@ -9,11 +9,14 @@ if (!defined('ABSPATH')) exit;
 
 class PatientFormTemplate extends AbstractModel
 {
-
-
     protected static function newInstance(?object $dto, ApiClientInterface $client): static
     {
         return new static($dto, $client);
+    }
+
+    public static function delete(string $id, ApiClientInterface $client): bool
+    {
+        throw new \LogicException('Patient form templates can only be archived or deleted in Cliniko.');
     }
 
     public function isRestrictedToPractitioner(): bool

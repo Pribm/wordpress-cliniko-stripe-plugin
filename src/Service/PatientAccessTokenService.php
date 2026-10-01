@@ -10,6 +10,7 @@ class PatientAccessTokenService
 {
     public const ACCESS_TOKEN_TTL = 900;
     public const CHALLENGE_TOKEN_TTL = 600;
+    public const MAX_CHALLENGE_FAILURES = 3;
     public const HASH_FRAGMENT_KEY = 'es_patient_access_token';
     public const QUERY_PARAM_KEY = 'patient_access_token';
 
@@ -175,6 +176,10 @@ class PatientAccessTokenService
             return null;
         }
 
+        if ($this->challengeFailureCount($challengeToken) >= self::MAX_CHALLENGE_FAILURES) {
+            return null;
+        }
+
         $normalizedEmail = $this->normalizeEmail($email);
         $normalizedCode = preg_replace('/\D+/', '', $code);
 
@@ -184,10 +189,48 @@ class PatientAccessTokenService
             || !preg_match('/^\d{6}$/', $normalizedCode)
             || !hash_equals((string) $payload['code'], $normalizedCode)
         ) {
+            $this->recordChallengeFailure($challengeToken, (int) ($payload['exp'] ?? 0));
             return null;
         }
 
+        $this->clearChallengeFailures($challengeToken);
         return $payload;
+    }
+
+    private function challengeFailureCount(string $challengeToken): int
+    {
+        if (!function_exists('get_transient')) {
+            return 0;
+        }
+
+        return max(0, (int) get_transient($this->challengeFailureStorageKey($challengeToken)));
+    }
+
+    private function recordChallengeFailure(string $challengeToken, int $expiresAt): void
+    {
+        if (!function_exists('set_transient')) {
+            return;
+        }
+
+        $count = min(
+            self::MAX_CHALLENGE_FAILURES,
+            $this->challengeFailureCount($challengeToken) + 1
+        );
+        $ttl = max(1, $expiresAt - time());
+        set_transient($this->challengeFailureStorageKey($challengeToken), $count, $ttl);
+    }
+
+    private function clearChallengeFailures(string $challengeToken): void
+    {
+        if (function_exists('delete_transient')) {
+            delete_transient($this->challengeFailureStorageKey($challengeToken));
+        }
+    }
+
+    private function challengeFailureStorageKey(string $challengeToken): string
+    {
+        $hash = hash_hmac('sha256', trim($challengeToken), $this->secret());
+        return 'cliniko_patient_access_fail_' . substr($hash, 0, 32);
     }
 
     /**

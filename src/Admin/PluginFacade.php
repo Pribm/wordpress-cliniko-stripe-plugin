@@ -2,17 +2,36 @@
 
 namespace App\Admin;
 
-use App\Admin\Modules\AppointmentTypes;
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\AccountBuilders\AccountBuilders;
+use App\Admin\Modules\Settings\Credentials;
 use App\Admin\Modules\Debug;
-use App\Admin\Modules\ElementorTemplateSync;
-use App\Admin\Modules\PatientForms;
-use App\Admin\Modules\Settings;
+use App\Admin\Modules\Integrations\ElementorTemplateSync;
+use App\Admin\Modules\AccountBuilders\Forms\PatientAccountForms;
+use App\Admin\Modules\AccountBuilders\Forms\PatientOnboarding;
+use App\Admin\Modules\AccountBuilders\Forms\PatientFormHistoryForms;
+use App\Admin\Modules\AccountBuilders\Forms\PatientFormTemplateForms;
+use App\Admin\Modules\AccountBuilders\Dashboard\DashboardModules;
+use App\Admin\Modules\AccountBuilders\Dashboard\DashboardPatientDetails;
+use App\Admin\Modules\AccountBuilders\Dashboard\PatientAttachmentsModule;
+use App\Admin\Modules\AccountBuilders\Dashboard\PatientCommunicationsModule;
+use App\Admin\Modules\Settings\PatientSyncSettings;
+use App\Admin\Modules\AccountBuilders\Emails\PatientVerificationEmails;
+use App\Admin\Modules\PatientBookingForms;
+use App\Admin\Modules\AccountBuilders\Shortcodes\ShortcodeCatalog;
+use App\Admin\Modules\Settings\Settings;
 use App\Admin\Modules\Tools;
+use App\Admin\Modules\UserGuide;
 use App\Workers\BookingAttemptCleanupWorker;
 use App\Workers\ClinikoPatientFormWorker;
 use App\Workers\ClinikoSchedulingWorker;
 use App\Widgets\ClinikoForm\Webhooks\WebhookDeliveryWorker;
+use App\Admin\Modules\AccountBuilders\Shortcodes\PatientVariables;
+use App\Admin\Modules\AccountBuilders\Shortcodes\PatientCommunicationUnread;
+use App\Admin\Modules\AccountBuilders\Shortcodes\AppointmentCountVariables;
+use App\Admin\Modules\AccountBuilders\Shortcodes\PatientAccountClosure;
+use App\Admin\Modules\AccountBuilders\Shortcodes\PatientVerificationConfirmation;
+use App\Admin\Modules\AccountBuilders\Dashboard\PatientAttachments\ShortCodeTemplates;
+use App\Admin\Modules\AccountBuilders\Dashboard\PatientCommunications\ShortCodeTemplates as PatientCommunicationShortCodeTemplates;
 
 
 
@@ -49,9 +68,28 @@ class PluginFacade
         ElementorTemplateSync::init();
         Settings::init();
         Credentials::init();
-        AppointmentTypes::init();
-        PatientForms::init();
+        AccountBuilders::init();
+        ShortcodeCatalog::init();
+        PatientAccountForms::init();
+        PatientOnboarding::init();
+        PatientFormHistoryForms::init();
+        PatientFormTemplateForms::init();
+        DashboardModules::init();
+        DashboardPatientDetails::init();
+        PatientAttachmentsModule::init();
+        ShortCodeTemplates::init();
+        PatientCommunicationsModule::init();
+        PatientCommunicationShortCodeTemplates::init();
+        PatientVariables::init();
+        PatientCommunicationUnread::init();
+        AppointmentCountVariables::init();
+        PatientAccountClosure::init();
+        PatientVerificationConfirmation::init();
+        PatientSyncSettings::init();
+        PatientVerificationEmails::init();
+        PatientBookingForms::init();
         Tools::init();
         Debug::init();
+        UserGuide::init();
     }
 }

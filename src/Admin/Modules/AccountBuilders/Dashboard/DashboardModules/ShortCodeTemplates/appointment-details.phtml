@@ -1,0 +1,51 @@
+<?php
+
+use App\Admin\Modules\Components\DataReview;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** @var array<string,mixed> $appointment */
+$labels = [
+    'starts_at' => 'Starts',
+    'ends_at' => 'Ends',
+    'service' => 'Service',
+    'appointment_type' => 'Appointment type',
+    'status' => 'Status',
+    'doctor' => 'Doctor / practitioner',
+    'duration' => 'Duration',
+    'category' => 'Category',
+    'description' => 'Description',
+    'price' => 'Price',
+    'notes' => 'Notes',
+    'telehealth_url' => 'Telehealth',
+];
+$dateFormat = (string) get_option('date_format') . ' ' . (string) get_option('time_format');
+$rows = [];
+foreach ($labels as $key => $label) {
+    $value = $appointment[$key] ?? '';
+    if (($key === 'starts_at' || $key === 'ends_at') && is_string($value) && $value !== '') {
+        $timestamp = strtotime($value);
+        $value = $timestamp ? wp_date($dateFormat, $timestamp) : $value;
+    } elseif ($key === 'duration' && $value !== '') {
+        $value = (string) $value . ' minutes';
+    } elseif ($key === 'price' && $value !== '' && is_numeric($value)) {
+        $value = '$' . number_format(((float) $value) / 100, 2);
+    }
+    $isTelehealthLink = $key === 'telehealth_url' && is_string($value) && $value !== '';
+    $rows[] = [
+        'label' => $label,
+        'value' => $isTelehealthLink
+            ? '<a href="' . esc_url($value) . '" target="_blank" rel="noopener">Join telehealth</a>'
+            : (is_scalar($value) ? (string) $value : ''),
+        'html' => $isTelehealthLink,
+    ];
+}
+
+echo DataReview::render([
+    'class' => 'cliniko-appointment-details',
+    'list_class' => 'cliniko-appointment-details__list',
+    'show_empty' => true,
+    'rows' => $rows,
+]);

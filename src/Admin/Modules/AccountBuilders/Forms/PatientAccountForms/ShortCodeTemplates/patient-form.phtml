@@ -1,0 +1,198 @@
+<?php
+
+use App\Admin\Modules\AccountBuilders\Forms\ShortcodeFormInputRules;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** @var array<int,array{id:string,name:string,columns:array<int,array{width:int,fields:array<int,array{key:string,label:string,required:bool,width:int}>}>}> $layout */
+/** @var array<string,array<string,mixed>> $definitions */
+/** @var array<string,mixed> $patient */
+/** @var string $returnTo */
+/** @var string $formId */
+$choiceValues = [];
+$customFields = is_array($patient['custom_fields'] ?? null) ? $patient['custom_fields'] : [];
+foreach (($customFields['sections'] ?? []) as $customSection) {
+    if (!is_array($customSection)) {
+        continue;
+    }
+
+    foreach (($customSection['fields'] ?? []) as $customField) {
+        if (!is_array($customField)) {
+            continue;
+        }
+
+        $fieldToken = sanitize_key((string) ($customField['token'] ?? ''));
+        $fieldType = strtolower((string) ($customField['type'] ?? ''));
+        if ($fieldToken === '' || !in_array($fieldType, ['radiobuttons', 'checkboxes'], true)) {
+            continue;
+        }
+
+        $choiceValues['custom_' . $fieldToken] = [];
+        foreach (($customField['options'] ?? []) as $option) {
+            if (is_array($option) && !empty($option['selected'])) {
+                $choiceValues['custom_' . $fieldToken][] = (string) ($option['name'] ?? $option['value'] ?? '');
+            }
+        }
+    }
+}
+$values = array_merge(
+    $patient,
+    is_array($patient['custom_field_values'] ?? null) ? $patient['custom_field_values'] : [],
+    $choiceValues
+);
+$truthy = static fn($value): bool => $value === true || $value === 1 || in_array(strtolower((string) $value), ['1', 'yes', 'true', 'on'], true);
+$switchValues = [];
+foreach ($layout as $layoutSection) {
+    foreach ((array) ($layoutSection['columns'] ?? []) as $layoutColumn) {
+        foreach ((array) ($layoutColumn['fields'] ?? []) as $layoutField) {
+            if ((string) ($layoutField['kind'] ?? '') !== 'switch') continue;
+            $switchKey = sanitize_key((string) ($layoutField['key'] ?? ''));
+            if ($switchKey !== '') $switchValues[$switchKey] = (string) ($layoutField['default_value'] ?? 'off') === 'on';
+        }
+    }
+}
+?>
+<?php if (isset($_GET['cliniko_patient_saved'])) : ?>
+    <p class="cliniko-patient-account-form__message <?php echo (string) $_GET['cliniko_patient_saved'] === '1' ? 'is-success' : 'is-error'; ?>"><?php echo (string) $_GET['cliniko_patient_saved'] === '1' ? 'Your details were saved.' : 'Your details could not be saved.'; ?></p>
+<?php endif; ?>
+<?php if (isset($_GET['cliniko_patient_email_change'])) :
+    $emailChangeStatus = sanitize_key((string) $_GET['cliniko_patient_email_change']);
+    $emailChangeMessages = [
+        'pending' => ['is-success', 'A confirmation link was sent to your new email address. Your current email remains active until you confirm it.'],
+        'conflict' => ['is-error', 'That email address isn’t available. Please use a different one or contact us for help.'],
+        'failed' => ['is-error', 'The email change could not be started. Your current email was not changed.'],
+    ];
+    $emailChangeMessage = $emailChangeMessages[$emailChangeStatus] ?? null;
+    ?>
+    <?php if (is_array($emailChangeMessage)) : ?>
+        <p class="cliniko-patient-account-form__message <?php echo esc_attr($emailChangeMessage[0]); ?>"><?php echo esc_html($emailChangeMessage[1]); ?></p>
+    <?php endif; ?>
+<?php endif; ?>
+<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cliniko-patient-account-form cliniko-component cliniko-component-form-fields" data-cliniko-patient-form data-endpoint="<?php echo esc_url(rest_url('v2/patient/me')); ?>" data-nonce="<?php echo esc_attr(wp_create_nonce('wp_rest')); ?>">
+    <input type="hidden" name="action" value="wp_cliniko_patient_account_update">
+    <input type="hidden" name="form_id" value="<?php echo esc_attr($formId); ?>">
+    <input type="hidden" name="return_to" value="<?php echo esc_attr($returnTo); ?>">
+    <?php wp_nonce_field('update_cliniko_patient_account'); ?>
+    <div class="cliniko-patient-account-form__message" aria-live="polite"></div>
+    <?php foreach ($layout as $section) : ?>
+    <section id="<?php echo esc_attr($section['id']); ?>" class="cliniko-patient-account-form__section" data-cliniko-section-id="<?php echo esc_attr($section['id']); ?>">
+        <h2 class="cliniko-patient-account-form__section-title"><?php echo esc_html($section['name']); ?></h2>
+        <div class="cliniko-patient-account-form__section-columns" style="display:flex;gap:16px;flex-wrap:wrap">
+        <?php foreach ($section['columns'] as $column) : ?><div class="cliniko-patient-account-form__column" style="width:calc(<?php echo esc_attr((string) (($column['width'] / 12) * 100)); ?>% - 16px)">
+        <?php foreach ($column['fields'] as $config) :
+            $field = $config['key'];
+            $fieldHtmlId = 'cliniko-patient-' . sanitize_html_class($formId) . '-' . sanitize_html_class($field);
+            if ((string) ($config['kind'] ?? '') === 'switch') :
+                $switchLabel = trim((string) ($config['label'] ?? '')) ?: 'Do you have additional details to provide?';
+                $switchOnLabel = trim((string) ($config['on_label'] ?? '')) ?: 'Yes';
+                $switchOffLabel = trim((string) ($config['off_label'] ?? '')) ?: 'No';
+                $switchChecked = !empty($switchValues[$field]);
+                $switchWidth = in_array((int) ($config['width'] ?? 100), [50, 100], true) ? (int) $config['width'] : 100;
+                ?>
+                <div class="cliniko-patient-account-form__field cliniko-patient-account-form__field--logic-switch" style="width:<?php echo esc_attr((string) $switchWidth); ?>%" data-cliniko-switch-field="<?php echo esc_attr($field); ?>">
+                    <span class="cliniko-patient-account-form__label" id="<?php echo esc_attr($fieldHtmlId . '-label'); ?>"><?php echo esc_html($switchLabel); ?><?php echo !empty($config['required']) ? ' *' : ''; ?></span>
+                    <div class="cliniko-patient-account-form__logic-options" role="radiogroup" aria-labelledby="<?php echo esc_attr($fieldHtmlId . '-label'); ?>">
+                        <label class="cliniko-patient-account-form__logic-option" for="<?php echo esc_attr($fieldHtmlId . '-on'); ?>"><input id="<?php echo esc_attr($fieldHtmlId . '-on'); ?>" type="radio" name="cliniko_switches[<?php echo esc_attr($field); ?>]" value="1" data-cliniko-switch="<?php echo esc_attr($field); ?>" <?php checked($switchChecked); ?> <?php echo !empty($config['required']) ? 'required' : ''; ?>><span><?php echo esc_html($switchOnLabel); ?></span></label>
+                        <label class="cliniko-patient-account-form__logic-option" for="<?php echo esc_attr($fieldHtmlId . '-off'); ?>"><input id="<?php echo esc_attr($fieldHtmlId . '-off'); ?>" type="radio" name="cliniko_switches[<?php echo esc_attr($field); ?>]" value="0" data-cliniko-switch="<?php echo esc_attr($field); ?>" <?php checked(!$switchChecked); ?>><span><?php echo esc_html($switchOffLabel); ?></span></label>
+                    </div>
+                </div>
+                <?php continue;
+            endif;
+            if (!isset($definitions[$field])) continue;
+            $fieldIsRequired = !empty($config['required']);
+            $conditionSwitch = sanitize_key((string) ($config['condition_switch'] ?? ''));
+            $conditionValue = (string) ($config['condition_value'] ?? 'on') === 'off' ? 'off' : 'on';
+            $conditionVisible = $conditionSwitch === '' || (!empty($switchValues[$conditionSwitch]) === ($conditionValue === 'on'));
+            $conditionalAttributes = '';
+            if ($conditionSwitch !== '') {
+                $conditionalAttributes = ' data-cliniko-conditional-field data-cliniko-condition-switch="' . esc_attr($conditionSwitch) . '" data-cliniko-condition-value="' . esc_attr($conditionValue) . '" data-cliniko-condition-required="' . ($fieldIsRequired ? '1' : '0') . '"';
+                if (!$conditionVisible) $conditionalAttributes .= ' hidden aria-hidden="true"';
+            }
+            $definition = array_merge($definitions[$field], ['label' => $config['label'], 'required' => $fieldIsRequired && $conditionVisible, 'width' => $config['width']]);
+            $isCustomField = !empty($definition['custom']);
+            $value = $values[$field] ?? '';
+            $inputType = in_array((string) ($config['input_type'] ?? 'default'), ['text', 'date', 'select'], true)
+                ? (string) $config['input_type']
+                : 'default';
+            $fieldType = strtolower((string) ($definition['type'] ?? 'text'));
+            if ($inputType === 'text') {
+                $fieldType = 'text';
+            } elseif ($inputType === 'date') {
+                $fieldType = 'formatted_date';
+            } elseif ($inputType === 'select') {
+                $fieldType = 'select';
+            }
+            $dateFormat = ShortcodeFormInputRules::normaliseDateFormat($config['date_format'] ?? 'dmy_slash');
+            $inputAttributes = ShortcodeFormInputRules::inputAttributes($config);
+            $inputHint = ShortcodeFormInputRules::hint($config);
+            $selectedValues = is_array($value)
+                ? array_map('strval', $value)
+                : array_values(array_filter(array_map('trim', explode(',', (string) $value)), static fn(string $item): bool => $item !== ''));
+            $optionValues = array_map(
+                static fn($option): string => is_array($option)
+                    ? (string) ($option['value'] ?? $option['name'] ?? '')
+                    : (string) $option,
+                (array) ($definition['options'] ?? [])
+            );
+            if ($inputType === 'select') {
+                $optionValues = array_map('strval', (array) ($config['select_options'] ?? []));
+            }
+            $optionsWithSelection = array_values(array_filter(array_map(
+                static fn(string $option): array => [
+                    'value' => $option,
+                    'selected' => in_array($option, $selectedValues, true),
+                ],
+                $optionValues
+            ), static fn(array $option): bool => $option['value'] !== ''));
+            $clinikoFieldType = strtolower((string) ($definition['cliniko_field_type'] ?? ''));
+            ?>
+            <div class="cliniko-patient-account-form__field" style="width:<?php echo esc_attr((string) $definition['width']); ?>%"<?php echo $conditionalAttributes; ?>>
+                <label for="<?php echo esc_attr($fieldHtmlId); ?>"><?php echo esc_html((string) $definition['label']); ?><?php echo $fieldIsRequired ? ' *' : ''; ?></label>
+                <?php if ($fieldType === 'textarea') : ?>
+                    <textarea id="<?php echo esc_attr($fieldHtmlId); ?>" name="<?php echo esc_attr($field); ?>" <?php echo $isCustomField ? 'data-cliniko-custom-field="1"' : ''; ?> <?php echo !empty($definition['required']) ? 'required' : ''; ?><?php echo $inputAttributes; ?>><?php echo esc_textarea(is_scalar($value) ? (string) $value : ''); ?></textarea>
+                <?php elseif ($clinikoFieldType === 'radiobuttons' && $optionsWithSelection !== []) : ?>
+                    <div id="<?php echo esc_attr($fieldHtmlId . '-options'); ?>" class="cliniko-patient-account-form__choice-group cliniko-patient-account-form__choice-group--radiobuttons" data-cliniko-field-type="radiobuttons">
+                    <?php foreach ($optionsWithSelection as $optionIndex => $option) : $optionHtmlId = $fieldHtmlId . '-option-' . (int) $optionIndex; ?>
+                        <label for="<?php echo esc_attr($optionHtmlId); ?>" class="cliniko-patient-account-form__choice-option cliniko-patient-account-form__choice-option--radio">
+                            <input id="<?php echo esc_attr($optionHtmlId); ?>" class="cliniko-patient-account-form__choice-input cliniko-patient-account-form__choice-input--radio" type="radio" name="<?php echo esc_attr($field); ?>" value="<?php echo esc_attr($option['value']); ?>" <?php checked($option['selected']); ?> <?php echo !empty($definition['required']) ? 'required' : ''; ?> <?php echo $isCustomField ? 'data-cliniko-custom-field="1"' : ''; ?> />
+                            <span class="cliniko-patient-account-form__choice-label"><?php echo esc_html($option['value']); ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                    </div>
+                <?php elseif ($clinikoFieldType === 'checkboxes' && $optionsWithSelection !== []) : ?>
+                    <div id="<?php echo esc_attr($fieldHtmlId . '-options'); ?>" class="cliniko-patient-account-form__choice-group cliniko-patient-account-form__choice-group--checkboxes" data-cliniko-field-type="checkboxes" <?php echo !empty($definition['required']) ? 'data-cliniko-required-choice-group="1"' : ''; ?>>
+                    <?php foreach ($optionsWithSelection as $optionIndex => $option) : $optionHtmlId = $fieldHtmlId . '-option-' . (int) $optionIndex; ?>
+                        <label for="<?php echo esc_attr($optionHtmlId); ?>" class="cliniko-patient-account-form__choice-option cliniko-patient-account-form__choice-option--checkbox">
+                            <input id="<?php echo esc_attr($optionHtmlId); ?>" class="cliniko-patient-account-form__choice-input cliniko-patient-account-form__choice-input--checkbox" type="checkbox" name="<?php echo esc_attr($field); ?>[]" value="<?php echo esc_attr($option['value']); ?>" <?php checked($option['selected']); ?> <?php echo $isCustomField ? 'data-cliniko-custom-field="1"' : ''; ?> />
+                            <span class="cliniko-patient-account-form__choice-label"><?php echo esc_html($option['value']); ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                    </div>
+                <?php elseif ($fieldType === 'formatted_date') : ?>
+                    <div class="cliniko-shortcode-date-control" data-cliniko-date-control>
+                        <input id="<?php echo esc_attr($fieldHtmlId); ?>" name="<?php echo esc_attr($field); ?>" type="text" value="<?php echo esc_attr(ShortcodeFormInputRules::displayDate($value, $dateFormat)); ?>" inputmode="numeric" maxlength="10" placeholder="<?php echo esc_attr(ShortcodeFormInputRules::datePlaceholder($dateFormat)); ?>" data-cliniko-date-input data-cliniko-date-format="<?php echo esc_attr($dateFormat); ?>" <?php echo !empty($definition['required']) ? 'required' : ''; ?> <?php echo $isCustomField ? 'data-cliniko-custom-field="1"' : ''; ?>>
+                        <button type="button" class="cliniko-shortcode-date-picker" data-cliniko-date-picker-trigger aria-label="Choose <?php echo esc_attr((string) $definition['label']); ?> from calendar"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M7 2v2H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3h-2V2h-2v2H9V2H7Zm12 8H5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9ZM6 6h12a1 1 0 0 1 1 1v1H5V7a1 1 0 0 1 1-1Z"/></svg></button>
+                        <input type="date" class="cliniko-shortcode-native-date" value="<?php echo esc_attr(is_scalar($value) ? substr((string) $value, 0, 10) : ''); ?>" data-cliniko-native-date-picker tabindex="-1" aria-hidden="true">
+                    </div>
+                <?php elseif ($fieldType === 'select' && $optionValues !== []) : ?>
+                    <select id="<?php echo esc_attr($fieldHtmlId); ?>" name="<?php echo esc_attr($field); ?>" <?php echo $isCustomField ? 'data-cliniko-custom-field="1"' : ''; ?> <?php echo !empty($definition['required']) ? 'required' : ''; ?>>
+                        <option value="">Select</option>
+                        <?php foreach ($optionValues as $option) : ?><option value="<?php echo esc_attr((string) $option); ?>" <?php selected((string) $value, (string) $option); ?>><?php echo esc_html((string) $option); ?></option><?php endforeach; ?>
+                    </select>
+                <?php else : ?>
+                    <?php if ($fieldType === 'checkbox') : ?><input type="hidden" name="<?php echo esc_attr($field); ?>" value=""><?php endif; ?>
+                    <input id="<?php echo esc_attr($fieldHtmlId); ?>" name="<?php echo esc_attr($field); ?>" type="<?php echo esc_attr($fieldType === 'number' && (string) ($config['input_format'] ?? 'none') !== 'none' ? 'text' : $fieldType); ?>" <?php echo $isCustomField ? 'data-cliniko-custom-field="1"' : ''; ?> <?php echo $fieldType === 'checkbox' ? 'value="1"' : 'value="' . esc_attr(is_scalar($value) ? (string) $value : '') . '"'; ?> <?php echo $fieldType === 'checkbox' && $truthy($value) ? 'checked' : ''; ?> <?php echo !empty($definition['required']) ? 'required' : ''; ?><?php echo $inputAttributes; ?> />
+                <?php endif; ?>
+                
+                <?php if ($field === 'email') : ?>
+                    <small class="cliniko-patient-account-form__email-notice">If you change your email address, we’ll send a confirmation link to your new inbox. Once confirmed, you’ll be asked to sign in again.</small>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?></div><?php endforeach; ?>
+        </div>
+    </section>
+    <?php endforeach; ?>
+    <button type="submit">Save details</button>
+</form>

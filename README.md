@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `1.6.15`
+- Current plugin version: `2.0.0`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,32 +14,42 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 1.6.15
-- Custom-form widgets can now send signed server-side webhooks for booking and payment milestones.
-- Booking-attempt jobs now nudge Action Scheduler from public requests so async deliveries and booking work start promptly.
-- Cliniko patient-form create and attach requests no longer send `email_to_patient_on_completion` unless explicitly set.
+## What Is New in 2.0.0
+- A complete Ultimate Member-backed patient account and verification workflow, including Nextend Social Login compatibility and protected Cliniko patient sessions.
+- Patient portal builders and shortcodes for profiles, onboarding, appointments, patient forms, attachments, communications, account closure, and patient variables.
+- Guest, authenticated-patient, and renewal booking shortcodes with saved aliases, patient-detail review, calendar controls, and Stripe or Tyro Health payments.
+- Protected patient APIs, encrypted dashboard caching, safer Cliniko attachment/custom-field handling, and explicit route authorization policies.
+- A reorganised admin experience with API Credentials, Patient Accounts, Template Builder, Patient Booking Forms, Tools, Debug, and an in-plugin User Guide.
+- Expanded responsive booking-form styling and a machine-readable OpenAPI document in [`docs/openapi.yaml`](docs/openapi.yaml).
 
 ## Core Features
 - Shard-aware Cliniko API integration.
 - Elementor widgets for appointment cards and booking forms.
+- Ultimate Member-backed patient identity, verification, synchronisation, and access control.
+- Patient portal shortcodes for appointments, profiles, forms, attachments, and communications.
+- Guest, authenticated-patient, and renewal booking-form builders.
 - Multi-step booking flow with custom step sequencing.
 - Async scheduling pipeline through Action Scheduler (WP-Cron fallback).
 - Validation pipeline for patient form payloads.
 - Gateway handling for Stripe and Tyro Health.
 - Signed server-side webhooks for custom-form booking events.
+- Encrypted patient dashboard caches with mutation-driven invalidation.
 
 ## Requirements
 - WordPress `>= 5.9`
 - PHP `>= 7.4` (tested up to 8.2)
+- Ultimate Member (required)
 - Elementor `>= 3.10`
 - PHP OpenSSL extension enabled
 - Cliniko API key
 - Stripe keys (publishable and secret) for Stripe mode
 
+Nextend Social Login is optional and supported for social patient registration. Elementor is required only for Elementor widget workflows; shortcode-based patient portal and booking features can be configured from the plugin admin.
+
 ## Installation
 1. Install the plugin in `/wp-content/plugins/` or upload the ZIP from WordPress admin.
 2. Activate the plugin.
-3. Open `Settings -> Cliniko Stripe Integration`.
+3. Open `Cliniko + Stripe -> API Credentials`.
 4. Configure credentials:
    - Cliniko API Key
    - Cliniko App Name
@@ -52,6 +62,28 @@ Cliniko app and shard can be derived from your Cliniko URL:
 - Example: `https://my-clinic.au4.cliniko.com/...`
 - App Name: `my-clinic`
 - Shard: `au4`
+
+For patient accounts:
+
+1. Open `Cliniko + Stripe -> Patient Accounts`, enable patient synchronisation, and select the Ultimate Member patient role.
+2. Create a public verification page containing `[cliniko_patient_verification success_url="/patient-dashboard/" login_after_verification="yes"]`.
+3. Configure the verification page URL and email under `Cliniko + Stripe -> Template Builder -> Email Templates`.
+4. Build portal modules and forms in Template Builder, place their generated shortcodes on Ultimate Member-protected pages, and test registration and login in a private browser.
+
+The complete setup and testing procedure is available in `Cliniko + Stripe -> User Guide`.
+
+## Patient Portal and Booking Shortcodes
+
+Version 2.0.0 adds configurable shortcode builders for:
+
+- Patient onboarding and profile editing.
+- Appointment lists, details, and appointment-count variables.
+- Patient-form history and current template submission.
+- Attachment listing/upload and patient communications.
+- Guest, authenticated-patient, and renewal booking forms.
+- Patient verification and account closure.
+
+Authenticated shortcodes resolve the linked Cliniko patient on the server. Patient identifiers and profile data are not embedded into public page configuration, and protected mutations require the appropriate WordPress session, verification state, nonce, and authorization policy.
 
 ## Elementor Widgets
 
@@ -253,6 +285,9 @@ Content schema notes:
 - `signature` questions are not allowed in payloads.
 
 ## Headless API Reference
+
+The machine-readable Swagger/OpenAPI document for this Cliniko plugin is available at [`docs/openapi.yaml`](docs/openapi.yaml). Import it into Swagger UI, Postman, Insomnia, or another OpenAPI-compatible tool and replace its example server URL with the WordPress site URL.
+
 These are the REST endpoints the headless helpers call. They are registered under the WordPress REST API and protected by same-origin checks plus route-specific tokens where needed.
 
 Base path:

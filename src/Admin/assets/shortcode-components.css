@@ -1,0 +1,589 @@
+.cliniko-component {
+    --cliniko-component-primary: var(--cliniko-ui-primary, #2563eb);
+    --cliniko-component-accent: var(--cliniko-ui-accent, #0ea5e9);
+    --cliniko-component-text: var(--cliniko-ui-text, #111827);
+    --cliniko-component-muted: var(--cliniko-ui-muted, #64748b);
+    --cliniko-component-surface: var(--cliniko-ui-surface, #fff);
+    --cliniko-component-surface-alt: var(--cliniko-ui-surface-alt, #f8fafc);
+    --cliniko-component-border: var(--cliniko-ui-border, #e2e8f0);
+    color: var(--cliniko-component-text);
+    font-family: var(--cliniko-ui-font-family, inherit);
+}
+
+.cliniko-component-data-review > h3 {
+    color: var(--cliniko-component-primary);
+    font-family: var(--cliniko-ui-font-family, inherit);
+}
+
+/* Form fields */
+.cliniko-component-form-fields .cliniko-patient-booking-form__question,
+.cliniko-component-form-fields .cliniko-patient-booking-form__patient-field,
+.cliniko-component-form-fields .cliniko-patient-account-form__field,
+.cliniko-component-form-fields .cliniko-patient-template-form__field,
+.cliniko-component-form-fields .cliniko-patient-onboarding__field,
+.cliniko-component-form-fields .cliniko-patient-attachments-module form > label,
+.cliniko-component-form-fields .cliniko-patient-communications__composer > label {
+    margin-bottom: var(--cliniko-ui-field-gap, 20px);
+}
+
+.cliniko-component-form-fields input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.cliniko-component-form-fields select {
+    min-height: var(--cliniko-ui-control-height, 46px);
+}
+
+.cliniko-component-form-fields input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.cliniko-component-form-fields select,
+.cliniko-component-form-fields textarea {
+    border-color: var(--cliniko-component-border) !important;
+    border-radius: var(--cliniko-ui-radius, 12px) !important;
+    color: var(--cliniko-component-text) !important;
+    background: var(--cliniko-component-surface) !important;
+    font-family: var(--cliniko-ui-font-family, inherit);
+}
+
+.cliniko-component-form-fields label {
+    color: var(--cliniko-component-text);
+}
+
+.cliniko-component-form-fields button,
+.cliniko-component-list .cliniko-dashboard-details-button {
+    border-radius: var(--cliniko-ui-radius, 12px);
+}
+
+/* Compact review and read-only data */
+.cliniko-component-data-review .cliniko-patient-booking-form__question {
+    padding-block: var(--cliniko-ui-review-answer-spacing, 0) !important;
+    border-bottom-color: var(--cliniko-ui-review-divider, transparent);
+}
+
+.cliniko-component-data-review .cliniko-dashboard-detail,
+.cliniko-component-data-review .cliniko-appointment-details__list > div,
+.cliniko-component-data-review .cliniko-patient-form-history__answer {
+    padding-block: var(--cliniko-ui-review-detail-spacing, 8px) !important;
+    border-bottom-color: var(--cliniko-ui-review-divider, transparent);
+}
+
+.cliniko-component-data-review dt,
+.cliniko-component-data-review .cliniko-dashboard-detail strong,
+.cliniko-component-data-review .cliniko-patient-form-history__answer > strong,
+.cliniko-component-data-review .cliniko-renewal-field-heading label {
+    min-width: var(--cliniko-ui-review-label-width, 120px) !important;
+    font-weight: var(--cliniko-ui-review-label-weight, 650);
+}
+
+/* Appointment selector: mirrors the two-panel form shell calendar. */
+.cliniko-patient-booking-form .cliniko-component-appointment-selector .cliniko-patient-booking-form__appointment {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.cliniko-patient-booking-form .cliniko-booking-appointment-selection {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--cliniko-ui-calendar-panel-gap, 16px);
+}
+
+.cliniko-patient-booking-form .appointment-calendar,
+.cliniko-patient-booking-form .appointment-day-times {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--cliniko-component-border);
+    border-radius: var(--cliniko-ui-calendar-panel-radius, 16px);
+    background: var(--cliniko-component-surface);
+}
+
+.cliniko-patient-booking-form .appointment-calendar__header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__nav {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.cliniko-patient-booking-form .appointment-calendar .calendar-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #fff;
+    background: var(--cliniko-component-primary);
+    font-size: 24px;
+    line-height: 1;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__month {
+    color: var(--cliniko-component-text);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+
+.cliniko-patient-booking-form .calendar-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cliniko-component-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.cliniko-patient-booking-form .calendar-legend-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+
+.cliniko-patient-booking-form .calendar-legend-dot--morning,
+.cliniko-patient-booking-form .calendar-period--morning.is-active { background: var(--cliniko-ui-calendar-morning, #0ea5e9); }
+.cliniko-patient-booking-form .calendar-legend-dot--afternoon,
+.cliniko-patient-booking-form .calendar-period--afternoon.is-active { background: var(--cliniko-ui-calendar-afternoon, #f59e0b); }
+.cliniko-patient-booking-form .calendar-legend-dot--evening,
+.cliniko-patient-booking-form .calendar-period--evening.is-active { background: var(--cliniko-ui-calendar-evening, #ef4444); }
+
+.cliniko-patient-booking-form .appointment-calendar__filters {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--cliniko-component-border);
+    border-radius: 12px;
+    background: var(--cliniko-component-surface-alt);
+}
+
+.cliniko-patient-booking-form .appointment-calendar__label {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    color: var(--cliniko-component-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__select {
+    width: 100%;
+    font-size: 13px;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__weekdays,
+.cliniko-component-preview .appointment-calendar__weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--cliniko-ui-calendar-day-gap, 6px);
+    margin-bottom: 8px;
+    color: var(--cliniko-component-muted, #64748b);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__weekdays span,
+.cliniko-component-preview .appointment-calendar__weekdays span { text-align: center; }
+
+.cliniko-patient-booking-form .appointment-calendar__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(28px, 1fr));
+    gap: var(--cliniko-ui-calendar-day-gap, 6px);
+    position: relative;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__grid[aria-busy="true"] {
+    opacity: .55;
+    pointer-events: none;
+}
+
+.cliniko-patient-booking-form .cliniko-booking-calendar__loader,
+.cliniko-patient-booking-form .appointment-day-times__loading {
+    align-items: center;
+    gap: 9px;
+    margin: 8px 0;
+    color: var(--cliniko-component-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cliniko-patient-booking-form .cliniko-booking-calendar__loader:not([hidden]),
+.cliniko-patient-booking-form .appointment-day-times__loading:not([hidden]) { display: flex; }
+
+.cliniko-patient-booking-form .cliniko-booking-calendar__spinner,
+.cliniko-patient-booking-form .appointment-day-times__spinner {
+    width: 15px;
+    height: 15px;
+    border: 2px solid #cbd5e1;
+    border-top-color: var(--cliniko-component-primary);
+    border-radius: 50%;
+    animation: cliniko-component-spin .7s linear infinite;
+}
+
+@keyframes cliniko-component-spin { to { transform: rotate(360deg); } }
+
+.cliniko-patient-booking-form .appointment-calendar__grid .calendar-day {
+    display: flex;
+    min-width: 0;
+    width: 100%;
+    min-height: var(--cliniko-ui-calendar-day-size, 52px);
+    padding: 4px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 1px solid var(--cliniko-component-border);
+    border-radius: 8px;
+    color: var(--cliniko-ui-calendar-available, #2563eb);
+    background: var(--cliniko-component-surface);
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: transform .1s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__grid .calendar-day:hover:not(.is-disabled):not(.is-blank) {
+    border-color: var(--cliniko-component-primary);
+    box-shadow: 0 7px 18px rgb(15 23 42 / 12%);
+    transform: translateY(-1px);
+}
+
+.cliniko-patient-booking-form .appointment-calendar__grid .calendar-day.is-selected {
+    border-color: var(--cliniko-ui-calendar-selected, #1d4ed8);
+    color: #fff;
+    background: var(--cliniko-ui-calendar-selected, #1d4ed8);
+    box-shadow: 0 8px 20px rgb(15 23 42 / 16%);
+}
+
+.cliniko-patient-booking-form .appointment-calendar__grid .calendar-day.is-disabled {
+    opacity: .45;
+    color: var(--cliniko-component-muted);
+    background: var(--cliniko-component-surface-alt);
+    cursor: not-allowed;
+}
+
+.cliniko-patient-booking-form .appointment-calendar__grid .calendar-day.is-blank {
+    border-color: transparent;
+    background: transparent;
+    cursor: default;
+}
+
+.cliniko-patient-booking-form .calendar-day__number { font-size: 12px; font-weight: 700; }
+.cliniko-patient-booking-form .calendar-day__periods { display: flex; gap: 3px; justify-content: center; }
+.cliniko-patient-booking-form .calendar-period { width: 6px; height: 6px; border-radius: 50%; background: #e2e8f0; }
+.cliniko-patient-booking-form .cliniko-booking-calendar__status { margin: 10px 0 0; color: var(--cliniko-component-muted); font-size: 12px; }
+
+.cliniko-patient-booking-form .appointment-day-times__title { margin-bottom: 10px; color: var(--cliniko-component-text); font-size: 14px; font-weight: 700; }
+.cliniko-patient-booking-form .appointment-day-times__hint { margin: -6px 0 12px; color: var(--cliniko-component-muted); font-size: 12px; }
+.cliniko-patient-booking-form .appointment-day-times__placeholder {
+    display: flex;
+    min-height: 150px;
+    padding: 18px 16px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px dashed var(--cliniko-component-border);
+    border-radius: 14px;
+    color: var(--cliniko-component-muted);
+    background: var(--cliniko-component-surface-alt);
+    text-align: center;
+}
+.cliniko-patient-booking-form .appointment-day-times__placeholder-icon { font-size: 22px; }
+.cliniko-patient-booking-form .appointment-day-times__placeholder-title { color: var(--cliniko-component-text); font-size: 13px; font-weight: 700; }
+.cliniko-patient-booking-form .appointment-day-times__placeholder-text { max-width: 220px; font-size: 12px; }
+.cliniko-patient-booking-form .appointment-day-times__groups { display: flex; flex-direction: column; gap: 14px; }
+.cliniko-patient-booking-form .appointment-day-times__group-title { margin-bottom: 6px; color: var(--cliniko-component-muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.cliniko-patient-booking-form .appointment-day-times__group-slots { display: flex; flex-wrap: wrap; gap: 8px; }
+.cliniko-patient-booking-form .appointment-day-times .appointment-time-slot {
+    min-height: 34px;
+    padding: 6px 12px;
+    border: 1px solid var(--cliniko-component-primary);
+    border-radius: var(--cliniko-ui-calendar-slot-radius, 999px);
+    color: var(--cliniko-component-primary);
+    background: var(--cliniko-component-surface);
+    font-size: 13px;
+    font-weight: 650;
+}
+.cliniko-patient-booking-form .appointment-day-times .appointment-time-slot:hover { color: var(--cliniko-component-primary); background: var(--cliniko-component-surface-alt); }
+.cliniko-patient-booking-form .appointment-day-times .appointment-time-slot.is-selected { color: #fff; background: var(--cliniko-ui-calendar-selected, #1d4ed8); }
+.cliniko-patient-booking-form .appointment-day-times__empty { color: var(--cliniko-component-muted); font-size: 13px; }
+.cliniko-patient-booking-form .cliniko-booking-time-select { display: grid; gap: 6px; margin-top: 14px; }
+.cliniko-patient-booking-form .cliniko-booking-time-select.is-enhanced {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Shared booking steps (previously emitted as per-shortcode inline CSS). */
+.cliniko-patient-booking-form .cliniko-booking-progress { display: flex; gap: 0; list-style: none; margin: 0 0 8px; padding: 0; counter-reset: booking-step; overflow-x: auto; }
+.cliniko-patient-booking-form .cliniko-booking-progress li { position: relative; flex: 1; min-width: 120px; padding: 28px 8px 0; color: var(--cliniko-component-muted); font-size: var(--cliniko-ui-step-label-size, 12px); line-height: 1.25; text-align: center; counter-increment: booking-step; }
+.cliniko-patient-booking-form .cliniko-booking-progress li::before { content: counter(booking-step); position: absolute; top: 0; left: 50%; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; margin-left: -11px; border: 2px solid var(--cliniko-component-border); border-radius: 50%; color: var(--cliniko-component-muted); background: var(--cliniko-component-surface); font-size: 12px; font-weight: 600; }
+.cliniko-patient-booking-form .cliniko-booking-progress li::after { content: ""; position: absolute; top: 10px; left: 0; width: 100%; height: 2px; background: var(--cliniko-component-border); }
+.cliniko-patient-booking-form .cliniko-booking-progress li:first-child::after { left: 50%; width: 50%; }
+.cliniko-patient-booking-form .cliniko-booking-progress li:last-child::after { width: 50%; }
+.cliniko-patient-booking-form .cliniko-booking-progress li.is-active,
+.cliniko-patient-booking-form .cliniko-booking-progress li.is-complete { color: var(--cliniko-component-primary); font-weight: 600; }
+.cliniko-patient-booking-form .cliniko-booking-progress li.is-active::before,
+.cliniko-patient-booking-form .cliniko-booking-progress li.is-complete::before { border-color: var(--cliniko-component-primary); color: #fff; background: var(--cliniko-component-primary); }
+.cliniko-patient-booking-form .cliniko-booking-progress li.is-complete::after { background: var(--cliniko-component-primary); }
+.cliniko-patient-booking-form .cliniko-booking-progress li.is-complete::before { content: "✓"; }
+.cliniko-patient-booking-form .cliniko-booking-progress-summary { margin: 0 0 14px; color: var(--cliniko-component-muted); font-size: 13px; }
+.cliniko-patient-booking-form .cliniko-booking-progress-track { height: 4px; margin: 0 0 14px; border-radius: 4px; background: var(--cliniko-component-border); overflow: hidden; }
+.cliniko-patient-booking-form .cliniko-booking-progress-fill { display: block; width: 0; height: 100%; border-radius: 4px; background: var(--cliniko-component-primary); transition: width .2s ease; }
+
+/* Onboarding uses a compact progress header rather than the booking step list. */
+.cliniko-component-steps [data-onboarding-progress-label] {
+    font-size: var(--cliniko-ui-step-label-size, 12px);
+}
+
+/* Lists */
+.cliniko-component-list {
+    color: var(--cliniko-ui-list-body-text, var(--cliniko-component-text));
+    font-size: var(--cliniko-ui-list-body-size, 16px);
+}
+
+.cliniko-component-list > h2 {
+    color: var(--cliniko-ui-list-title-color, var(--cliniko-component-primary));
+    font-size: var(--cliniko-ui-list-title-size, 24px);
+}
+
+.cliniko-component-list.cliniko-dashboard-table-module {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    contain: inline-size;
+}
+
+.cliniko-component-list .cliniko-dashboard-detail,
+.cliniko-component-list .cliniko-dashboard-table th,
+.cliniko-component-list .cliniko-dashboard-table td,
+.cliniko-component-list .cliniko-patient-form-history__answer,
+.cliniko-component-list .cliniko-dashboard-attachment {
+    padding-block: var(--cliniko-ui-list-row-spacing, 12px);
+    padding-inline: var(--cliniko-ui-list-row-horizontal-spacing, 12px);
+    border-bottom-width: var(--cliniko-ui-list-divider-width, 1px);
+    border-bottom-style: var(--cliniko-ui-list-divider-style, solid);
+    border-bottom-color: var(--cliniko-ui-list-divider, var(--cliniko-component-border));
+}
+
+.cliniko-component-list .cliniko-dashboard-table-scroll {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: auto;
+    border-width: var(--cliniko-ui-list-table-border-width, 1px);
+    border-style: var(--cliniko-ui-list-table-border-style, solid);
+    border-color: var(--cliniko-ui-list-table-border, var(--cliniko-component-border));
+    border-radius: var(--cliniko-ui-list-table-radius, 12px);
+    background: var(--cliniko-ui-list-row-background, var(--cliniko-component-surface));
+    box-shadow: var(--cliniko-ui-list-table-shadow, none);
+    box-sizing: border-box;
+    contain: inline-size;
+}
+
+.cliniko-component-list .cliniko-dashboard-table {
+    width: max-content;
+    max-width: none;
+    min-width: 100%;
+    color: var(--cliniko-ui-list-body-text, var(--cliniko-component-text));
+    font-size: var(--cliniko-ui-list-body-size, 16px);
+}
+
+.cliniko-component-list .cliniko-dashboard-table th {
+    color: var(--cliniko-ui-list-header-text, var(--cliniko-component-text));
+    border-color: var(--cliniko-ui-list-divider, var(--cliniko-component-border));
+    background: var(--cliniko-ui-list-header-background, var(--cliniko-component-surface-alt));
+    font-size: var(--cliniko-ui-list-header-size, 14px);
+    font-weight: var(--cliniko-ui-list-header-weight, 700);
+}
+
+.cliniko-component-list .cliniko-dashboard-table td {
+    color: var(--cliniko-ui-list-body-text, var(--cliniko-component-text));
+    border-color: var(--cliniko-ui-list-divider, var(--cliniko-component-border));
+    background: var(--cliniko-ui-list-row-background, var(--cliniko-component-surface));
+    transition: background-color .15s ease;
+}
+
+.cliniko-component-list .cliniko-dashboard-table :is(th, td):not(:last-child) {
+    border-right-width: var(--cliniko-ui-list-column-divider-width, 0);
+    border-right-style: var(--cliniko-ui-list-column-divider-style, solid);
+    border-right-color: var(--cliniko-ui-list-column-divider, var(--cliniko-component-border));
+}
+
+.cliniko-component-list .cliniko-dashboard-table tbody tr:nth-child(even) > td {
+    background: var(--cliniko-ui-list-alternate-background, var(--cliniko-ui-list-row-background, var(--cliniko-component-surface)));
+}
+
+.cliniko-component-list .cliniko-dashboard-table tbody tr:hover > td {
+    background: var(--cliniko-ui-list-row-hover-background, var(--cliniko-ui-list-row-background, var(--cliniko-component-surface)));
+}
+
+.cliniko-component-list .cliniko-dashboard-table tbody tr:last-child > td {
+    border-bottom-width: 0;
+}
+
+.cliniko-component-list .cliniko-dashboard-appointment,
+.cliniko-component-list .cliniko-patient-form-history__form,
+.cliniko-component-list .cliniko-patient-communications__item {
+    color: var(--cliniko-ui-list-body-text, var(--cliniko-component-text));
+    border: var(--cliniko-ui-list-card-border-width, 1px) solid var(--cliniko-ui-list-card-border, var(--cliniko-component-border));
+    border-radius: var(--cliniko-ui-list-card-radius, 12px);
+    background: var(--cliniko-ui-list-card-background, var(--cliniko-component-surface));
+    box-shadow: var(--cliniko-ui-list-card-shadow, none);
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+.cliniko-component-list .cliniko-dashboard-appointment,
+.cliniko-component-list .cliniko-patient-communications__item {
+    padding: var(--cliniko-ui-list-card-padding, 16px);
+}
+
+.cliniko-component-list .cliniko-dashboard-appointment,
+.cliniko-component-list .cliniko-patient-form-history__form {
+    margin-bottom: var(--cliniko-ui-list-item-gap, 12px);
+}
+
+.cliniko-component-list .cliniko-patient-communications__timeline {
+    gap: var(--cliniko-ui-list-item-gap, 12px);
+}
+
+.cliniko-component-list .cliniko-patient-form-history__form summary {
+    padding: var(--cliniko-ui-list-card-padding, 16px);
+}
+
+.cliniko-component-list .cliniko-patient-form-history__content {
+    padding: 0 var(--cliniko-ui-list-card-padding, 16px) var(--cliniko-ui-list-card-padding, 16px);
+    border-color: var(--cliniko-ui-list-divider, var(--cliniko-component-border));
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-appointment, .cliniko-patient-form-history__form, .cliniko-patient-communications__item):hover {
+    background: var(--cliniko-ui-list-card-hover-background, var(--cliniko-ui-list-card-background, var(--cliniko-component-surface)));
+}
+
+.cliniko-component-list .cliniko-patient-communications__item.is-patient {
+    background: var(--cliniko-ui-list-alternate-background, var(--cliniko-ui-list-card-background, var(--cliniko-component-surface)));
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-appointment time, .cliniko-dashboard-appointment span, .cliniko-patient-communications__intro, .cliniko-patient-communications__read-only, .cliniko-patient-communications__item time, .cliniko-patient-communications__item small, .cliniko-patient-communications__empty),
+.cliniko-patient-attachments-module .cliniko-dashboard-attachment span,
+.cliniko-patient-attachments-module > p {
+    color: var(--cliniko-ui-list-muted, var(--cliniko-component-muted));
+}
+
+.cliniko-component-list .cliniko-patient-communications__tabs,
+.cliniko-component-list .cliniko-patient-communications__email-modal-dialog > header {
+    border-color: var(--cliniko-ui-list-divider, var(--cliniko-component-border));
+}
+
+.cliniko-component-list .cliniko-patient-communications__tabs button {
+    color: var(--cliniko-ui-list-body-text, var(--cliniko-component-text));
+    border-color: var(--cliniko-ui-list-card-border, var(--cliniko-component-border));
+    border-radius: var(--cliniko-ui-list-action-radius, 8px);
+    background: var(--cliniko-ui-list-row-background, var(--cliniko-component-surface));
+}
+
+.cliniko-component-list .cliniko-patient-communications__composer {
+    border-color: var(--cliniko-ui-list-card-border, var(--cliniko-component-border));
+    border-radius: var(--cliniko-ui-list-card-radius, 12px);
+    background: var(--cliniko-ui-list-header-background, var(--cliniko-component-surface-alt));
+}
+
+.cliniko-component-list .cliniko-patient-communications__email-modal-dialog {
+    color: var(--cliniko-ui-list-body-text, var(--cliniko-component-text));
+    border-color: var(--cliniko-ui-list-card-border, var(--cliniko-component-border));
+    border-radius: var(--cliniko-ui-list-card-radius, 12px);
+    background: var(--cliniko-ui-list-card-background, var(--cliniko-component-surface));
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-details-button, .cliniko-dashboard-attachment button, .cliniko-patient-communications__open-email),
+.cliniko-component-list .cliniko-patient-communications__tabs button[aria-selected="true"] {
+    color: var(--cliniko-ui-list-action-text, #fff);
+    background: var(--cliniko-ui-list-action-background, var(--cliniko-component-primary));
+}
+
+.cliniko-component-list .cliniko-dashboard-details-button {
+    display: inline-block;
+    padding: 7px 12px;
+    text-decoration: none;
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-details-button, .cliniko-dashboard-attachment button, .cliniko-patient-communications__open-email):hover {
+    color: var(--cliniko-ui-list-action-text, #fff);
+    filter: brightness(.94);
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-pagination, .cliniko-patient-form-history__pagination) {
+    display: flex;
+    align-items: center;
+    justify-content: var(--cliniko-ui-list-pagination-alignment, center);
+    gap: var(--cliniko-ui-list-pagination-gap, 8px);
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-pagination, .cliniko-patient-form-history__pagination) > a {
+    display: inline-block;
+    padding: 7px 12px;
+    border-width: var(--cliniko-ui-list-pagination-border-width, 1px);
+    border-style: var(--cliniko-ui-list-pagination-border-style, solid);
+    border-color: var(--cliniko-ui-list-pagination-border, var(--cliniko-ui-list-action-border, var(--cliniko-component-primary)));
+    border-radius: var(--cliniko-ui-list-pagination-radius, 8px);
+    color: var(--cliniko-ui-list-pagination-text, #fff);
+    background: var(--cliniko-ui-list-pagination-background, var(--cliniko-component-primary));
+    text-decoration: none;
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-pagination, .cliniko-patient-form-history__pagination) > a:hover {
+    color: var(--cliniko-ui-list-pagination-text, #fff);
+    filter: brightness(.94);
+}
+
+.cliniko-component-list :is(.cliniko-dashboard-pagination, .cliniko-patient-form-history__pagination) > span {
+    display: var(--cliniko-ui-list-pagination-page-display, inline);
+    color: var(--cliniko-ui-list-muted, var(--cliniko-component-muted));
+    font-size: .9em;
+}
+
+/* Feedback defaults remain easy to override in per-module custom CSS. */
+.cliniko-component-feedback {
+    border-radius: var(--cliniko-ui-radius, 12px);
+}
+
+.cliniko-component-feedback:not(:empty) {
+    padding: 10px 12px;
+    color: var(--cliniko-ui-feedback-success, #166534);
+    background: var(--cliniko-ui-feedback-surface, #f0fdf4);
+}
+
+.cliniko-component-feedback.is-error:not(:empty) {
+    color: var(--cliniko-ui-feedback-error, #b91c1c);
+}
+
+@media (max-width: 720px) {
+    .cliniko-patient-booking-form .cliniko-booking-appointment-selection { grid-template-columns: 1fr; }
+    .cliniko-patient-booking-form .appointment-calendar__grid { gap: 4px; }
+    .cliniko-patient-booking-form .appointment-calendar__grid .calendar-day { min-height: 40px; }
+}

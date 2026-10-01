@@ -6,7 +6,10 @@
         "psr-4": {
             "App\\": "src/",
             "App\\Core\\Framework\\": "app/Core/Framework/"
-        }
+        },
+        "classmap": [
+            "src/DTO"
+        ]
     },
     "scripts": {
         "analyse": "phpstan analyse --configuration=phpstan.neon --memory-limit=1024M",

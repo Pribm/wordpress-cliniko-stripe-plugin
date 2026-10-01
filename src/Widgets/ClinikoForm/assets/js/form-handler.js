@@ -10,6 +10,7 @@ let isClinikoForm;
 let formType = "multi";
 let isHeadless = false;
 let progressEl;
+let shellIntroEl;
 let paymentLoaderProgress = null;
 let paymentLoaderHeadline = "";
 let paymentLoaderDetail = "";
@@ -21,6 +22,18 @@ let patientHistoryRequestStatusStop = null;
 let patientHistoryAttentionTitle = "";
 const patientHistoryTabId = `esph_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 
+function reportClinikoConnection(response, payload) {
+  if (window.ClinikoConnectionNotice?.inspectResponse) {
+    window.ClinikoConnectionNotice.inspectResponse(response, payload);
+  }
+}
+
+function reportClinikoNetworkFailure(error) {
+  if (!navigator.onLine || error instanceof TypeError) {
+    window.ClinikoConnectionNotice?.reportOffline?.();
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   isPaymentEnabled = Boolean(formHandlerData.is_payment_enabled);
   stripeInitStarted = false;
@@ -31,9 +44,11 @@ document.addEventListener("DOMContentLoaded", () => {
   formType = String(formHandlerData?.form_type || "multi").toLowerCase();
   isHeadless = formType === "headless";
   progressEl = document.getElementById("form-progress-indicator");
+  shellIntroEl = document.querySelector(".cliniko-form-shell-intro");
 
   if (!isHeadless) {
     mountForm();
+    initPatientDetailsReview();
   } else {
     window.currentStep = 0;
     initHeadlessCalendarHelpers();
@@ -51,6 +66,214 @@ document.addEventListener("visibilitychange", () => {
 
 function getSelectedGateway() {
   return String(formHandlerData?.custom_form_payment || "stripe").toLowerCase();
+}
+
+function getAuthenticatedPatientBookingConfig() {
+  const config = formHandlerData?.authenticated_patient_booking;
+  return config && typeof config === "object" ? config : {};
+}
+
+function shouldUseAuthenticatedPatientBooking() {
+  const config = getAuthenticatedPatientBookingConfig();
+  return Boolean(
+    config.enabled &&
+      String(config.preflight_url || "").trim() &&
+      String(config.nonce || "").trim()
+  );
+}
+
+function getPatientDetailsReviewConfig() {
+  const config = formHandlerData?.patient_details_review;
+  return config && typeof config === "object" ? config : {};
+}
+
+function initPatientDetailsReview() {
+  const config = getPatientDetailsReviewConfig();
+  const review = document.querySelector("[data-cliniko-patient-details-review]");
+  const drawer = document.querySelector("[data-cliniko-patient-details-drawer]");
+  const panel = drawer?.querySelector(".cliniko-form-patient-drawer__panel");
+  const openButton = review?.querySelector("[data-cliniko-patient-details-open]");
+  const loadStatus = review?.querySelector("[data-cliniko-patient-details-load-status]");
+  const saveButton = drawer?.querySelector("[data-cliniko-patient-details-save]");
+  const saveStatus = drawer?.querySelector("[data-cliniko-patient-details-status]");
+  const patientUrl = String(config.patient_url || "").trim();
+
+  if (!config.enabled || !patientUrl || !review || !drawer || !panel || !openButton || !saveButton) {
+    return;
+  }
+
+  const controls = () => Array.from(drawer.querySelectorAll("[data-cliniko-patient-details-field]"));
+  const closeButtons = Array.from(drawer.querySelectorAll("[data-cliniko-patient-details-close]"));
+  let committedValues = {};
+  let restoreFocus = null;
+  let closeTimer = null;
+
+  const displayValue = (key, value) => {
+    const text = String(value ?? "").trim();
+    if (key === "date_of_birth" && /^\d{4}-\d{2}-\d{2}/.test(text)) {
+      const parts = text.slice(0, 10).split("-");
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return text || "Not provided";
+  };
+
+  const rememberValues = () => {
+    committedValues = {};
+    controls().forEach((control) => {
+      committedValues[control.dataset.clinikoPatientDetailsField] = control.value;
+    });
+  };
+
+  const restoreValues = () => {
+    controls().forEach((control) => {
+      const key = control.dataset.clinikoPatientDetailsField;
+      if (Object.prototype.hasOwnProperty.call(committedValues, key)) {
+        control.value = committedValues[key];
+      }
+    });
+  };
+
+  const applyPatient = (patient) => {
+    if (!patient || typeof patient !== "object") return;
+    controls().forEach((control) => {
+      const key = control.dataset.clinikoPatientDetailsField;
+      if (!key || !Object.prototype.hasOwnProperty.call(patient, key)) return;
+      const value = patient[key] ?? "";
+      control.value = key === "date_of_birth" ? String(value).slice(0, 10) : String(value);
+      const output = review.querySelector(`[data-cliniko-patient-details-value="${key}"]`);
+      if (output) output.textContent = displayValue(key, value);
+    });
+    rememberValues();
+  };
+
+  const request = async (method, payload) => {
+    const headers = { "Content-Type": "application/json" };
+    const nonce = String(formHandlerData?.rest_nonce || "").trim();
+    if (nonce) headers["X-WP-Nonce"] = nonce;
+    const options = { method, credentials: "same-origin", headers };
+    if (payload) options.body = JSON.stringify(payload);
+
+    try {
+      const response = await fetch(patientUrl, options);
+      let result = {};
+      try { result = await response.json(); } catch (error) { result = {}; }
+      reportClinikoConnection(response, result);
+      return { response, result };
+    } catch (error) {
+      reportClinikoNetworkFailure(error);
+      throw error;
+    }
+  };
+
+  const close = () => {
+    restoreValues();
+    drawer.classList.remove("is-open");
+    document.body.classList.remove("cliniko-form-patient-drawer-open");
+    if (closeTimer) window.clearTimeout(closeTimer);
+    closeTimer = window.setTimeout(() => { drawer.hidden = true; }, 220);
+    restoreFocus?.focus?.();
+  };
+
+  const open = () => {
+    restoreFocus = document.activeElement;
+    if (closeTimer) window.clearTimeout(closeTimer);
+    if (saveStatus) {
+      saveStatus.textContent = "";
+      saveStatus.classList.remove("is-error");
+    }
+    drawer.hidden = false;
+    document.body.classList.add("cliniko-form-patient-drawer-open");
+    window.requestAnimationFrame(() => {
+      drawer.classList.add("is-open");
+      panel.focus();
+    });
+  };
+
+  openButton.addEventListener("click", open);
+  closeButtons.forEach((button) => button.addEventListener("click", close));
+  drawer.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      close();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(drawer.querySelectorAll(
+      "button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])"
+    ));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+
+  saveButton.addEventListener("click", async () => {
+    if (!controls().every((control) => control.reportValidity())) return;
+    const payload = {};
+    controls().forEach((control) => {
+      payload[control.dataset.clinikoPatientDetailsField] = control.value;
+    });
+    saveButton.disabled = true;
+    if (saveStatus) {
+      saveStatus.textContent = "Saving your details...";
+      saveStatus.classList.remove("is-error");
+    }
+    try {
+      const { response, result } = await request("PATCH", payload);
+      applyPatient(result.data);
+      if (!response.ok || !result.ok) {
+        throw new Error(result.email_change?.message || result.message || "Your details could not be saved.");
+      }
+      const emailPending = result.email_change?.status === "pending";
+      if (saveStatus) {
+        saveStatus.textContent = emailPending
+          ? "Your details were saved. Check your new email address to confirm the email change."
+          : "Your details were saved.";
+      }
+      if (!emailPending) window.setTimeout(close, 500);
+    } catch (error) {
+      if (saveStatus) {
+        saveStatus.textContent = error.message || "Your details could not be saved.";
+        saveStatus.classList.add("is-error");
+      }
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  request("GET")
+    .then(({ response, result }) => {
+      if (!response.ok || !result.ok || !result.data) {
+        throw new Error(result.message || "Your patient details could not be loaded.");
+      }
+      applyPatient(result.data);
+      review.setAttribute("aria-busy", "false");
+      openButton.disabled = false;
+      if (loadStatus) loadStatus.textContent = "";
+    })
+    .catch((error) => {
+      review.setAttribute("aria-busy", "false");
+      if (loadStatus) {
+        loadStatus.textContent = error.message || "Your patient details could not be loaded.";
+        loadStatus.classList.add("is-error");
+      }
+    });
+}
+
+function getSchedulingPatientFields(patient) {
+  const source = patient && typeof patient === "object" ? patient : {};
+  return ["appointment_start", "appointment_date", "practitioner_id", "patient_booked_time"]
+    .reduce((output, key) => {
+      if (source[key] !== undefined && source[key] !== null && String(source[key]).trim() !== "") {
+        output[key] = source[key];
+      }
+      return output;
+    }, {});
 }
 
 function isStripeSelected() {
@@ -117,6 +340,30 @@ function withPendingCalendarRequest(store, key, loader) {
   return promise;
 }
 
+async function fetchFreshCalendarJson(url, fallbackMessage) {
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache, no-store",
+        Pragma: "no-cache",
+      },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    reportClinikoConnection(res, data);
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.message || fallbackMessage || "Request failed.");
+    }
+    return data?.data ?? data ?? {};
+  } catch (error) {
+    reportClinikoNetworkFailure(error);
+    throw error;
+  }
+}
+
 function initHeadlessCalendarHelpers() {
   if (!isHeadless) return;
 
@@ -140,8 +387,6 @@ function initHeadlessCalendarHelpers() {
   const cacheStore = getCalendarFrontendCacheStore();
   const cacheTtlMs = {
     practitioners: 5 * 60 * 1000,
-    calendar: 2 * 60 * 1000,
-    timesPage: 30 * 1000,
   };
 
   const buildUrl = (base, params) => {
@@ -1134,20 +1379,17 @@ const fetchJson = async (url) => {
     const practitioner = practitionerId || "";
     const month = monthKey || "";
     const cacheKey = `cliniko:calendar:${id}:${practitioner}:${month}`;
-    const cached = readCalendarCacheValue(cacheStore, cacheKey);
-    if (cached) {
-      return cached;
-    }
 
     return withPendingCalendarRequest(cacheStore, cacheKey, async () => {
       const url = buildUrl(endpoints.calendar, {
         appointment_type_id: id,
         practitioner_id: practitioner,
         month,
+        _ts: Date.now(),
       });
-      const payload = await fetchJson(url); // { grid_html, month_label, month_key }
-      writeCalendarCacheValue(cacheStore, cacheKey, payload, cacheTtlMs.calendar);
-      return payload;
+      // Appointment availability is live medical scheduling data. Do not
+      // reuse completed calendar responses in the browser or an HTTP cache.
+      return fetchFreshCalendarJson(url, "Failed to load calendar.");
     });
   };
 
@@ -1202,10 +1444,6 @@ const fetchJson = async (url) => {
     const perPageValue = String(perPage || defaultPerPage);
     const pageValue = String(page || 1);
     const cacheKey = `cliniko:times:${id}:${practitioner}:${fromDate}:${toDate}:${perPageValue}:${pageValue}`;
-    const cached = readCalendarCacheValue(cacheStore, cacheKey);
-    if (cached) {
-      return cached;
-    }
 
     return withPendingCalendarRequest(cacheStore, cacheKey, async () => {
       const url = buildUrl(endpoints.availableTimes, {
@@ -1215,15 +1453,15 @@ const fetchJson = async (url) => {
         to: toDate,
         per_page: perPageValue,
         page: pageValue,
+        _ts: Date.now(),
       });
-      const payload = await fetchJson(url);
+      const payload = await fetchFreshCalendarJson(url, "Failed to load available times.");
       const rawTimes = payload.available_times || [];
       const items = Array.isArray(rawTimes)
         ? rawTimes.map((t) => t?.appointment_start || t?.appointmentStart || t).filter(Boolean)
         : [];
       const total = Number(payload.total_entries || items.length);
       const result = { items, total };
-      writeCalendarCacheValue(cacheStore, cacheKey, result, cacheTtlMs.timesPage);
       return result;
     });
   };
@@ -1433,10 +1671,6 @@ function initHeadlessPaymentWatcher() {
   };
 
   maybeInit();
-
-  const observer = new MutationObserver(() => maybeInit());
-  observer.observe(paymentForm, { attributes: true, attributeFilter: ["style", "class"] });
-
   window.addEventListener("load", () => maybeInit());
 }
 
@@ -3412,9 +3646,11 @@ async function initAvailableTimesPicker() {
   const frontendCache = getCalendarFrontendCacheStore();
   const frontendCacheTtlMs = {
     practitioners: 5 * 60 * 1000,
-    calendar: 2 * 60 * 1000,
-    timesPage: 30 * 1000,
   };
+  // Completed calendar responses are retained only when they were explicitly
+  // prefetched, then consumed once by the visible month render. Network and
+  // HTTP caches remain disabled for every calendar request.
+  const calendarPreloaded = new Map();
   let calendarRequestSeq = 0;
   let dayRequestSeq = 0;
 
@@ -3493,28 +3729,34 @@ async function initAvailableTimesPicker() {
 
   function updateNavState() {
     if (!calendarPrevBtn) return;
-    const thisMonthKey = getMonthKeyFromDate(new Date());
     if (!currentMonthKey) {
       calendarPrevBtn.disabled = true;
       return;
     }
-    calendarPrevBtn.disabled = currentMonthKey <= thisMonthKey;
+    calendarPrevBtn.disabled = false;
   }
 
 async function fetchJson(url, fallbackMessage) {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-    credentials: "same-origin",
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      credentials: "same-origin",
+    });
     const data = await res.json().catch(() => ({}));
+    reportClinikoConnection(res, data);
     if (!res.ok || data?.success === false) {
       throw new Error(data?.message || fallbackMessage || "Request failed.");
     }
     return data?.data ?? data ?? {};
+  } catch (error) {
+    reportClinikoNetworkFailure(error);
+    throw error;
   }
+}
 
   async function fetchPractitioners() {
     if (!practitionersEndpoint || !appointmentTypeId) return [];
@@ -3566,32 +3808,48 @@ async function fetchJson(url, fallbackMessage) {
     practitionerSelectWrap.classList.remove("is-hidden");
   }
 
-  async function fetchCalendarPayload(practitioner, monthKey = null) {
+  async function fetchCalendarPayload(practitioner, monthKey = null, options = {}) {
     if (!calendarEndpoint || !appointmentTypeId) {
       throw new Error("Calendar endpoint not configured.");
     }
     const month = monthKey || currentMonthKey || "";
     const cacheKey = `cliniko:calendar:${appointmentTypeId}:${practitioner || ""}:${month}`;
-    const cached = readCalendarCacheValue(frontendCache, cacheKey);
-    if (cached) {
-      return cached;
+    const consumePreload = options.consume !== false;
+
+    if (!options.forceFresh && calendarPreloaded.has(cacheKey)) {
+      const preloaded = calendarPreloaded.get(cacheKey);
+      if (consumePreload) calendarPreloaded.delete(cacheKey);
+      return preloaded;
     }
+
+    const pending = frontendCache.pending.get(cacheKey);
+    if (pending) {
+      const pendingPayload = await pending;
+      if (consumePreload) calendarPreloaded.delete(cacheKey);
+      return pendingPayload;
+    }
+
+    if (options.forceFresh) calendarPreloaded.delete(cacheKey);
 
     return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
       const url = new URL(calendarEndpoint, window.location.origin);
       url.searchParams.set("appointment_type_id", appointmentTypeId);
       if (practitioner) url.searchParams.set("practitioner_id", practitioner);
       if (month) url.searchParams.set("month", month);
-      const data = await fetchJson(url.toString(), "Failed to load calendar.");
-      writeCalendarCacheValue(frontendCache, cacheKey, data, frontendCacheTtlMs.calendar);
-      return data;
+      url.searchParams.set("_ts", String(Date.now()));
+      const payload = await fetchFreshCalendarJson(url.toString(), "Failed to load calendar.");
+      if (options.preload) calendarPreloaded.set(cacheKey, payload);
+      return payload;
     });
   }
 
   async function prefetchCalendarMonth(practitioner, monthKey) {
     if (!practitioner || !monthKey) return false;
     try {
-      await fetchCalendarPayload(practitioner, monthKey);
+      await fetchCalendarPayload(practitioner, monthKey, {
+        consume: false,
+        preload: true,
+      });
       return true;
     } catch (_) {
       return false;
@@ -3608,14 +3866,16 @@ async function fetchJson(url, fallbackMessage) {
     return true;
   }
 
-  async function refreshCalendar(practitioner, monthKey = null) {
+  async function refreshCalendar(practitioner, monthKey = null, options = {}) {
     if (!calendarGrid) return;
     const requestSeq = ++calendarRequestSeq;
 
     calendarGrid.classList.add("is-loading");
     calendarGrid.setAttribute("aria-busy", "true");
     try {
-      const payload = await fetchCalendarPayload(practitioner, monthKey);
+      const payload = await fetchCalendarPayload(practitioner, monthKey, {
+        forceFresh: options.forceFresh === true,
+      });
 
       if (requestSeq !== calendarRequestSeq) {
         return;
@@ -3643,7 +3903,8 @@ async function fetchJson(url, fallbackMessage) {
         setStatus("Select a day to view times.");
       }
 
-      const lookAheadMonth = shiftMonthKey(currentMonthKey, 1);
+      const direction = Number(options.prefetchDirection) < 0 ? -1 : 1;
+      const lookAheadMonth = shiftMonthKey(currentMonthKey, direction);
       if (lookAheadMonth) {
         void prefetchCalendarMonth(practitioner, lookAheadMonth);
       }
@@ -3657,10 +3918,6 @@ async function fetchJson(url, fallbackMessage) {
 
   async function fetchPage(from, to, page) {
     const cacheKey = `cliniko:times:${appointmentTypeId}:${practitionerId || ""}:${from}:${to}:${perPage}:${page}`;
-    const cached = readCalendarCacheValue(frontendCache, cacheKey);
-    if (cached) {
-      return cached;
-    }
 
     return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
       const url = new URL(endpoint, window.location.origin);
@@ -3672,8 +3929,12 @@ async function fetchJson(url, fallbackMessage) {
       if (practitionerId) {
         url.searchParams.set("practitioner_id", practitionerId);
       }
+      url.searchParams.set("_ts", String(Date.now()));
 
-      const payload = await fetchJson(url.toString(), "Failed to load available times.");
+      const payload = await fetchFreshCalendarJson(
+        url.toString(),
+        "Failed to load available times."
+      );
       const rawTimes = payload.available_times || [];
       const items = Array.isArray(rawTimes)
         ? rawTimes
@@ -3683,7 +3944,6 @@ async function fetchJson(url, fallbackMessage) {
 
       const total = Number(payload.total_entries || items.length);
       const result = { items, total };
-      writeCalendarCacheValue(frontendCache, cacheKey, result, frontendCacheTtlMs.timesPage);
       return result;
     });
   }
@@ -3907,6 +4167,14 @@ async function fetchJson(url, fallbackMessage) {
       if (!dateKey) return;
       selectDay(cell, dateKey);
     });
+    calendarGrid.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const cell = event.target.closest(".calendar-day");
+      if (!cell || cell.classList.contains("is-blank") || cell.classList.contains("is-disabled")) return;
+      event.preventDefault();
+      const dateKey = cell.dataset.date;
+      if (dateKey) selectDay(cell, dateKey);
+    });
   }
 
   async function initializePractitionerSelect() {
@@ -3932,8 +4200,11 @@ async function fetchJson(url, fallbackMessage) {
 
         if (calendarReady) {
           try {
-            await prefetchCalendarWindow(selected, currentMonthKey);
-            await refreshCalendar(selected, currentMonthKey);
+            calendarPreloaded.clear();
+            await refreshCalendar(selected, currentMonthKey, {
+              forceFresh: true,
+              prefetchDirection: 1,
+            });
           } catch (e) {
             setStatus(e?.message || "Failed to load calendar.", true);
           }
@@ -3945,8 +4216,13 @@ async function fetchJson(url, fallbackMessage) {
   async function initializeCalendarState() {
     if (calendarReady && calendarEndpoint && practitionerSelect) {
       try {
-        await prefetchCalendarWindow(practitionerId, currentMonthKey);
-        await refreshCalendar(practitionerId, currentMonthKey);
+        // Start both requests immediately. The visible month can render as
+        // soon as its response arrives while the next month continues in the
+        // background.
+        void prefetchCalendarWindow(practitionerId, currentMonthKey);
+        await refreshCalendar(practitionerId, currentMonthKey, {
+          prefetchDirection: 1,
+        });
       } catch (e) {
         setStatus(e?.message || "Failed to load calendar.", true);
       }
@@ -3994,7 +4270,9 @@ async function fetchJson(url, fallbackMessage) {
         resetSelectedTime();
         clearDayTimes();
         try {
-          await refreshCalendar(practitionerId, targetKey);
+          await refreshCalendar(practitionerId, targetKey, {
+            prefetchDirection: -1,
+          });
         } catch (e) {
           setStatus(e?.message || "Failed to load calendar.", true);
         }
@@ -4011,7 +4289,9 @@ async function fetchJson(url, fallbackMessage) {
         resetSelectedTime();
         clearDayTimes();
         try {
-          await refreshCalendar(practitionerId, targetKey);
+          await refreshCalendar(practitionerId, targetKey, {
+            prefetchDirection: 1,
+          });
         } catch (e) {
           setStatus(e?.message || "Failed to load calendar.", true);
         }
@@ -4531,37 +4811,258 @@ function closeClinikoEmailConfirmModal() {
 }
 
 
-function updateIndicators(index) {
-  const type = formHandlerData.appearance.progress_type;
+function getAppearanceSettings() {
+  return formHandlerData?.appearance || {};
+}
+
+function normalizeProgressType(value, fallback = "bar") {
+  const type = String(value || "").trim();
+  return ["none", "bar", "dots", "steps", "fraction", "percentage"].includes(type)
+    ? type
+    : fallback;
+}
+
+function normalizeProgressLabelMode(value, fallback = "none") {
+  const mode = String(value || "").trim();
+  return ["none", "percentage", "fraction", "step_text"].includes(mode)
+    ? mode
+    : fallback;
+}
+
+function getResponsiveProgressValue(name, fallback = "") {
+  const appearance = getAppearanceSettings();
+  const datasetName = name.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+  const base =
+    progressEl?.dataset?.[datasetName] ||
+    appearance[name] ||
+    fallback;
+  const tablet =
+    progressEl?.dataset?.[`${datasetName}Tablet`] ||
+    appearance[`${name}_tablet`] ||
+    "";
+  const mobile =
+    progressEl?.dataset?.[`${datasetName}Mobile`] ||
+    appearance[`${name}_mobile`] ||
+    "";
+
+  if (window.matchMedia("(max-width: 767px)").matches && mobile) {
+    return mobile;
+  }
+
+  if (window.matchMedia("(max-width: 1024px)").matches && tablet) {
+    return tablet;
+  }
+
+  return base;
+}
+
+function getProgressType() {
+  return normalizeProgressType(getResponsiveProgressValue("progress_type", "bar"));
+}
+
+function getProgressLabelMode() {
+  return normalizeProgressLabelMode(
+    getResponsiveProgressValue("label_mode", "") ||
+      getResponsiveProgressValue("progress_label_mode", "none")
+  );
+}
+
+function syncProgressResponsiveClasses() {
+  if (!progressEl) return;
+
+  const type = getProgressType();
+  const labelMode = getProgressLabelMode();
+
+  progressEl.classList.remove(
+    "form-progress--none",
+    "form-progress--bar",
+    "form-progress--dots",
+    "form-progress--steps",
+    "form-progress--fraction",
+    "form-progress--percentage",
+    "form-progress--label-none",
+    "form-progress--label-percentage",
+    "form-progress--label-fraction",
+    "form-progress--label-step_text"
+  );
+
+  progressEl.classList.add(`form-progress--${type}`);
+  progressEl.classList.add(`form-progress--label-${labelMode}`);
+  progressEl.dataset.activeProgressType = type;
+  progressEl.dataset.activeLabelMode = labelMode;
+}
+
+function getProgressStepLabels() {
+  const rawLabels = progressEl?.dataset?.stepLabels || "";
+  if (rawLabels) {
+    try {
+      const parsed = JSON.parse(rawLabels);
+      if (Array.isArray(parsed)) {
+        return parsed.map((label) => String(label || "").trim());
+      }
+    } catch (error) {
+      console.warn("Invalid progress step labels.", error);
+    }
+  }
+
+  return steps.map((step, index) => {
+    const heading = step.querySelector("h3, h4");
+    return String(heading?.textContent || `Step ${index + 1}`).trim();
+  });
+}
+
+function getProgressStatusText(index, total) {
+  const safeTotal = Math.max(1, total);
+  const current = Math.min(Math.max(index + 1, 1), safeTotal);
+  const mode = getProgressLabelMode();
+
+  if (mode === "percentage") {
+    return Math.round((current / safeTotal) * 100) + "%";
+  }
+
+  if (mode === "fraction") {
+    return current + "/" + safeTotal;
+  }
+
+  if (mode === "step_text") {
+    const labels = getProgressStepLabels();
+    const label = labels[index] || `Step ${current}`;
+    return `Step ${current} of ${safeTotal}: ${label}`;
+  }
+
+  return "";
+}
+
+function getShellIntroStepLabels() {
+  const rawLabels = shellIntroEl?.dataset?.stepLabels || "";
+  if (rawLabels) {
+    try {
+      const parsed = JSON.parse(rawLabels);
+      if (Array.isArray(parsed)) {
+        return parsed.map((label) => String(label || "").trim());
+      }
+    } catch (error) {
+      console.warn("Invalid shell intro step labels.", error);
+    }
+  }
+
+  return getProgressStepLabels();
+}
+
+function getShellIntroTitle(index, total) {
+  const source = String(shellIntroEl?.dataset?.titleSource || "static");
+  const staticTitle = String(shellIntroEl?.dataset?.staticTitle || "").trim();
+
+  if (source === "static") {
+    return staticTitle;
+  }
+
+  const safeTotal = Math.max(1, total);
+  const current = Math.min(Math.max(index + 1, 1), safeTotal);
+  const labels = getShellIntroStepLabels();
+  const label = labels[index] || staticTitle || `Step ${current}`;
+
+  if (source === "current_step_with_count") {
+    return `Step ${current} of ${safeTotal}: ${label}`;
+  }
+
+  return label;
+}
+
+function updateShellIntroTitle(index, total = steps.length) {
+  if (!shellIntroEl) return;
+
+  const title = shellIntroEl.querySelector("[data-shell-intro-title]");
+  if (!title) return;
+
+  title.textContent = getShellIntroTitle(index, total);
+}
+
+function updateProgressStatusText(index, total) {
+  if (!progressEl) return;
+
+  const mode = getProgressLabelMode();
+  const plain = progressEl.querySelector(".progress-status-text--plain");
+  const split = progressEl.querySelector(".progress-status-text--split");
+  const current = split?.querySelector(".progress-status-current");
+  const label = split?.querySelector(".progress-status-label");
+
+  if (mode === "step_text" && current && label) {
+    const safeTotal = Math.max(1, total);
+    const stepNumber = Math.min(Math.max(index + 1, 1), safeTotal);
+    const labels = getProgressStepLabels();
+    current.textContent = `Step ${stepNumber} of ${safeTotal}`;
+    label.textContent = labels[index] || `Step ${stepNumber}`;
+    return;
+  }
+
+  if (plain) {
+    plain.textContent = getProgressStatusText(index, total);
+  }
+}
+
+function updateProgressIndicators(index) {
+  syncProgressResponsiveClasses();
+
+  const type = getProgressType();
+  const total = Math.max(1, steps.length);
 
   if (type === "steps") {
-    document.querySelectorAll(".progress-step").forEach((el, i) => {
+    progressEl?.querySelectorAll(".progress-step").forEach((el, i) => {
       el.classList.toggle("is-active", i === index);
     });
   } else if (type === "dots") {
-    document.querySelectorAll(".progress-dot").forEach((el, i) => {
+    progressEl?.querySelectorAll(".progress-dot").forEach((el, i) => {
       el.classList.toggle("is-active", i === index);
     });
   } else if (type === "bar") {
-    const total = steps.length;
-    const fill = document.querySelector(".progress-fill");
+    const fill = progressEl?.querySelector(".progress-fill");
     if (fill) {
       fill.style.width = ((index + 1) / total) * 100 + "%";
     }
   } else if (type === "fraction") {
-    const text = document.querySelector(
-      ".form-progress--fraction .progress-text"
-    );
+    const text = progressEl?.querySelector(".progress-text--fraction");
     if (text) {
-      text.textContent = index + 1 + "/" + steps.length;
+      text.textContent = index + 1 + "/" + total;
     }
   } else if (type === "percentage") {
-    const text = document.querySelector(
-      ".form-progress--percentage .progress-text"
-    );
+    const text = progressEl?.querySelector(".progress-text--percentage");
     if (text) {
-      text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
+      text.textContent = Math.round(((index + 1) / total) * 100) + "%";
     }
+  }
+
+  updateProgressStatusText(index, total);
+}
+
+function updateIndicators(index) {
+  updateProgressIndicators(index);
+}
+
+function shouldShowDisabledPreviousButton() {
+  return Boolean(getAppearanceSettings().buttons_show_disabled_prev);
+}
+
+function setPreviousButtonState(index) {
+  if (!prevBtn) return;
+
+  if (isSingleStep()) {
+    prevBtn.disabled = false;
+    prevBtn.removeAttribute("aria-disabled");
+    setHidden(prevBtn, true);
+    return;
+  }
+
+  const isFirstStep = index === 0;
+  const keepVisible = isFirstStep && shouldShowDisabledPreviousButton();
+
+  setHidden(prevBtn, isFirstStep && !keepVisible);
+  prevBtn.disabled = keepVisible;
+
+  if (keepVisible) {
+    prevBtn.setAttribute("aria-disabled", "true");
+  } else {
+    prevBtn.removeAttribute("aria-disabled");
   }
 }
 
@@ -4749,7 +5250,8 @@ function showStep(i) {
       setHidden(step, false);
     });
 
-    setHidden(prevBtn, true);
+    updateShellIntroTitle(i, steps.length);
+    setPreviousButtonState(i);
     if (progressEl) setHidden(progressEl, true);
 
     if (isClinikoForm) {
@@ -4766,8 +5268,7 @@ function showStep(i) {
     setHidden(step, index !== i);
   });
 
-  // prev button: hidden on first step
-  setHidden(prevBtn, i === 0);
+  setPreviousButtonState(i);
 
   // next button: hide on last step ONLY when it's a Cliniko form
   const hideNext = i === steps.length - 1 && isClinikoForm;
@@ -4775,42 +5276,27 @@ function showStep(i) {
 
   if (progressEl) setHidden(progressEl, false);
   updateIndicators(i);
+  updateShellIntroTitle(i, steps.length);
   syncPatientHistoryStandaloneUi();
 }
 
 function updateStepIndicator(index) {
-  const type = formHandlerData.appearance.progress_type;
-
-  if (type === "steps") {
-    document.querySelectorAll(".progress-step").forEach((el, i) => {
-      el.classList.toggle("is-active", i === index);
-    });
-  } else if (type === "dots") {
-    document.querySelectorAll(".progress-dot").forEach((el, i) => {
-      el.classList.toggle("is-active", i === index);
-    });
-  } else if (type === "bar") {
-    const total = steps.length;
-    const fill = document.querySelector(".progress-fill");
-    if (fill) {
-      fill.style.width = ((index + 1) / total) * 100 + "%";
-    }
-  } else if (type === "fraction") {
-    const text = document.querySelector(
-      ".form-progress--fraction .progress-text"
-    );
-    if (text) {
-      text.textContent = index + 1 + "/" + steps.length;
-    }
-  } else if (type === "percentage") {
-    const text = document.querySelector(
-      ".form-progress--percentage .progress-text"
-    );
-    if (text) {
-      text.textContent = Math.round(((index + 1) / steps.length) * 100) + "%";
-    }
-  }
+  updateProgressIndicators(index);
+  updateShellIntroTitle(index, steps.length);
 }
+
+window.updateStepIndicator = updateStepIndicator;
+
+let progressResizeTimer = null;
+window.addEventListener("resize", () => {
+  if (!progressEl) return;
+
+  window.clearTimeout(progressResizeTimer);
+  progressResizeTimer = window.setTimeout(() => {
+    const current = Number.isInteger(window.currentStep) ? window.currentStep : 0;
+    updateProgressIndicators(current);
+  }, 120);
+});
 
 async function safeInitStripe() {
   // Already initialized and mounted?
@@ -4918,8 +5404,7 @@ async function showStripePaymentForm() {
     await safeInitStripe();
   }
 
-  // (Optional) if you ever need to force Tyro handler attach, you can do it here,
-  // but your tyrohealth.js already attaches on DOMContentLoaded + MutationObserver.
+  // TyroHealth attaches its payment button on DOMContentLoaded.
 
   const backBtn = document.getElementById("go-back-button");
   if (backBtn && !backBtn.dataset.bound) {
@@ -5050,6 +5535,8 @@ function mountForm() {
 
   if (prevBtn) {
     prevBtn.addEventListener("click", () => {
+      if (prevBtn.disabled) return;
+
       if (window.currentStep > 0) {
         window.currentStep--;
         showStep(window.currentStep);
@@ -5140,35 +5627,51 @@ function mountForm() {
 function buildRequestHeaders(attemptToken = "") {
   const headers = { "Content-Type": "application/json" };
   const attempt = String(attemptToken || "").trim();
+  const restNonce = String(formHandlerData?.rest_nonce || "").trim();
 
   if (attempt) {
     headers["X-ES-Attempt-Token"] = attempt;
+  }
+  if (restNonce) {
+    headers["X-WP-Nonce"] = restNonce;
   }
 
   return headers;
 }
 
 async function postJsonExpectJson(url, payload, attemptToken = "") {
-  const response = await fetch(url, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: buildRequestHeaders(attemptToken),
-    body: JSON.stringify(payload || {}),
-  });
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: buildRequestHeaders(attemptToken),
+      body: JSON.stringify(payload || {}),
+    });
 
-  const result = await response.json().catch(() => ({}));
-  return { response, result };
+    const result = await response.json().catch(() => ({}));
+    reportClinikoConnection(response, result);
+    return { response, result };
+  } catch (error) {
+    reportClinikoNetworkFailure(error);
+    throw error;
+  }
 }
 
 async function getJsonExpectJson(url, attemptToken = "") {
-  const response = await fetch(url, {
-    method: "GET",
-    credentials: "same-origin",
-    headers: buildRequestHeaders(attemptToken),
-  });
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "same-origin",
+      headers: buildRequestHeaders(attemptToken),
+    });
 
-  const result = await response.json().catch(() => ({}));
-  return { response, result };
+    const result = await response.json().catch(() => ({}));
+    reportClinikoConnection(response, result);
+    return { response, result };
+  } catch (error) {
+    reportClinikoNetworkFailure(error);
+    throw error;
+  }
 }
 
 function colorWithAlpha(color, alpha) {
@@ -5392,8 +5895,14 @@ async function submitBookingForm(
   }
 
   const parsed = headlessPayload || parseFormToStructuredBody(formElement);
+  const useAuthenticatedPatientBooking =
+    !isClinikoIframe && shouldUseAuthenticatedPatientBooking();
 
-  if (isHeadless && window.ClinikoHeadlessCalendar?.validateHeadlessPatientFields) {
+  if (
+    isHeadless &&
+    !useAuthenticatedPatientBooking &&
+    window.ClinikoHeadlessCalendar?.validateHeadlessPatientFields
+  ) {
     const headlessValidation = window.ClinikoHeadlessCalendar.validateHeadlessPatientFields(
       parsed?.patient || {}
     );
@@ -5425,7 +5934,12 @@ async function submitBookingForm(
   }
 
   const content = normalizeContentForSubmission(parsed?.content || {});
-  const patient = normalizePatientForSubmission(parsed?.patient || {});
+  const parsedPatient = normalizePatientForSubmission(parsed?.patient || {});
+  // In authenticated mode, only scheduling information leaves the browser.
+  // The server resolves every patient identity field from the verified account.
+  const patient = useAuthenticatedPatientBooking
+    ? getSchedulingPatientFields(parsedPatient)
+    : parsedPatient;
   const headlessPatientFields = Array.isArray(parsed?.headless_patient_fields)
     ? parsed.headless_patient_fields
     : Array.isArray(formHandlerData?.headless_patient_fields)
@@ -5562,12 +6076,20 @@ async function submitBookingForm(
         getPaymentLoaderProgress("preflighted")
       );
 
+      const authenticatedBookingConfig = getAuthenticatedPatientBookingConfig();
+      const preflightUrl = useAuthenticatedPatientBooking
+        ? authenticatedBookingConfig.preflight_url
+        : formHandlerData.booking_attempt_preflight_url;
+      const preflightPayload = {
+        ...payload,
+        gateway: payment.gateway || null,
+        ...(useAuthenticatedPatientBooking
+          ? { authenticated_booking_nonce: authenticatedBookingConfig.nonce }
+          : {}),
+      };
       const { response: preflightResponse, result: preflightResult } = await postJsonExpectJson(
-        formHandlerData.booking_attempt_preflight_url,
-        {
-          ...payload,
-          gateway: payment.gateway || null,
-        }
+        preflightUrl,
+        preflightPayload
       );
 
       if (!preflightResponse.ok || !preflightResult?.ok) {
@@ -5710,12 +6232,18 @@ async function submitBookingForm(
         ? "stripe"
         : "free");
 
+    const confirmation = finalizeResult?.result?.confirmation || {};
+    const confirmationPatient = confirmation?.patient || {};
+    const confirmationAppointment = confirmation?.appointment || {};
+
     const queryParams = new URLSearchParams({
-      patient_name:
-        patient?.first_name && patient?.last_name
+      patient_name: confirmationPatient?.name ||
+        (patient?.first_name && patient?.last_name
           ? `${patient.first_name} ${patient.last_name}`
-          : "",
-      email: patient?.email ?? "",
+          : ""),
+      email: confirmationPatient?.email || patient?.email || "",
+      start: confirmationAppointment?.starts_at || patient?.appointment_start || "",
+      end: confirmationAppointment?.ends_at || "",
       ref: ref ?? "free",
       status: "booking_confirmed",
       receipt: paymentResult?.receipt_url ?? "",

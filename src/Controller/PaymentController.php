@@ -1,7 +1,8 @@
 <?php
 namespace App\Controller;
 
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Settings\Credentials;
+use App\Debug\Runtime;
 use App\Model\AppointmentType;
 use App\Service\PatientFormPayloadSanitizer;
 use App\Service\PatientSubmissionSanitizer;
@@ -172,10 +173,14 @@ class PaymentController
             ], 200);
 
         } catch (\Throwable $e) {
+            Runtime::logException('legacy_payment_failed', $e, [
+                'module_id' => (string) $moduleId,
+                'patient_form_template_id' => (string) $patientFormTemplateId,
+            ]);
+
             return new WP_REST_Response([
                 'status' => 'error',
-                'message' => 'Unexpected error during payment.',
-                'detail' => $e->getMessage(),
+                'message' => 'Payment could not be completed. Please try again.',
             ], 500);
         }
     }

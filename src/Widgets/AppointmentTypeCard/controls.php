@@ -16,7 +16,7 @@ $this->start_controls_section('section_content', [
 ]);
 
 $client = cliniko_client(true);
-$types = AppointmentType::all($client, true);
+$types = AppointmentType::all($client);
 
 // $options = array_column($types, 'name', 'id');
 

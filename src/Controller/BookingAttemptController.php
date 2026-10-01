@@ -26,6 +26,22 @@ class BookingAttemptController
         return new WP_REST_Response($this->withoutMeta($result), (int) ($result['status'] ?? 500));
     }
 
+    public function preflightAuthenticated(WP_REST_Request $request): WP_REST_Response
+    {
+        $body = json_decode($request->get_body(), true) ?: $request->get_params();
+
+        $result = $this->service->preflightAuthenticated(is_array($body) ? $body : []);
+        return new WP_REST_Response($this->withoutMeta($result), (int) ($result['status'] ?? 500));
+    }
+
+    public function preflightAuthenticatedWidget(WP_REST_Request $request): WP_REST_Response
+    {
+        $body = json_decode($request->get_body(), true) ?: $request->get_params();
+
+        $result = $this->service->preflightAuthenticatedWidget(is_array($body) ? $body : []);
+        return new WP_REST_Response($this->withoutMeta($result), (int) ($result['status'] ?? 500));
+    }
+
     public function chargeStripe(WP_REST_Request $request): WP_REST_Response
     {
         $body = json_decode($request->get_body(), true) ?: $request->get_params();

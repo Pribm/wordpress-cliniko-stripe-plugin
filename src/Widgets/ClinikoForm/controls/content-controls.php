@@ -349,6 +349,62 @@ function register_cliniko_form_controls($widget)
         ],
     ]);
 
+    $widget->add_control('use_patient_data_if_logged_in', [
+        'label' => 'Use patient data if logged in',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'no',
+        'description' => 'For verified patient accounts, resolve patient details on the server and omit the patient-details step from the form.',
+        'condition' => ['appointment_source' => 'custom_form'],
+    ]);
+
+    $widget->add_control('show_patient_details_review', [
+        'label' => 'Show patient personal details review when logged in',
+        'type' => Controls_Manager::SWITCHER,
+        'label_on' => 'Yes',
+        'label_off' => 'No',
+        'return_value' => 'yes',
+        'default' => 'no',
+        'separator' => 'before',
+        'description' => 'Shows verified patients a read-only personal-details review. Editing opens a full-screen drawer and saves asynchronously to Cliniko. Requires Custom Form and "Use patient data if logged in".',
+        'condition' => [
+            'appointment_source' => 'custom_form',
+        ],
+    ]);
+
+    $widget->add_control('shell_intro_title_source', [
+        'label' => 'Shell Intro Title Source',
+        'type' => Controls_Manager::SELECT,
+        'default' => 'static',
+        'options' => [
+            'static' => 'Static Text',
+            'current_step' => 'Current Step Name',
+            'current_step_with_count' => 'Step Count + Name',
+        ],
+        'description' => 'Dynamic options use the same step names that build the form/progress indicator.',
+        'condition' => ['form_type!' => 'headless'],
+    ]);
+
+    $widget->add_control('shell_intro_title', [
+        'label' => 'Shell Intro Title / Fallback',
+        'type' => Controls_Manager::TEXT,
+        'default' => '',
+        'placeholder' => 'Example: Easy Scripts',
+        'description' => 'Used as the static title, or as a fallback if a dynamic step title is unavailable.',
+        'condition' => ['form_type!' => 'headless'],
+    ]);
+
+    $widget->add_control('shell_intro_subtitle', [
+        'label' => 'Shell Intro Subtitle',
+        'type' => Controls_Manager::TEXTAREA,
+        'default' => '',
+        'rows' => 2,
+        'placeholder' => 'Example: Complete your form and booking details.',
+        'condition' => ['form_type!' => 'headless'],
+    ]);
+
     $widget->add_control('cliniko_cache_ttl', [
         'label' => 'Cliniko Cache TTL (seconds)',
         'type' => Controls_Manager::NUMBER,
