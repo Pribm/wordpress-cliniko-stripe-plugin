@@ -2,6 +2,8 @@
 
 namespace App\Admin\Modules;
 
+use App\Admin\Modules\Settings\Credentials;
+
 use App\Client\Cliniko\CachedClientDecorator;
 use App\Model\AppointmentType;
 use App\Model\PatientFormTemplate;
@@ -146,6 +148,9 @@ public static function renderPage(): void
             'headers' => [
                 'Authorization' => 'Basic ' . base64_encode($clinikoKey . ':'),
                 'Accept' => 'application/json',
+                'User-Agent' => 'WordPress-Cliniko-Stripe-Plugin/'
+                    . (defined('WP_CLINIKO_PLUGIN_VERSION') ? (string) constant('WP_CLINIKO_PLUGIN_VERSION') : 'unknown')
+                    . ' (https://github.com/Pribm/wordpress-cliniko-stripe-plugin)',
             ],
             'timeout' => 10,
         ]);

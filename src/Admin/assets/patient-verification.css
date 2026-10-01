@@ -1,0 +1,86 @@
+.cliniko-patient-verification {
+  max-width: 680px;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid #dbe7f3;
+  border-radius: 14px;
+  background: #fff;
+  color: #1d2939;
+  box-shadow: 0 8px 28px rgba(16, 24, 40, 0.06);
+}
+
+.cliniko-patient-verification__header h2 {
+  margin: 4px 0 18px;
+  color: #101828;
+}
+
+.cliniko-patient-verification__eyebrow {
+  color: #175cd3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cliniko-patient-verification__form {
+  margin-top: 20px;
+}
+
+.cliniko-patient-verification__form[data-cliniko-patient-verification-auto-submit] {
+  margin-top: 0;
+}
+
+.cliniko-patient-verification__form[data-cliniko-patient-verification-auto-submit]
+  .cliniko-patient-verification__button {
+  display: none;
+}
+
+.cliniko-patient-verification__progress::before {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.55em;
+  border: 2px solid #b2ccff;
+  border-top-color: #175cd3;
+  border-radius: 50%;
+  content: "";
+  vertical-align: -0.08em;
+  animation: cliniko-patient-verification-spin 0.8s linear infinite;
+}
+
+@keyframes cliniko-patient-verification-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cliniko-patient-verification__button {
+  padding: 11px 18px;
+  border: 1px solid #175cd3;
+  border-radius: 8px;
+  background: #175cd3;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cliniko-patient-verification__button:hover,
+.cliniko-patient-verification__button:focus-visible {
+  background: #1849a9;
+}
+
+.cliniko-patient-verification__message {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f2f4f7;
+}
+
+.cliniko-patient-verification__message.is-success {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.cliniko-patient-verification__message.is-error {
+  background: #fef3f2;
+  color: #b42318;
+}

@@ -1,120 +1,148 @@
 <?php
+
 namespace App\Service;
 
 use App\Client\Cliniko\Client;
 use App\Contracts\ApiClientInterface;
 use App\Exception\ApiException;
 
-class ClinikoAttachmentService
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** Patient-scoped implementation of Cliniko's three-step attachment flow. */
+final class ClinikoAttachmentService
 {
-    protected ApiClientInterface $client;
+    private ApiClientInterface $client;
 
-    public function __construct()
+    public function __construct(?ApiClientInterface $client = null)
     {
-        $this->client = Client::getInstance();
+        $this->client = $client ?: Client::getInstance();
     }
 
-    /**
-     * Step 1: Get presigned POST info from Cliniko
-     */
-    public function getPresignedPost(int $patientId): array
+    /** @return array<string,mixed> */
+    public function getPresignedPost(string $patientId): array
     {
-        $response = $this->client->get("patients/{$patientId}/attachment_presigned_post")->data;
-
-        if (empty($response['url']) || empty($response['fields'])) {
-            throw new ApiException("Invalid response from presigned URL request", ['response' => $response]);
-        }
-
-        return $response;
-    }
-
-    /**
-     * Step 2: Upload file to S3 using presigned fields
-     */
-    public function uploadToS3(string $filePath, array $presigned): string
-    {
-        if (!file_exists($filePath)) {
-            throw new ApiException("File does not exist: {$filePath}");
-        }
-
-        $fields = $presigned['fields'];
-        $url = $presigned['url'];
-
-        // Usa o nome real que será usado no S3 (evita ${filename} quebrado)
-        $filename = $_FILES['signature_file']['name'] ?? basename($filePath);
-        $mime = mime_content_type($filePath);
-
-        foreach ($fields as $key => $value) {
-            $fields[$key] = str_replace('${filename}', $filename, $value);
-        }
-
-        $fields['file'] = new \CURLFile($filePath, $mime, $filename);
-
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $fields,
-            CURLOPT_HEADER => false,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($httpCode !== 201) {
-            throw new ApiException("S3 upload failed", [
-                'http_code' => $httpCode,
-                'curl_error' => $curlError,
-                'response' => $response,
+        $response = $this->client->get('patients/' . rawurlencode($patientId) . '/attachment_presigned_post');
+        if (!$response->isSuccessful() || !is_array($response->data) || empty($response->data['url']) || !is_array($response->data['fields'] ?? null)) {
+            throw new ApiException('Cliniko could not prepare the file upload.', [
+                'error' => $response->error,
+                'status_code' => $response->statusCode,
             ]);
         }
 
-        // Extrai a URL do XML
-        preg_match('/<Location>(.*?)<\/Location>/', $response, $matches);
-       $uploadUrl = urldecode(html_entity_decode($matches[1] ?? ''));
+        return $response->data;
+    }
 
-        if (empty($uploadUrl)) {
-            throw new ApiException("Failed to extract upload URL from S3 response", ['xml' => $response]);
+    /** @return array<int,array<string,mixed>> */
+    public function listForPatient(string $patientId): array
+    {
+        $query = '?per_page=100&q[]=' . rawurlencode('patient_id:=' . $patientId);
+        $response = $this->client->get('patient_attachments' . $query);
+        if (!$response->isSuccessful() || !is_array($response->data)) {
+            throw new ApiException('Cliniko could not load patient attachments.', ['error' => $response->error]);
         }
 
+        $attachments = $response->data['patient_attachments'] ?? $response->data;
+        return is_array($attachments) ? array_values(array_filter($attachments, 'is_array')) : [];
+    }
+
+    /** @return array<string,mixed> */
+    public function createAttachmentRecord(string $patientId, string $uploadUrl, string $description = ''): array
+    {
+        $this->assertUploadBelongsToPatient($patientId, $uploadUrl);
+        $response = $this->client->post('patient_attachments', [
+            'patient_id' => $patientId,
+            'upload_url' => $uploadUrl,
+            'description' => $description,
+        ]);
+
+        if (!$response->isSuccessful() || !is_array($response->data)) {
+            throw new ApiException('Cliniko could not create the patient attachment.', ['error' => $response->error]);
+        }
+
+        return $response->data;
+    }
+
+    /** @param array<string,mixed> $presigned */
+    public function uploadToS3(string $filePath, string $filename, array $presigned): string
+    {
+        if (!is_file($filePath)) {
+            throw new ApiException('The uploaded file could not be found.');
+        }
+
+        $fields = [];
+        foreach (($presigned['fields'] ?? []) as $key => $value) {
+            $fields[(string) $key] = str_replace('${filename}', $filename, (string) $value);
+        }
+        $mime = function_exists('mime_content_type') ? (string) mime_content_type($filePath) : 'application/octet-stream';
+        $fields['file'] = new \CURLFile($filePath, $mime !== '' ? $mime : 'application/octet-stream', $filename);
+
+        $handle = curl_init((string) ($presigned['url'] ?? ''));
+        if ($handle === false) {
+            throw new ApiException('The S3 upload could not be started.');
+        }
+        curl_setopt_array($handle, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $fields,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => false,
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+        $caBundle = $this->caBundlePath();
+        if ($caBundle !== '') {
+            curl_setopt($handle, CURLOPT_CAINFO, $caBundle);
+        }
+        $body = curl_exec($handle);
+        $status = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
+        $error = curl_error($handle);
+        curl_close($handle);
+
+        if ($body === false || $status !== 201) {
+            throw new ApiException('The file could not be uploaded to Cliniko storage.', ['status_code' => $status, 'error' => $error]);
+        }
+
+        preg_match('/<Location>(.*?)<\/Location>/s', (string) $body, $matches);
+        $uploadUrl = urldecode(html_entity_decode((string) ($matches[1] ?? ''), ENT_QUOTES, 'UTF-8'));
+        if ($uploadUrl === '') {
+            throw new ApiException('The S3 upload response did not contain a file location.');
+        }
         return $uploadUrl;
     }
 
-
-    /**
-     * Step 3: Register uploaded file as an attachment in Cliniko
-     */
-    public function createAttachmentRecord(int $patientId, string $uploadUrl, string $description = ''): array
+    private function caBundlePath(): string
     {
-            return $this->client->post('patient_attachments', [
-            'patient_id' => $patientId,
-            'upload_url' => $uploadUrl,
-            'description' => $description
-        ])->data;
+        $configured = [
+            (string) ini_get('curl.cainfo'),
+            (string) ini_get('openssl.cafile'),
+        ];
+        if (defined('ABSPATH')) {
+            $configured[] = rtrim(ABSPATH, '/\\') . '/wp-includes/certificates/ca-bundle.crt';
+        }
+        foreach ($configured as $path) {
+            if ($path !== '' && is_file($path) && is_readable($path)) {
+                return $path;
+            }
+        }
+        return '';
     }
 
-    /**
-     * Upload full process: presign, upload, register
-     */
-    public function uploadPatientAttachment(int $patientId, string $filePath, string $description = ''): array
+    /** @return array<string,mixed> */
+    public function uploadPatientAttachment(string $patientId, string $filePath, string $filename, string $description = ''): array
     {
         $presigned = $this->getPresignedPost($patientId);
-        $uploadUrl = $this->uploadToS3($filePath, $presigned);
+        $uploadUrl = $this->uploadToS3($filePath, $filename, $presigned);
         return $this->createAttachmentRecord($patientId, $uploadUrl, $description);
     }
 
-    public function deletePatientAttachment($id, ApiClientInterface $client)   {
-        $response = $client->post("patient_attachments/" . $id . "/archive", []);
-
-        if (!$response->isSuccessful()) {
-            throw new ApiException("Request to create patient form failed.", [
-                "error" => $response->error,
-            ]);
+    private function assertUploadBelongsToPatient(string $patientId, string $uploadUrl): void
+    {
+        $parts = wp_parse_url($uploadUrl);
+        $path = (string) ($parts['path'] ?? '');
+        if (($parts['scheme'] ?? '') !== 'https' || $path === '' || !str_contains(rawurldecode($path), '/patients/' . $patientId . '/attachments/')) {
+            throw new ApiException('The uploaded file does not belong to this patient.');
         }
-
-        return true;
     }
 }

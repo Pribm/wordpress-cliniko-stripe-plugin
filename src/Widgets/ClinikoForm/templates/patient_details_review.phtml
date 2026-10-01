@@ -1,0 +1,76 @@
+<?php
+
+if (!defined('ABSPATH')) exit;
+
+$patientReviewFields = [
+  'first_name' => ['label' => 'First name', 'type' => 'text', 'autocomplete' => 'given-name'],
+  'last_name' => ['label' => 'Last name', 'type' => 'text', 'autocomplete' => 'family-name'],
+  'email' => ['label' => 'Email', 'type' => 'email', 'autocomplete' => 'email'],
+  'phone' => ['label' => 'Phone', 'type' => 'tel', 'autocomplete' => 'tel'],
+  'medicare' => ['label' => 'Medicare number', 'type' => 'text', 'autocomplete' => 'off'],
+  'medicare_reference_number' => ['label' => 'Medicare reference', 'type' => 'text', 'autocomplete' => 'off'],
+  'address_1' => ['label' => 'Address line 1', 'type' => 'text', 'autocomplete' => 'address-line1'],
+  'address_2' => ['label' => 'Address line 2', 'type' => 'text', 'autocomplete' => 'address-line2'],
+  'city' => ['label' => 'City', 'type' => 'text', 'autocomplete' => 'address-level2'],
+  'state' => ['label' => 'State', 'type' => 'text', 'autocomplete' => 'address-level1'],
+  'post_code' => ['label' => 'Post code', 'type' => 'text', 'autocomplete' => 'postal-code'],
+  'country' => ['label' => 'Country', 'type' => 'text', 'autocomplete' => 'country-name'],
+  'date_of_birth' => ['label' => 'Date of birth', 'type' => 'date', 'autocomplete' => 'bday'],
+];
+$reviewTitleId = wp_unique_id('cliniko-form-patient-review-title-');
+$drawerTitleId = wp_unique_id('cliniko-form-patient-drawer-title-');
+$reviewHidden = !$is_single_form;
+$reviewClass = 'form-step cliniko-form-patient-review-step' . ($reviewHidden ? ' is-hidden' : '');
+$reviewStyle = ($is_unstyled_form && $reviewHidden) ? ' style="display:none;"' : '';
+?>
+<div class="<?= esc_attr($reviewClass) ?>" data-step="<?= (int) $reviewStepIndex ?>" data-cliniko-patient-details-step<?= $reviewStyle ?>>
+  <section class="cliniko-form-patient-review" data-cliniko-patient-details-review aria-labelledby="<?= esc_attr($reviewTitleId) ?>" aria-busy="true">
+    <header class="cliniko-form-patient-review__header">
+      <div>
+        <h3 id="<?= esc_attr($reviewTitleId) ?>">Review your personal details</h3>
+        <p>Please check that these details are correct before continuing.</p>
+      </div>
+      <button type="button" class="cliniko-form-patient-review__edit" data-cliniko-patient-details-open disabled>Edit details</button>
+    </header>
+    <p class="cliniko-form-patient-review__notice" data-cliniko-patient-details-load-status role="status" aria-live="polite">Loading your details…</p>
+    <dl class="cliniko-form-patient-review__values">
+      <?php foreach ($patientReviewFields as $key => $definition): ?>
+        <div>
+          <dt><?= esc_html($definition['label']) ?></dt>
+          <dd data-cliniko-patient-details-value="<?= esc_attr($key) ?>">—</dd>
+        </div>
+      <?php endforeach; ?>
+    </dl>
+  </section>
+
+  <div class="cliniko-form-patient-drawer" data-cliniko-patient-details-drawer hidden>
+    <button type="button" class="cliniko-form-patient-drawer__backdrop" data-cliniko-patient-details-close aria-label="Close personal details editor"></button>
+    <section class="cliniko-form-patient-drawer__panel" role="dialog" aria-modal="true" aria-labelledby="<?= esc_attr($drawerTitleId) ?>" tabindex="-1">
+      <header class="cliniko-form-patient-drawer__header">
+        <div>
+          <p class="cliniko-form-patient-drawer__eyebrow">Patient profile</p>
+          <h2 id="<?= esc_attr($drawerTitleId) ?>">Edit personal details</h2>
+        </div>
+        <button type="button" class="cliniko-form-patient-drawer__close" data-cliniko-patient-details-close aria-label="Close personal details editor">&times;</button>
+      </header>
+      <div class="cliniko-form-patient-drawer__body">
+        <div class="cliniko-form-patient-drawer__fields">
+          <?php foreach ($patientReviewFields as $key => $definition):
+            $inputId = wp_unique_id('cliniko-form-patient-review-');
+            ?>
+            <div class="cliniko-form-patient-drawer__field">
+              <label for="<?= esc_attr($inputId) ?>"><?= esc_html($definition['label']) ?></label>
+              <input id="<?= esc_attr($inputId) ?>" type="<?= esc_attr($definition['type']) ?>" autocomplete="<?= esc_attr($definition['autocomplete']) ?>" data-cliniko-patient-details-field="<?= esc_attr($key) ?>">
+              <?php if ($key === 'email'): ?><small>Email changes require confirmation from the new address before they take effect.</small><?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
+        <p class="cliniko-form-patient-drawer__status" data-cliniko-patient-details-status role="status" aria-live="polite"></p>
+      </div>
+      <footer class="cliniko-form-patient-drawer__footer">
+        <button type="button" class="cliniko-form-patient-drawer__cancel" data-cliniko-patient-details-close>Cancel</button>
+        <button type="button" class="cliniko-form-patient-drawer__save" data-cliniko-patient-details-save>Save details</button>
+      </footer>
+    </section>
+  </div>
+</div>

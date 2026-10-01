@@ -4,6 +4,7 @@ namespace App\Workers;
 use App\Client\Cliniko\Client;
 use App\DTO\CreatePatientDTO;
 use App\DTO\CreatePatientFormDTO;
+use App\DTO\PatientPhoneNumberDTO;
 use App\Model\AppointmentType;
 use App\Model\Booking;
 use App\Model\IndividualAppointment;
@@ -195,7 +196,10 @@ class ClinikoSchedulingWorker
             if (is_array($patient['custom_fields'] ?? null) && array_key_exists('sections', $patient['custom_fields'])) {
                 $dto->customFields = $patient['custom_fields'];
             }
-            $dto->patientPhoneNumbers = [['number' => $patient['phone'] ?? '', 'phone_type' => 'Home']];
+            $phone = trim((string) ($patient['phone'] ?? ''));
+            if ($phone !== '') {
+                $dto->patientPhoneNumbers = [new PatientPhoneNumberDTO($phone, 'Home')];
+            }
             $dto->acceptedPrivacyPolicy = true;
 
             $pt = $cliniko->findOrCreatePatient($dto);

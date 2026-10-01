@@ -1,0 +1,396 @@
+/*
+ * Shared component values are preferred, with Elementor globals retained as
+ * fallbacks when this stylesheet is used without the component layer.
+ * Per-onboarding inline variables override these defaults when enabled.
+ */
+.cliniko-patient-onboarding {
+    --cliniko-onboarding-primary: var(--cliniko-component-primary, var(--e-global-color-primary, var(--e-global-color-accent, #2563eb)));
+    --cliniko-onboarding-primary-hover: var(--cliniko-component-accent, var(--e-global-color-accent, var(--cliniko-onboarding-primary)));
+    --cliniko-onboarding-title: var(--cliniko-component-primary, var(--e-global-color-primary, #111827));
+    --cliniko-onboarding-label: var(--cliniko-component-text, #111827);
+    --cliniko-onboarding-text: var(--cliniko-component-text, #000);
+    --cliniko-onboarding-muted: var(--cliniko-component-muted, #6b7280);
+    --cliniko-onboarding-font-family: var(--cliniko-ui-font-family, var(--e-global-typography-text-font-family, inherit));
+    --cliniko-onboarding-heading-family: var(--cliniko-ui-font-family, var(--e-global-typography-primary-font-family, var(--cliniko-onboarding-font-family)));
+    --cliniko-onboarding-heading-weight: var(--e-global-typography-primary-font-weight, 700);
+    --cliniko-onboarding-text-weight: var(--e-global-typography-text-font-weight, 400);
+    --cliniko-onboarding-heading-size: clamp(1.65rem, 3vw, 2.25rem);
+    --cliniko-onboarding-body-size: 1rem;
+    --cliniko-onboarding-surface: var(--cliniko-component-surface, #fff);
+    --cliniko-onboarding-surface-soft: var(--cliniko-component-surface-alt, #f8fafc);
+    --cliniko-onboarding-border: var(--cliniko-component-border, #d1d5db);
+    --cliniko-onboarding-input-border: var(--cliniko-component-border, #111827);
+    --cliniko-onboarding-success-bg: var(--cliniko-ui-feedback-surface, #ecfdf3);
+    --cliniko-onboarding-success-text: var(--cliniko-ui-feedback-success, #166534);
+    --cliniko-onboarding-danger-bg: var(--cliniko-ui-feedback-surface, #fef2f2);
+    --cliniko-onboarding-danger-text: var(--cliniko-ui-feedback-error, #991b1b);
+    box-sizing: border-box;
+    width: min(100%, 820px);
+    margin: clamp(18px, 4vw, 48px) auto;
+    padding: clamp(22px, 4vw, 42px);
+    border: 1px solid var(--cliniko-onboarding-border);
+    border-radius: var(--cliniko-ui-radius, 20px);
+    color: var(--cliniko-onboarding-text);
+    background: var(--cliniko-onboarding-surface);
+    box-shadow: 0 18px 55px rgb(15 23 42 / 9%);
+    font-family: var(--cliniko-onboarding-font-family);
+    font-size: var(--cliniko-onboarding-body-size);
+    font-weight: var(--cliniko-onboarding-text-weight);
+    line-height: 1.55;
+    opacity: 1 !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    isolation: isolate;
+}
+.cliniko-patient-onboarding *,
+.cliniko-patient-onboarding *::before,
+.cliniko-patient-onboarding *::after { box-sizing: border-box; }
+.cliniko-patient-onboarding h2,
+.cliniko-patient-onboarding h3 {
+    color: var(--cliniko-onboarding-title);
+    font-family: var(--cliniko-onboarding-heading-family);
+    font-weight: var(--cliniko-onboarding-heading-weight);
+}
+
+.cliniko-patient-onboarding--modal,
+.cliniko-patient-onboarding--blocking_overlay {
+    position: fixed;
+    z-index: 99999;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: clamp(12px, 4vw, 40px);
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.cliniko-patient-onboarding__backdrop { position: absolute; z-index: 0; inset: 0; background: #111827; opacity: .7; }
+.cliniko-patient-onboarding__panel {
+    position: relative;
+    z-index: 1;
+    width: min(820px, 100%);
+    max-height: min(920px, calc(100dvh - 48px));
+    padding: clamp(22px, 4vw, 42px);
+    overflow-y: auto;
+    border: 1px solid var(--cliniko-onboarding-border);
+    border-radius: 20px;
+    background: var(--cliniko-onboarding-surface);
+    box-shadow: 0 30px 100px rgb(15 23 42 / 35%);
+}
+.cliniko-patient-onboarding--overlay-full_screen { padding: 0; }
+.cliniko-patient-onboarding--overlay-full_screen .cliniko-patient-onboarding__panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+}
+.cliniko-patient-onboarding--overlay-full_screen .cliniko-patient-onboarding__panel > :not(.cliniko-patient-onboarding__close) {
+    width: min(100%, 900px);
+    margin-right: auto;
+    margin-left: auto;
+}
+.cliniko-patient-onboarding__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--cliniko-onboarding-border);
+    border-radius: 50%;
+    color: var(--cliniko-onboarding-text);
+    background: var(--cliniko-onboarding-surface);
+    font: inherit;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+.cliniko-patient-onboarding__close:hover { border-color: var(--cliniko-onboarding-primary); color: var(--cliniko-onboarding-primary); }
+body.cliniko-patient-onboarding-modal-open {
+    position: fixed;
+    right: 0;
+    left: 0;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+.cliniko-patient-onboarding__welcome {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    min-height: min(520px, 70vh);
+    text-align: center;
+}
+.cliniko-patient-onboarding__welcome[hidden],
+.cliniko-patient-onboarding__flow[hidden] { display: none !important; }
+.cliniko-patient-onboarding__welcome-content { width: 100%; margin-bottom: clamp(22px, 4vw, 34px); }
+.cliniko-patient-onboarding__welcome-content > :first-child { margin-top: 0; }
+.cliniko-patient-onboarding__welcome-content > :last-child { margin-bottom: 0; }
+.cliniko-patient-onboarding__welcome-start {
+    min-width: min(240px, 100%);
+    min-height: var(--cliniko-ui-control-height, 50px);
+    padding: 11px 24px;
+    border: 1px solid var(--cliniko-onboarding-primary);
+    border-radius: var(--cliniko-ui-radius, 9px);
+    color: #fff;
+    background: var(--cliniko-onboarding-primary);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+.cliniko-patient-onboarding__welcome-start:hover {
+    color: #fff;
+    background: var(--cliniko-onboarding-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgb(15 23 42 / 14%);
+}
+
+.cliniko-patient-onboarding__header,
+.cliniko-patient-onboarding__complete { margin-bottom: clamp(24px, 4vw, 34px); }
+.cliniko-patient-onboarding__header::before,
+.cliniko-patient-onboarding__complete::before {
+    display: block;
+    width: 44px;
+    height: 5px;
+    margin-bottom: 18px;
+    border-radius: 999px;
+    background: var(--cliniko-onboarding-primary);
+    content: "";
+}
+.cliniko-patient-onboarding__header h2,
+.cliniko-patient-onboarding__complete h2,
+.cliniko-patient-onboarding__step h3 { margin: 0 0 9px; line-height: 1.2; }
+.cliniko-patient-onboarding__header h2,
+.cliniko-patient-onboarding__complete h2 { font-size: var(--cliniko-onboarding-heading-size); }
+.cliniko-patient-onboarding__step h3 { color: var(--cliniko-onboarding-title); font-size: clamp(1.2rem, 2vw, 1.5rem); }
+.cliniko-patient-onboarding__header p,
+.cliniko-patient-onboarding__complete p,
+.cliniko-patient-onboarding__step-header p { margin: 0; color: var(--cliniko-onboarding-text); }
+
+.cliniko-patient-onboarding__message { margin: 0 0 22px; padding: 13px 16px; border-radius: var(--cliniko-ui-radius, 10px); }
+.cliniko-patient-onboarding__message.is-success { color: var(--cliniko-onboarding-success-text); background: var(--cliniko-onboarding-success-bg); }
+.cliniko-patient-onboarding__message.is-error { color: var(--cliniko-onboarding-danger-text); background: var(--cliniko-onboarding-danger-bg); }
+.cliniko-patient-onboarding__progress { margin: 0 0 22px; color: var(--cliniko-onboarding-muted); font-size: .875rem; font-weight: 600; }
+.cliniko-patient-onboarding__progress-track { display: block; height: 7px; margin-top: 9px; overflow: hidden; border-radius: 999px; background: var(--cliniko-onboarding-border) !important; }
+.cliniko-patient-onboarding__progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--cliniko-onboarding-primary) !important; transition: width .2s ease; }
+
+.cliniko-patient-onboarding__step {
+    padding: clamp(20px, 4vw, 30px);
+    border: 1px solid var(--cliniko-onboarding-border);
+    border-radius: var(--cliniko-ui-radius, 14px);
+    background: var(--cliniko-onboarding-surface-soft);
+}
+.cliniko-patient-onboarding__step-count { margin: 0 0 7px !important; color: var(--cliniko-onboarding-primary) !important; font-size: .76rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.cliniko-patient-onboarding__fields { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 24px; }
+.cliniko-patient-onboarding__field,
+.cliniko-patient-onboarding__paragraph { min-width: 0; }
+[data-onboarding-conditional-field][hidden] { display: none !important; }
+.cliniko-patient-onboarding__hidden-field { display: none !important; }
+.cliniko-patient-onboarding__label { display: block; margin-bottom: 7px; color: var(--cliniko-onboarding-label) !important; font-weight: 600; }
+.cliniko-patient-onboarding__field--logic-switch {
+    min-height: 72px;
+    padding: 14px 16px;
+    border: 1px solid var(--cliniko-onboarding-input-border);
+    border-radius: var(--cliniko-ui-radius, 10px);
+    background: var(--cliniko-onboarding-surface);
+}
+.cliniko-patient-onboarding__field--logic-switch .cliniko-patient-onboarding__label { margin: 0 0 11px; color: var(--cliniko-onboarding-label) !important; }
+.cliniko-patient-onboarding__logic-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.cliniko-patient-onboarding__logic-option {
+    position: relative;
+    display: block;
+    min-width: 0;
+    margin: 0;
+    cursor: pointer;
+}
+.cliniko-patient-onboarding__logic-option > input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+}
+.cliniko-patient-onboarding__logic-option > span {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 9px 13px;
+    border: 2px solid var(--cliniko-onboarding-input-border);
+    border-radius: var(--cliniko-ui-radius, 8px);
+    color: var(--cliniko-onboarding-text);
+    background: var(--cliniko-onboarding-surface);
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+.cliniko-patient-onboarding__logic-option:hover > span { border-color: var(--cliniko-onboarding-primary); }
+.cliniko-patient-onboarding__logic-option > input:checked + span {
+    border-color: var(--cliniko-onboarding-primary);
+    color: #fff;
+    background: var(--cliniko-onboarding-primary);
+}
+.cliniko-patient-onboarding__logic-option > input:focus-visible + span {
+    outline: 2px solid var(--cliniko-onboarding-primary);
+    outline-offset: 2px;
+}
+.cliniko-patient-onboarding__field input:not([type="checkbox"]):not([type="radio"]),
+.cliniko-patient-onboarding__field select,
+.cliniko-patient-onboarding__field textarea {
+    width: 100%;
+    min-height: var(--cliniko-ui-control-height, 48px);
+    padding: 11px 13px;
+    border: 1px solid var(--cliniko-onboarding-input-border) !important;
+    border-radius: var(--cliniko-ui-radius, 8px);
+    color: var(--cliniko-onboarding-text) !important;
+    background: var(--cliniko-onboarding-surface) !important;
+    box-shadow: none;
+    font: inherit;
+    opacity: 1 !important;
+}
+.cliniko-patient-onboarding__field input:hover,
+.cliniko-patient-onboarding__field select:hover,
+.cliniko-patient-onboarding__field textarea:hover { border-color: var(--cliniko-onboarding-primary) !important; }
+.cliniko-patient-onboarding__field input:focus,
+.cliniko-patient-onboarding__field select:focus,
+.cliniko-patient-onboarding__field textarea:focus {
+    border-color: var(--cliniko-onboarding-primary) !important;
+    outline: 2px solid var(--cliniko-onboarding-primary);
+    outline-offset: 1px;
+}
+.cliniko-patient-onboarding__field input::placeholder,
+.cliniko-patient-onboarding__field textarea::placeholder { color: var(--cliniko-onboarding-muted); opacity: 1; }
+.cliniko-patient-onboarding__field textarea { min-height: 120px; resize: vertical; }
+.cliniko-patient-onboarding__date-control { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 8px; }
+.cliniko-patient-onboarding__date-control > input[data-onboarding-date-input] { min-width: 0; }
+.cliniko-patient-onboarding__date-picker-button {
+    display: grid !important;
+    place-items: center;
+    width: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 1px solid var(--cliniko-onboarding-input-border) !important;
+    border-radius: var(--cliniko-ui-radius, 8px) !important;
+    color: var(--cliniko-onboarding-text) !important;
+    background: var(--cliniko-onboarding-surface) !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+.cliniko-patient-onboarding__date-picker-button:hover,
+.cliniko-patient-onboarding__date-picker-button:focus { border-color: var(--cliniko-onboarding-primary) !important; color: var(--cliniko-onboarding-primary) !important; }
+.cliniko-patient-onboarding__date-picker-button:focus { outline: 2px solid var(--cliniko-onboarding-primary); outline-offset: 1px; }
+.cliniko-patient-onboarding__date-picker-button svg { display: block; fill: currentColor; pointer-events: none; }
+.cliniko-patient-onboarding__field .cliniko-patient-onboarding__native-date-picker {
+    position: absolute !important;
+    width: 1px !important;
+    min-width: 1px !important;
+    height: 1px !important;
+    min-height: 1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    opacity: 0 !important;
+    pointer-events: none;
+}
+.cliniko-patient-onboarding__choices { display: grid; gap: 10px; }
+.cliniko-patient-onboarding__choice { display: flex; align-items: center; gap: 9px; min-height: 36px; color: var(--cliniko-onboarding-text); cursor: pointer; }
+.cliniko-patient-onboarding__choice input { accent-color: var(--cliniko-onboarding-primary); }
+.cliniko-patient-onboarding__hint { display: block; margin-top: 7px; color: var(--cliniko-onboarding-muted); font-size: .84rem; }
+.cliniko-patient-onboarding__controls { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
+.cliniko-patient-onboarding__controls button {
+    min-height: var(--cliniko-ui-control-height, 46px);
+    padding: 10px 20px;
+    border: 1px solid var(--cliniko-onboarding-primary);
+    border-radius: var(--cliniko-ui-radius, 8px);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+.cliniko-patient-onboarding__controls button:hover { transform: translateY(-1px); box-shadow: 0 7px 18px rgb(15 23 42 / 12%); }
+.cliniko-patient-onboarding__next,
+.cliniko-patient-onboarding__submit { margin-left: auto; color: #fff; background: var(--cliniko-onboarding-primary); }
+.cliniko-patient-onboarding__next:hover,
+.cliniko-patient-onboarding__submit:hover { color: #fff; background: var(--cliniko-onboarding-primary-hover); }
+.cliniko-patient-onboarding__back { color: var(--cliniko-onboarding-text); border-color: var(--cliniko-onboarding-border); background: var(--cliniko-onboarding-surface); }
+.cliniko-patient-onboarding__back[hidden] { display: none !important; }
+
+@media (max-width: 640px) {
+    .cliniko-patient-onboarding { width: 100%; margin: 14px auto; padding: 20px 14px; border-radius: 14px; }
+    .cliniko-patient-onboarding--modal,
+    .cliniko-patient-onboarding--blocking_overlay { align-items: flex-start; margin: 0; padding: 8px; border-radius: 0; }
+    .cliniko-patient-onboarding__panel { width: 100%; max-height: calc(100dvh - 16px); padding: 24px 15px 16px; border-radius: 14px; }
+    .cliniko-patient-onboarding--overlay-full_screen {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        min-width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        min-height: 100vh;
+        max-height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+    }
+    .cliniko-patient-onboarding--overlay-full_screen .cliniko-patient-onboarding__panel {
+        position: relative;
+        width: 100vw;
+        min-width: 0;
+        max-width: 100vw;
+        height: 100vh;
+        min-height: 100vh;
+        max-height: 100vh;
+        margin: 0;
+        padding:
+            max(24px, env(safe-area-inset-top))
+            max(15px, env(safe-area-inset-right))
+            max(16px, env(safe-area-inset-bottom))
+            max(15px, env(safe-area-inset-left));
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        border-radius: 0;
+        -webkit-overflow-scrolling: touch;
+    }
+    @supports (height: 100dvh) {
+        .cliniko-patient-onboarding--overlay-full_screen,
+        .cliniko-patient-onboarding--overlay-full_screen .cliniko-patient-onboarding__panel {
+            height: 100dvh;
+            min-height: 100dvh;
+            max-height: 100dvh;
+        }
+    }
+    .cliniko-patient-onboarding__close { top: 10px; right: 10px; }
+    .cliniko-patient-onboarding__welcome { min-height: calc(100dvh - 80px); }
+    .cliniko-patient-onboarding__field,
+    .cliniko-patient-onboarding__paragraph { width: 100% !important; }
+    .cliniko-patient-onboarding__logic-options { grid-template-columns: 1fr; }
+    .cliniko-patient-onboarding__step { padding: 18px 13px; border-radius: 11px; }
+    .cliniko-patient-onboarding__controls { flex-wrap: wrap; }
+    .cliniko-patient-onboarding__controls button { flex: 1 1 140px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cliniko-patient-onboarding__progress-track span,
+    .cliniko-patient-onboarding__controls button { transition: none; }
+}

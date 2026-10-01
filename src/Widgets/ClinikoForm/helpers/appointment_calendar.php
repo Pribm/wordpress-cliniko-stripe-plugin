@@ -70,7 +70,7 @@ if (!function_exists('cliniko_build_appointment_calendar_context')) {
     $targetMonth = null;
     $monthArg = isset($args['month']) ? trim((string) $args['month']) : '';
     if ($monthArg !== '') {
-      $candidate = DateTimeImmutable::createFromFormat('Y-m', $monthArg, $tz);
+      $candidate = DateTimeImmutable::createFromFormat('!Y-m-d', $monthArg . '-01', $tz);
       if ($candidate instanceof DateTimeImmutable) {
         $targetMonth = $candidate;
       }
@@ -160,16 +160,33 @@ if (!function_exists('cliniko_render_appointment_calendar_grid')) {
     $periodLabels = [
       'morning' => 'Morning',
       'afternoon' => 'Afternoon',
-      'evening' => 'Evening',
+      'evening' => 'Night',
     ];
 
     ob_start();
 
-    for ($i = 0; $i < $firstDow; $i++) {
-      echo '<div class="calendar-day is-blank" aria-hidden="true"></div>';
+    echo '<table class="appointment-calendar__table">';
+    echo '<thead><tr>';
+    foreach (['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $weekday) {
+      echo '<th scope="col">' . esc_html($weekday) . '</th>';
     }
+    echo '</tr></thead><tbody>';
 
-    for ($day = 1; $day <= $daysInMonth; $day++) {
+    $totalCells = (int) ceil(($firstDow + $daysInMonth) / 7) * 7;
+    for ($cell = 0; $cell < $totalCells; $cell++) {
+      if ($cell % 7 === 0) {
+        echo '<tr>';
+      }
+
+      $day = $cell - $firstDow + 1;
+      if ($day < 1 || $day > $daysInMonth) {
+        echo '<td class="calendar-day is-blank" aria-hidden="true"></td>';
+        if ($cell % 7 === 6) {
+          echo '</tr>';
+        }
+        continue;
+      }
+
       $date = $monthStart->setDate($year, $month, $day);
       $dateKey = $date->format('Y-m-d');
       $isPast = $date < $today;
@@ -192,14 +209,14 @@ if (!function_exists('cliniko_render_appointment_calendar_grid')) {
       if (!$hasAvailability && !$availabilityFailed) $classes[] = 'is-empty';
 
       $label = $date->format('l, F j');
-      echo '<div class="' . esc_attr(implode(' ', $classes)) . '" data-date="' . esc_attr($dateKey) . '"';
+      echo '<td class="' . esc_attr(implode(' ', $classes)) . '" data-date="' . esc_attr($dateKey) . '"';
       echo ' aria-label="' . esc_attr($label) . '"';
       if ($isDisabled) {
         echo ' aria-disabled="true"';
       }
-      echo '>';
+      echo ' tabindex="' . ($isDisabled ? '-1' : '0') . '">';
       echo '<div class="calendar-day__number">' . esc_html((string) $day) . '</div>';
-      echo '<div class="calendar-day__periods">';
+      echo '<div class="calendar-day__periods" aria-label="Available periods">';
 
       foreach ($periodLabels as $key => $title) {
         $periodClasses = ['calendar-period', 'calendar-period--' . $key];
@@ -209,8 +226,14 @@ if (!function_exists('cliniko_render_appointment_calendar_grid')) {
         echo '<span class="' . esc_attr(implode(' ', $periodClasses)) . '" data-period="' . esc_attr($key) . '" title="' . esc_attr($title) . '"></span>';
       }
 
-      echo '</div></div>';
+      echo '</div></td>';
+
+      if ($cell % 7 === 6) {
+        echo '</tr>';
+      }
     }
+
+    echo '</tbody></table>';
 
     return ob_get_clean();
   }

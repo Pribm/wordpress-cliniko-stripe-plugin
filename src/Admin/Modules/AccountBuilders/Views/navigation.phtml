@@ -1,0 +1,34 @@
+<?php
+/** @var string $activeTab */
+/** @var array<string,string> $tabs */
+/** @var callable(string,array<string,string>):string $url */
+?>
+<div class="cliniko-template-builder-nav">
+    <div class="cliniko-template-builder-nav__header">
+        <div>
+            <span class="cliniko-template-builder-nav__eyebrow">EasyScripts</span>
+            <h1>Template Builder</h1>
+            <p>Create and manage the patient-facing forms, bookings, dashboards, and messages used across your site.</p>
+        </div>
+        <div class="cliniko-template-builder-nav__hint">Choose a workspace below to get started.</div>
+    </div>
+    <nav class="cliniko-template-builder-nav__tabs" aria-label="Template builder">
+        <?php foreach ($tabs as $tab => $label) : ?>
+            <a class="<?php echo $activeTab === $tab ? 'is-active' : ''; ?>" href="<?php echo esc_url($url($tab, $tab === 'dashboard-modules' ? ['dashboard_section' => 'appointment-types'] : [])); ?>">
+                <span><?php echo esc_html($label); ?></span>
+                <small><?php echo esc_html(match ($tab) {
+                    'patient-forms' => 'Profile and Cliniko forms',
+                    'onboarding' => 'Guided profile setup',
+                    'booking-forms' => 'Guest appointments',
+                    'dashboard-modules' => 'Patient portal content',
+                    'components' => 'Shared UI and behaviour',
+                    'shortcodes' => 'Find what to embed',
+                    'redirects' => 'Submission destinations',
+                    'emails' => 'Verification messages',
+                    'custom-code' => 'HTML, CSS and JavaScript',
+                    default => '',
+                }); ?></small>
+            </a>
+        <?php endforeach; ?>
+    </nav>
+</div>

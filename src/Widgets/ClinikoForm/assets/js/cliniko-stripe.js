@@ -37,7 +37,9 @@ async function initStripe() {
     const errorEl = document.createElement("div");
     errorEl.id = "payment-error-message";
     errorEl.style.cssText = "margin-top: 1rem; color: #c62828; font-weight: 500;";
-    document.getElementById("payment-element").after(errorEl);
+    const paymentElement = document.getElementById("payment-element");
+    const paymentShell = paymentElement?.closest("#payment-element-shell");
+    (paymentShell || paymentElement)?.after(errorEl);
 
     document.getElementById("payment-button").addEventListener("click", async () => {
       showPaymentLoader();
@@ -78,6 +80,7 @@ async function initStripe() {
         });
 
         const result = await response.json();
+        window.ClinikoConnectionNotice?.inspectResponse(response, result);
 
         if (result.status === "success") {
           const redirectBase = ClinikoStripeData.redirect_url;
@@ -97,6 +100,7 @@ async function initStripe() {
           errorEl.textContent = result.message || "Error booking appointment. Please try again.";
         }
       } catch (err) {
+        if (!navigator.onLine || err instanceof TypeError) window.ClinikoConnectionNotice?.reportOffline?.();
         console.error("Payment or booking error:", err);
         errorEl.textContent = "An unexpected error occurred. Please try again.";
       } finally {
@@ -109,7 +113,9 @@ async function initStripe() {
     const fallbackError = document.createElement("div");
     fallbackError.style.color = "#c62828";
     fallbackError.textContent = "Failed to initialize payment. Please reload the page.";
-    document.getElementById("payment-element").after(fallbackError);
+    const fallbackMount = document.getElementById("payment-element");
+    const fallbackShell = fallbackMount?.closest("#payment-element-shell");
+    (fallbackShell || fallbackMount)?.after(fallbackError);
   }
 }
 

@@ -1,0 +1,249 @@
+.cliniko-component-editor {
+    max-width: 1240px;
+    --component-admin-border: #dcdcde;
+    --component-admin-muted: #646970;
+    --component-admin-blue: #2271b1;
+}
+
+.cliniko-component-editor__hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 20px 0 6px;
+    padding: 24px 28px;
+    border: 1px solid var(--component-admin-border);
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fff, #f6f9fc);
+}
+
+.cliniko-component-editor__hero h1 { margin: 4px 0 6px; }
+.cliniko-component-editor__hero p { max-width: 720px; margin: 0; color: var(--component-admin-muted); }
+.cliniko-component-editor__eyebrow { color: var(--component-admin-blue); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.cliniko-component-editor__hero-actions { display: flex; flex-direction: column; align-items: stretch; gap: 9px; min-width: 210px; }
+.cliniko-component-editor__status { padding: 6px 11px; border: 1px solid var(--component-admin-border); border-radius: 999px; color: var(--component-admin-muted); background: #fff; font-weight: 600; text-align: center; }
+.cliniko-component-editor__import-status { min-height: 20px; margin: 0 0 14px; color: var(--component-admin-muted); }
+.cliniko-component-editor__import-status.is-success { color: #008a20; font-weight: 600; }
+
+.cliniko-component-editor__layout {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr) minmax(360px, 420px);
+    gap: 18px;
+    align-items: start;
+}
+
+.cliniko-component-editor__library,
+.cliniko-component-editor__panel,
+.cliniko-component-editor__preview-card,
+.cliniko-component-editor__publish {
+    overflow: hidden;
+    border: 1px solid var(--component-admin-border);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.cliniko-component-editor__library { position: sticky; top: 46px; display: grid; }
+.cliniko-component-editor__library > header { display: grid; gap: 2px; padding: 15px 14px 11px; border-bottom: 1px solid var(--component-admin-border); }
+.cliniko-component-editor__library > header small { color: var(--component-admin-muted); font-weight: 400; }
+.cliniko-component-editor__library > button { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; align-items: center; width: 100%; padding: 11px 12px; border: 0; border-bottom: 1px solid #f0f0f1; color: #3c434a; background: #fff; text-align: left; cursor: pointer; }
+.cliniko-component-editor__library > button:last-child { border-bottom: 0; }
+.cliniko-component-editor__library > button:hover { background: #f6f7f7; }
+.cliniko-component-editor__library > button.is-active { color: var(--component-admin-blue); background: #eef7fc; box-shadow: inset 3px 0 0 var(--component-admin-blue); }
+.cliniko-component-editor__library > button > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.cliniko-component-editor__library > button small { overflow: hidden; color: #787c82; font-size: 10px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.cliniko-component-editor__library-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: #50575e; background: #f0f0f1; font-size: 11px; font-weight: 700; }
+.cliniko-component-editor__library > button.is-active .cliniko-component-editor__library-icon { color: #fff; background: var(--component-admin-blue); }
+
+.cliniko-component-editor__workspace { min-width: 0; }
+.cliniko-component-editor__panel[hidden] { display: none; }
+.cliniko-component-editor__panel > header { padding: 19px 22px; border-bottom: 1px solid var(--component-admin-border); }
+.cliniko-component-editor__panel > header span { color: var(--component-admin-blue); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.cliniko-component-editor__panel h2 { margin: 4px 0; font-size: 20px; }
+.cliniko-component-editor__panel > header p { margin: 0; color: var(--component-admin-muted); }
+.cliniko-component-editor__groups { display: grid; }
+.cliniko-component-editor__group { padding: 20px 22px; border-bottom: 1px solid #edf0f2; }
+.cliniko-component-editor__group:last-child { border-bottom: 0; }
+.cliniko-component-editor__group > header { margin-bottom: 16px; }
+.cliniko-component-editor__group-header-with-action { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.cliniko-component-editor__group-header-with-action > div { min-width: 0; }
+.cliniko-component-editor__group-header-with-action .button { flex: 0 0 auto; }
+.cliniko-component-editor__group h3 { margin: 0 0 4px; font-size: 14px; }
+.cliniko-component-editor__group header p { margin: 0; color: var(--component-admin-muted); font-size: 12px; }
+.cliniko-component-editor__controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 20px; }
+.cliniko-component-editor__controls > label,
+.cliniko-component-editor__controls > .cliniko-component-editor__control { display: grid; align-content: start; gap: 7px; min-width: 0; font-weight: 600; }
+.cliniko-component-editor__controls > label.is-imported,
+.cliniko-component-editor__controls > .cliniko-component-editor__control.is-imported { margin: -7px; padding: 7px; border-radius: 6px; background: #edfaef; box-shadow: 0 0 0 1px #8bcf96; }
+.cliniko-component-editor__controls > label.is-wide,
+.cliniko-component-editor__controls > .cliniko-component-editor__control.is-wide { grid-column: 1 / -1; }
+.cliniko-component-editor__controls label > small { color: var(--component-admin-muted); font-weight: 400; line-height: 1.35; }
+.cliniko-component-editor__controls input[type="text"],
+.cliniko-component-editor__controls select { width: 100%; }
+.cliniko-component-editor__color { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: center; }
+.cliniko-component-editor__color input { width: 44px; height: 38px; padding: 2px; }
+.cliniko-component-editor__color code { padding: 8px; overflow: hidden; text-align: center; text-overflow: ellipsis; }
+.cliniko-component-editor__color-control.is-transparent .cliniko-component-editor__color input { opacity: .42; }
+.cliniko-component-editor__color-control.is-transparent .cliniko-component-editor__color code { background-image: linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%); background-position: 0 0, 0 6px, 6px -6px, -6px 0; background-size: 12px 12px; }
+.cliniko-component-editor__transparent { display: inline-flex; align-items: center; justify-self: start; gap: 6px; color: var(--component-admin-muted); font-size: 12px; font-weight: 500; }
+.cliniko-component-editor__transparent input { margin: 0; }
+.cliniko-component-editor__range { display: grid; grid-template-columns: 1fr 48px; gap: 9px; align-items: center; }
+.cliniko-component-editor__range output { color: var(--component-admin-muted); text-align: right; }
+.cliniko-component-editor__switch { grid-template-columns: auto 1fr !important; align-items: start; }
+.cliniko-component-editor__switch input { margin-top: 3px; }
+.cliniko-component-editor__switch > span { display: grid; gap: 2px; }
+.cliniko-component-editor__switch small { color: var(--component-admin-muted); font-weight: 400; }
+.cliniko-component-editor__custom-font { display: block; }
+.cliniko-component-editor__custom-font[hidden] { display: none; }
+.cliniko-component-editor__font-install { background: #fbfcfd; }
+.cliniko-component-editor__font-install-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
+.cliniko-component-editor__font-install-body > label { display: grid; align-content: start; gap: 7px; font-weight: 600; }
+.cliniko-component-editor__font-install-body input[type="file"] { width: 100%; min-height: 38px; padding: 7px; border: 1px solid #8c8f94; border-radius: 3px; background: #fff; box-sizing: border-box; }
+.cliniko-component-editor__font-install-body label small { color: var(--component-admin-muted); font-weight: 400; line-height: 1.35; }
+.cliniko-component-editor__installed-fonts { grid-column: 1 / -1; display: grid; gap: 7px; padding-top: 2px; }
+.cliniko-component-editor__installed-fonts > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.cliniko-component-editor__installed-fonts span { padding: 4px 8px; border: 1px solid #c6e2ce; border-radius: 999px; color: #166534; background: #edfaef; font-size: 11px; font-weight: 600; }
+
+.cliniko-component-editor__sidebar { position: sticky; top: 46px; display: grid; gap: 14px; min-width: 0; }
+.cliniko-component-editor__preview-card > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 15px; border-bottom: 1px solid var(--component-admin-border); }
+.cliniko-component-editor__preview-card > header > div:first-child { display: grid; gap: 2px; }
+.cliniko-component-editor__preview-card > header span { color: var(--component-admin-muted); font-size: 11px; }
+.cliniko-component-editor__preview-card > header > div:last-child { display: flex; gap: 4px; }
+.cliniko-component-editor__preview-card .button.is-active { color: #fff; border-color: var(--component-admin-blue); background: var(--component-admin-blue); }
+.cliniko-component-editor__preview { padding: 18px; overflow: auto; background: #f0f0f1; }
+.cliniko-component-editor__publish { padding: 17px; }
+.cliniko-component-editor__publish h2 { margin: 0 0 4px; }
+.cliniko-component-editor__publish p { margin: 0 0 12px; color: var(--component-admin-muted); }
+.cliniko-component-editor__publish .button { margin: 5px 5px 0 0; }
+
+/* Live component scenes */
+.cliniko-component-preview {
+    --cliniko-component-muted: var(--cliniko-ui-muted, #64748b);
+    width: 100%;
+    margin: auto;
+    padding: 18px;
+    border: 1px solid var(--cliniko-ui-border, #e2e8f0);
+    border-radius: var(--cliniko-ui-radius, 12px);
+    color: var(--cliniko-ui-text, #111827);
+    background: var(--cliniko-ui-surface, #fff);
+    box-sizing: border-box;
+    font-family: var(--cliniko-ui-font-family, inherit);
+    transition: max-width .2s;
+}
+.cliniko-component-preview * { box-sizing: border-box; }
+.cliniko-component-preview.is-mobile { max-width: 320px; }
+.cliniko-component-preview__scene[hidden] { display: none; }
+.cliniko-component-preview__scene { animation: cliniko-preview-in .15s ease; }
+@keyframes cliniko-preview-in { from { opacity: .45; transform: translateY(3px); } }
+.cliniko-component-preview__eyebrow { display: block; margin-bottom: 4px; color: var(--cliniko-ui-primary, #2563eb); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.cliniko-component-preview h3 { margin: 0 0 10px; color: var(--cliniko-ui-text, #111827); font-size: 18px; }
+.cliniko-component-preview p { color: var(--cliniko-ui-muted, #64748b); }
+.cliniko-component-preview button { cursor: pointer; }
+.cliniko-component-preview__primary,
+.cliniko-component-preview__secondary { min-height: var(--cliniko-ui-control-height, 46px); padding: 8px 14px; border-radius: var(--cliniko-ui-radius, 12px); font-weight: 600; }
+.cliniko-component-preview__primary { border: 1px solid var(--cliniko-ui-primary, #2563eb); color: #fff; background: var(--cliniko-ui-primary, #2563eb); }
+.cliniko-component-preview__secondary { border: 1px solid var(--cliniko-ui-border, #e2e8f0); color: var(--cliniko-ui-primary, #2563eb); background: var(--cliniko-ui-surface, #fff); }
+
+.cliniko-component-preview__field { display: grid; gap: 5px; margin: 0 0 var(--cliniko-ui-field-gap, 20px); font-weight: 600; }
+.cliniko-component-preview__field input,
+.cliniko-component-preview__field select,
+.cliniko-component-preview__field textarea { width: 100%; min-height: var(--cliniko-ui-control-height, 46px); border: 1px solid var(--cliniko-ui-border, #e2e8f0); border-radius: var(--cliniko-ui-radius, 12px); background: var(--cliniko-ui-surface, #fff); }
+.cliniko-component-preview.has-inline-label .cliniko-component-preview__fields .cliniko-component-preview__field { grid-template-columns: 90px 1fr; align-items: start; }
+
+.cliniko-component-preview__review > div { display: grid; grid-template-columns: minmax(90px, var(--cliniko-ui-review-label-width, 120px)) 1fr auto; gap: 8px; padding: var(--cliniko-ui-review-answer-spacing, 0) 0; border-bottom: 0; }
+.cliniko-component-preview__review strong { font-weight: var(--cliniko-ui-review-label-weight, 650); }
+.cliniko-component-preview__review a { color: var(--cliniko-ui-primary, #2563eb); }
+.cliniko-component-preview.has-review-dividers .cliniko-component-preview__review > div { border-bottom: 1px solid var(--cliniko-ui-border, #e2e8f0); }
+.cliniko-component-preview.has-edit-button .cliniko-component-preview__review a { padding: 3px 8px; border: 1px solid currentColor; border-radius: var(--cliniko-ui-radius, 12px); text-decoration: none; }
+.cliniko-component-preview__scene[data-preview-scene="review"] h4 { margin: 16px 0 4px; }
+.cliniko-component-preview__details > div { display: grid; grid-template-columns: var(--cliniko-ui-review-label-width, 120px) 1fr; gap: 8px; padding: var(--cliniko-ui-review-detail-spacing, 8px) 0; border-bottom: 0; }
+.cliniko-component-preview.has-review-dividers .cliniko-component-preview__details > div { border-bottom: 1px solid var(--cliniko-ui-border, #e2e8f0); }
+
+/* Calendar preview deliberately follows form_shell_builder.html. */
+.cliniko-component-preview .appointment-selection { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--cliniko-ui-calendar-panel-gap, 16px); }
+.cliniko-component-preview .appointment-calendar,
+.cliniko-component-preview .appointment-day-times { min-width: 0; padding: 12px; border: 1px solid var(--cliniko-ui-border, #e2e8f0); border-radius: var(--cliniko-ui-calendar-panel-radius, 16px); background: var(--cliniko-ui-surface, #fff); }
+.cliniko-component-preview .appointment-calendar__header { display: grid; gap: 9px; margin-bottom: 9px; }
+.cliniko-component-preview .appointment-calendar__nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cliniko-component-preview .calendar-nav { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; color: #fff; background: var(--cliniko-ui-primary, #2563eb); font-size: 19px; }
+.cliniko-component-preview .appointment-calendar__month { font-size: 12px; }
+.cliniko-component-preview .appointment-calendar__legend { display: flex; flex-wrap: wrap; gap: 5px 8px; color: var(--cliniko-ui-muted, #64748b); font-size: 8px; font-weight: 600; }
+.cliniko-component-preview .appointment-calendar__legend span { display: inline-flex; align-items: center; gap: 3px; }
+.cliniko-component-preview .appointment-calendar__legend i,
+.cliniko-component-preview .calendar-day i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; }
+.cliniko-component-preview .is-morning { background: var(--cliniko-ui-calendar-morning, #0ea5e9); }
+.cliniko-component-preview .is-afternoon { background: var(--cliniko-ui-calendar-afternoon, #f59e0b); }
+.cliniko-component-preview .is-evening { background: var(--cliniko-ui-calendar-evening, #ef4444); }
+.cliniko-component-preview .appointment-calendar__filters { margin-bottom: 8px; padding: 7px; border: 1px solid var(--cliniko-ui-border, #e2e8f0); border-radius: 8px; background: var(--cliniko-ui-surface-alt, #f8fafc); }
+.cliniko-component-preview .appointment-calendar__filters label { display: grid; gap: 3px; color: var(--cliniko-ui-muted, #64748b); font-size: 8px; font-weight: 700; text-transform: uppercase; }
+.cliniko-component-preview .appointment-calendar__filters select { width: 100%; min-height: 29px; font-size: 10px; }
+.cliniko-component-preview .appointment-calendar__weekdays { font-size: 7px; }
+.cliniko-component-preview .appointment-calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(16px, 1fr)); gap: var(--cliniko-ui-calendar-day-gap, 6px); }
+.cliniko-component-preview .calendar-day { display: grid; place-items: center; gap: 2px; min-width: 0; min-height: calc(var(--cliniko-ui-calendar-day-size, 52px) * .72); padding: 2px; border: 1px solid var(--cliniko-ui-border, #e2e8f0); border-radius: 5px; color: var(--cliniko-ui-calendar-available, #2563eb); background: var(--cliniko-ui-surface, #fff); font-size: 8px; }
+.cliniko-component-preview .calendar-day span { display: flex; gap: 2px; }
+.cliniko-component-preview .calendar-day.is-selected { color: #fff; border-color: var(--cliniko-ui-calendar-selected, #1d4ed8); background: var(--cliniko-ui-calendar-selected, #1d4ed8); }
+.cliniko-component-preview .appointment-day-times > strong { font-size: 11px; }
+.cliniko-component-preview .appointment-day-times > p { margin: 4px 0 10px; font-size: 9px; }
+.cliniko-component-preview .appointment-day-times__group { margin-bottom: 9px; }
+.cliniko-component-preview .appointment-day-times__group small { display: block; margin-bottom: 4px; color: var(--cliniko-ui-muted, #64748b); font-size: 8px; font-weight: 700; text-transform: uppercase; }
+.cliniko-component-preview .appointment-day-times__group > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.cliniko-component-preview .appointment-time-slot { padding: 4px 7px; border: 1px solid var(--cliniko-ui-primary, #2563eb); border-radius: 999px; color: var(--cliniko-ui-primary, #2563eb); background: #fff; font-size: 8px; }
+.cliniko-component-preview.has-card-slots .appointment-time-slot { border-radius: var(--cliniko-ui-radius, 12px); }
+.cliniko-component-preview .appointment-time-slot.is-selected { color: #fff; background: var(--cliniko-ui-calendar-selected, #1d4ed8); }
+
+.cliniko-component-preview__steps { display: flex; gap: 0; margin: 18px 0; padding: 0; list-style: none; counter-reset: preview-step; }
+.cliniko-component-preview__steps li { position: relative; flex: 1; padding-top: 28px; color: var(--cliniko-ui-muted, #64748b); font-size: 9px; text-align: center; counter-increment: preview-step; }
+.cliniko-component-preview__steps li::before { content: counter(preview-step); position: absolute; top: 0; left: 50%; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; margin-left: -11px; border: 2px solid var(--cliniko-ui-border, #e2e8f0); border-radius: 50%; background: #fff; }
+.cliniko-component-preview__steps li::after { content: ""; position: absolute; top: 10px; left: 0; width: 100%; height: 2px; background: var(--cliniko-ui-border, #e2e8f0); }
+.cliniko-component-preview__steps li.is-active::before,
+.cliniko-component-preview__steps li.is-complete::before { color: #fff; border-color: var(--cliniko-ui-primary, #2563eb); background: var(--cliniko-ui-primary, #2563eb); }
+.cliniko-component-preview.has-compact-steps .cliniko-component-preview__steps li { font-size: 0; }
+.cliniko-component-preview__step-card { padding: 12px; border-radius: var(--cliniko-ui-radius, 12px); background: var(--cliniko-ui-surface-alt, #f8fafc); }
+.cliniko-component-preview__step-card p { margin-bottom: 0; }
+
+.cliniko-component-preview__scene[data-preview-scene="lists"] h3 { color: var(--cliniko-ui-list-title-color, var(--cliniko-ui-primary, #2563eb)); font-size: var(--cliniko-ui-list-title-size, 24px); }
+.cliniko-component-preview__list { display: grid; gap: 14px; color: var(--cliniko-ui-list-body-text, var(--cliniko-ui-text, #111827)); font-size: var(--cliniko-ui-list-body-size, 16px); }
+.cliniko-component-preview__list-table-wrap { overflow: hidden; border-width: var(--cliniko-ui-list-table-border-width, 1px); border-style: var(--cliniko-ui-list-table-border-style, solid); border-color: var(--cliniko-ui-list-table-border, var(--cliniko-ui-border, #e2e8f0)); border-radius: var(--cliniko-ui-list-table-radius, 12px); box-shadow: var(--cliniko-ui-list-table-shadow, none); }
+.cliniko-component-preview__list-table { width: 100%; border-collapse: collapse; font-size: inherit; }
+.cliniko-component-preview__list-table th,
+.cliniko-component-preview__list-table td { padding: var(--cliniko-ui-list-row-spacing, 12px) var(--cliniko-ui-list-row-horizontal-spacing, 12px); border-bottom-width: var(--cliniko-ui-list-divider-width, 1px); border-bottom-style: var(--cliniko-ui-list-divider-style, solid); border-bottom-color: var(--cliniko-ui-list-divider, var(--cliniko-ui-border, #e2e8f0)); text-align: left; }
+.cliniko-component-preview__list-table :is(th, td):not(:last-child) { border-right-width: var(--cliniko-ui-list-column-divider-width, 0); border-right-style: var(--cliniko-ui-list-column-divider-style, solid); border-right-color: var(--cliniko-ui-list-column-divider, var(--cliniko-ui-border, #e2e8f0)); }
+.cliniko-component-preview__list-table th { color: var(--cliniko-ui-list-header-text, var(--cliniko-ui-text, #111827)); background: var(--cliniko-ui-list-header-background, var(--cliniko-ui-surface-alt, #f8fafc)); font-size: var(--cliniko-ui-list-header-size, 14px); font-weight: var(--cliniko-ui-list-header-weight, 700); }
+.cliniko-component-preview__list-table td { color: var(--cliniko-ui-list-body-text, var(--cliniko-ui-text, #111827)); background: var(--cliniko-ui-list-row-background, var(--cliniko-ui-surface, #fff)); transition: background-color .15s ease; }
+.cliniko-component-preview__list-table tbody tr:nth-child(even) td { background: var(--cliniko-ui-list-alternate-background, var(--cliniko-ui-list-row-background, #fff)); }
+.cliniko-component-preview__list-table tbody tr.is-preview-hover td { background: var(--cliniko-ui-list-row-hover-background, var(--cliniko-ui-list-row-background, #fff)); }
+.cliniko-component-preview__list-table tr:last-child td { border-bottom-width: 0; }
+.cliniko-component-preview__list small { display: block; margin-top: 3px; color: var(--cliniko-ui-list-muted, var(--cliniko-ui-muted, #64748b)); }
+.cliniko-component-preview__list-cards { display: grid; gap: var(--cliniko-ui-list-item-gap, 12px); }
+.cliniko-component-preview__list-cards article { padding: var(--cliniko-ui-list-card-padding, 16px); border: var(--cliniko-ui-list-card-border-width, 1px) solid var(--cliniko-ui-list-card-border, var(--cliniko-ui-border, #e2e8f0)); border-radius: var(--cliniko-ui-list-card-radius, 12px); background: var(--cliniko-ui-list-card-background, var(--cliniko-ui-surface, #fff)); box-shadow: var(--cliniko-ui-list-card-shadow, none); transition: background-color .15s ease, box-shadow .15s ease; }
+.cliniko-component-preview__list-cards article:last-child { background: var(--cliniko-ui-list-card-hover-background, var(--cliniko-ui-list-card-background, #fff)); }
+.cliniko-component-preview__list-action { justify-self: start; padding: 7px 12px; border-width: var(--cliniko-ui-list-action-border-width, 1px); border-style: var(--cliniko-ui-list-action-border-style, solid); border-color: var(--cliniko-ui-list-action-border, var(--cliniko-ui-list-action-background, var(--cliniko-ui-primary, #2563eb))); border-radius: var(--cliniko-ui-list-action-radius, 8px); color: var(--cliniko-ui-list-action-text, #fff); background: var(--cliniko-ui-list-action-background, var(--cliniko-ui-primary, #2563eb)); text-decoration: none; }
+.cliniko-component-preview__pagination { display: flex; align-items: center; justify-content: var(--cliniko-ui-list-pagination-alignment, center); gap: var(--cliniko-ui-list-pagination-gap, 8px); }
+.cliniko-component-preview__pagination a { padding: 7px 12px; border-width: var(--cliniko-ui-list-pagination-border-width, 1px); border-style: var(--cliniko-ui-list-pagination-border-style, solid); border-color: var(--cliniko-ui-list-pagination-border, var(--cliniko-ui-list-action-border, #2563eb)); border-radius: var(--cliniko-ui-list-pagination-radius, 8px); color: var(--cliniko-ui-list-pagination-text, #fff); background: var(--cliniko-ui-list-pagination-background, #2563eb); text-decoration: none; }
+.cliniko-component-preview__pagination span { display: var(--cliniko-ui-list-pagination-page-display, inline); color: var(--cliniko-ui-list-muted, var(--cliniko-ui-muted, #64748b)); font-size: .85em; }
+.cliniko-component-preview__feedback { padding: 10px 12px; border-radius: var(--cliniko-ui-radius, 12px); color: var(--cliniko-ui-feedback-success, #166534) !important; background: var(--cliniko-ui-feedback-surface, #f0fdf4); }
+.cliniko-component-preview__feedback.is-error { color: var(--cliniko-ui-feedback-error, #b91c1c) !important; }
+
+.cliniko-component-preview.is-mobile .appointment-selection { grid-template-columns: 1fr; }
+.cliniko-component-preview.is-mobile .cliniko-component-preview__review > div { grid-template-columns: 1fr auto; }
+.cliniko-component-preview.is-mobile .cliniko-component-preview__review > div > span { grid-column: 1 / -1; }
+
+@media (max-width: 1180px) {
+    .cliniko-component-editor__layout { grid-template-columns: 180px minmax(0, 1fr); }
+    .cliniko-component-editor__sidebar { position: static; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) 280px; }
+}
+
+@media (max-width: 782px) {
+    .cliniko-component-editor__hero { flex-direction: column; padding: 19px; }
+    .cliniko-component-editor__hero-actions { min-width: 0; }
+    .cliniko-component-editor__layout { grid-template-columns: 1fr; }
+    .cliniko-component-editor__library { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cliniko-component-editor__library > header { grid-column: 1 / -1; }
+    .cliniko-component-editor__library > button.is-active { box-shadow: inset 0 -3px 0 var(--component-admin-blue); }
+    .cliniko-component-editor__controls { grid-template-columns: 1fr; }
+    .cliniko-component-editor__controls > label.is-wide { grid-column: auto; }
+    .cliniko-component-editor__group-header-with-action { align-items: stretch; flex-direction: column; }
+    .cliniko-component-editor__group-header-with-action .button { align-self: flex-start; }
+    .cliniko-component-editor__font-install-body { grid-template-columns: 1fr; }
+    .cliniko-component-editor__installed-fonts { grid-column: auto; }
+    .cliniko-component-editor__sidebar { grid-column: auto; grid-template-columns: 1fr; }
+}

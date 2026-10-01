@@ -1,0 +1,35 @@
+.cliniko-dashboard-module h2 {
+    margin: 0 0 14px;
+    color: var(--cliniko-ui-list-title-color, var(--cliniko-component-primary, inherit));
+    font-family: var(--cliniko-ui-font-family, inherit);
+    font-size: var(--cliniko-ui-list-title-size, 24px);
+}
+.cliniko-dashboard-details { display: grid; grid-template-columns: repeat(var(--cliniko-detail-columns, 1), minmax(0, 1fr)); gap: 0 24px; }
+.cliniko-dashboard-detail { display: flex; justify-content: space-between; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--cliniko-component-border, #e5e7eb); }
+.cliniko-dashboard-detail span { text-align: right; }
+.cliniko-dashboard-appointment { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 14px; align-items: center; padding: var(--cliniko-ui-list-card-padding, 14px); margin-bottom: var(--cliniko-ui-list-item-gap, 8px); border: var(--cliniko-ui-list-card-border-width, 1px) solid var(--cliniko-ui-list-card-border, var(--cliniko-component-border, #e5e7eb)); border-radius: var(--cliniko-ui-list-card-radius, var(--cliniko-ui-radius, 6px)); background: var(--cliniko-ui-list-card-background, var(--cliniko-component-surface, transparent)); box-shadow: var(--cliniko-ui-list-card-shadow, none); }
+.cliniko-dashboard-appointment time,
+.cliniko-dashboard-appointment span { color: var(--cliniko-ui-list-muted, var(--cliniko-component-muted, #4b5563)); }
+.cliniko-dashboard-appointment em { font-style: normal; font-size: 12px; }
+.cliniko-dashboard-module nav { display: flex; gap: 6px; margin-top: 12px; }
+.cliniko-dashboard-module nav button { padding: 5px 10px; border-radius: var(--cliniko-ui-radius, 4px); }
+.cliniko-dashboard-module__message.is-error { color: var(--cliniko-ui-feedback-error, #b32d2e); margin-top: 10px; }
+.cliniko-dashboard-table-scroll { overflow-x: auto; }
+.cliniko-dashboard-table { width: 100%; border-collapse: collapse; color: var(--cliniko-ui-list-body-text, var(--cliniko-component-text, inherit)); font-size: var(--cliniko-ui-list-body-size, 16px); }
+.cliniko-dashboard-table th,
+.cliniko-dashboard-table td { padding: var(--cliniko-ui-list-row-spacing, 12px) var(--cliniko-ui-list-row-horizontal-spacing, 12px); border-bottom: var(--cliniko-ui-list-divider-width, 1px) solid var(--cliniko-ui-list-divider, var(--cliniko-component-border, #e5e7eb)); text-align: left; vertical-align: top; }
+.cliniko-dashboard-table th { color: var(--cliniko-ui-list-header-text, inherit); background: var(--cliniko-ui-list-header-background, var(--cliniko-component-surface-alt, #f8fafc)); font-size: var(--cliniko-ui-list-header-size, 14px); font-weight: var(--cliniko-ui-list-header-weight, 700); }
+.cliniko-dashboard-table td { color: var(--cliniko-ui-list-body-text, inherit); background: var(--cliniko-ui-list-row-background, var(--cliniko-component-surface, transparent)); }
+.cliniko-dashboard-details-button { display: inline-block; white-space: nowrap; padding: 7px 12px; border-radius: var(--cliniko-ui-list-action-radius, var(--cliniko-ui-radius, 4px)); background: var(--cliniko-ui-list-action-background, var(--cliniko-component-primary, #2271b1)); color: var(--cliniko-ui-list-action-text, #fff); text-decoration: none; }
+.cliniko-appointment-details__list > div { display: grid; grid-template-columns: minmax(150px, 240px) 1fr; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--cliniko-component-border, #e5e7eb); }
+.cliniko-appointment-details__list dt { font-weight: 700; }
+.cliniko-appointment-details__list dd { margin: 0; }
+.cliniko-patient-details-module.is-loading { opacity: .65; pointer-events: none; }
+.cliniko-patient-details-module .cliniko-dashboard-details:empty { display: none; }
+
+@media (max-width: 700px) {
+    .cliniko-dashboard-details { grid-template-columns: 1fr; }
+    .cliniko-dashboard-appointment { grid-template-columns: 1fr 1fr; }
+    .cliniko-dashboard-detail { display: block; }
+    .cliniko-dashboard-detail span { display: block; margin-top: 4px; text-align: left; }
+}

@@ -1,0 +1,1163 @@
+.cliniko-template-builder-nav {
+    max-width: 1240px;
+    margin: 24px 20px 0 0;
+    border: 1px solid #d9e1ea;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(16, 36, 62, .05);
+    overflow: hidden;
+}
+
+.cliniko-template-builder-nav__header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 30px;
+    padding: 28px 32px 24px;
+    background: linear-gradient(135deg, #102a43 0%, #174a70 100%);
+    color: #fff;
+}
+
+.cliniko-template-builder-nav__eyebrow {
+    display: block;
+    margin-bottom: 8px;
+    color: #a9d8f5;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.cliniko-template-builder-nav__header h1 {
+    margin: 0;
+    color: #fff;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+}
+
+.cliniko-template-builder-nav__header p {
+    max-width: 650px;
+    margin: 8px 0 0;
+    color: #d9edf9;
+    font-size: 14px;
+}
+
+.cliniko-template-builder-nav__hint {
+    max-width: 210px;
+    color: #b9d3e5;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: right;
+}
+
+.cliniko-template-builder-nav__tabs {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-top: 1px solid rgba(255, 255, 255, .1);
+}
+
+.cliniko-template-builder-nav__tabs a {
+    min-height: 66px;
+    padding: 14px 16px 12px;
+    border-right: 1px solid #e6ebf0;
+    color: #34495e;
+    text-decoration: none;
+}
+
+.cliniko-template-builder-nav__tabs a:last-child {
+    border-right: 0;
+}
+
+.cliniko-template-builder-nav__tabs a:hover,
+.cliniko-template-builder-nav__tabs a.is-active {
+    background: #eef7fc;
+    color: #075985;
+}
+
+.cliniko-template-builder-nav__tabs a.is-active {
+    box-shadow: inset 0 -3px 0 #1686c2;
+}
+
+.cliniko-template-builder-nav__tabs span,
+.cliniko-template-builder-nav__tabs small {
+    display: block;
+}
+
+.cliniko-template-builder-nav__tabs span {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.cliniko-template-builder-nav__tabs small {
+    margin-top: 4px;
+    color: #7a8794;
+    font-size: 11px;
+}
+
+.cliniko-template-builder-nav__tabs a:hover small,
+.cliniko-template-builder-nav__tabs a.is-active small {
+    color: #28749e;
+}
+
+#wpbody-content > .cliniko-template-builder-notice {
+    margin: 14px 20px 0 0;
+    max-width: 1240px;
+}
+
+.cliniko-template-builder-page {
+    max-width: 1240px;
+    margin-top: 18px;
+}
+
+.cliniko-template-builder-page > h1 {
+    margin-bottom: 8px;
+    font-size: 28px;
+    letter-spacing: -.01em;
+}
+
+.cliniko-template-builder-page > p {
+    color: #646970;
+    font-size: 14px;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) {
+    max-width: 1240px;
+    margin-right: 20px;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) > h1 {
+    margin-top: 24px;
+    margin-bottom: 8px;
+    color: #102a43;
+    font-size: 26px;
+    letter-spacing: -.02em;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) > p {
+    color: #646970;
+    font-size: 14px;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .widefat {
+    overflow: hidden;
+    border: 1px solid #d9e1ea;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(16, 36, 62, .04);
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .widefat thead th {
+    padding: 13px 14px;
+    background: #f4f8fb;
+    color: #526273;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .widefat td {
+    padding: 14px;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .form-table {
+    max-width: 920px;
+    margin-top: 20px;
+    border: 1px solid #d9e1ea;
+    border-radius: 10px;
+    background: #fff;
+    overflow: hidden;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .form-table th,
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .form-table td {
+    border-bottom: 1px solid #f0f3f6;
+    padding: 16px 18px;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .form-table th {
+    width: 220px;
+    color: #1d2327;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) input[type="text"],
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) input[type="url"],
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) select,
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) textarea {
+    border-color: #c3d0dc;
+    border-radius: 5px;
+}
+
+body.cliniko-template-builder-screen .wrap:not(.cliniko-template-builder-nav):not(.cliniko-template-builder-subnav) .postbox {
+    border: 1px solid #d9e1ea;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(16, 36, 62, .04);
+}
+
+.cliniko-template-builder-subnav {
+    float: left;
+    width: 220px;
+    box-sizing: border-box;
+    margin: 20px 0 0;
+    padding: 16px 12px;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.cliniko-template-builder-subnav h2 {
+    margin: 0 8px 12px;
+    color: #1d2327;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.cliniko-template-builder-subnav + .wrap {
+    margin-left: 260px !important;
+}
+
+.cliniko-template-builder-subnav nav {
+    display: grid;
+    gap: 2px;
+}
+
+.cliniko-template-builder-subnav nav a {
+    display: block;
+    padding: 9px 10px;
+    border: 1px solid #d9e1ea;
+    border-radius: 4px;
+    background: transparent;
+    color: #526273;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.cliniko-template-builder-subnav nav a:hover,
+.cliniko-template-builder-subnav nav a.current {
+    border-color: #8fc7e5;
+    background: #eaf6fd;
+    color: #075985;
+}
+
+.cliniko-template-builder-tip {
+    display: flex;
+    gap: 7px;
+    align-items: flex-start;
+    margin: 18px 8px 2px;
+    color: #646970;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.cliniko-info {
+    position: relative;
+    display: inline-grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #8c8f94;
+    border-radius: 50%;
+    color: #50575e;
+    cursor: help;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.cliniko-info::after {
+    position: absolute;
+    z-index: 20;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 220px;
+    padding: 8px 10px;
+    border: 1px solid #50575e;
+    border-radius: 4px;
+    background: #1d2327;
+    color: #fff;
+    content: attr(data-tooltip);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(3px);
+    transition: opacity .12s ease, transform .12s ease;
+}
+
+.cliniko-info:hover::after,
+.cliniko-info:focus::after {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.cliniko-template-builder-page .page-title-action {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.cliniko-template-builder-page .widefat {
+    overflow: hidden;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+
+.cliniko-template-builder-page .widefat thead th {
+    padding: 13px 14px;
+    background: #f6f7f7;
+    color: #50575e;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.cliniko-template-builder-page .widefat td {
+    padding: 14px;
+    vertical-align: middle;
+}
+
+.cliniko-template-builder-page .widefat tbody tr:hover {
+    background: #f9fafb;
+}
+
+.cliniko-template-builder-page code {
+    border-radius: 4px;
+    background: #f0f0f1;
+    padding: 3px 6px;
+}
+
+.cliniko-template-builder-page .postbox {
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+
+.cliniko-template-builder-page .postbox h2 {
+    color: #1d2327;
+    font-size: 18px;
+}
+
+.cliniko-template-builder-page [data-generic-booking-builder] {
+    max-width: 900px !important;
+    padding: 24px !important;
+}
+
+.cliniko-template-builder-page .form-table {
+    margin-top: 18px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+}
+
+.cliniko-template-builder-page .form-table th,
+.cliniko-template-builder-page .form-table td {
+    border-bottom: 1px solid #f0f0f1;
+    padding: 16px 18px;
+}
+
+.cliniko-template-builder-page .form-table tr:last-child th,
+.cliniko-template-builder-page .form-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.cliniko-template-builder-page .form-table th {
+    width: 220px;
+    color: #1d2327;
+    font-weight: 600;
+}
+
+.cliniko-template-builder-page .form-table input[type="text"],
+.cliniko-template-builder-page .form-table input[type="url"],
+.cliniko-template-builder-page .form-table select,
+.cliniko-template-builder-page .form-table textarea {
+    max-width: 680px;
+    border-color: #c3c4c7;
+    border-radius: 5px;
+}
+
+.cliniko-template-builder-page .form-table .description {
+    max-width: 680px;
+    margin-top: 7px;
+    color: #646970;
+}
+
+.cliniko-template-builder-editor form {
+    max-width: 900px !important;
+}
+
+.cliniko-template-builder-editor form > p:last-of-type {
+    position: sticky;
+    bottom: 18px;
+    z-index: 2;
+    margin: 18px -1px 0;
+    padding: 12px 14px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .08);
+}
+
+.cliniko-shortcode-library .notice {
+    padding: 14px 16px;
+    border-radius: 8px;
+}
+
+.cliniko-shortcode-library .notice .button {
+    margin-left: 6px;
+}
+
+.cliniko-shortcode-library h2 {
+    margin-top: 32px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #dcdcde;
+    color: #1d2327;
+}
+
+.cliniko-shortcode-library h3 {
+    margin-top: 28px;
+}
+
+.cliniko-shortcode-library form {
+    padding: 18px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.cliniko-shortcode-library form h2 {
+    margin-top: 0;
+}
+
+@media (max-width: 782px) {
+    .cliniko-template-builder-nav {
+        margin-right: 12px;
+    }
+
+    .cliniko-template-builder-nav__header {
+        display: block;
+        padding: 22px 20px;
+    }
+
+    .cliniko-template-builder-nav__header h1 {
+        font-size: 25px;
+    }
+
+    .cliniko-template-builder-nav__hint {
+        max-width: none;
+        margin-top: 12px;
+        text-align: left;
+    }
+
+    .cliniko-template-builder-nav__tabs {
+        display: block;
+    }
+
+    .cliniko-template-builder-nav__tabs a {
+        display: block;
+        min-height: 0;
+        border-right: 0;
+        border-bottom: 1px solid #e6ebf0;
+    }
+
+    .cliniko-template-builder-nav .nav-tab {
+        margin-bottom: 5px;
+    }
+
+    .cliniko-template-builder-page {
+        margin-right: 12px;
+    }
+
+    .cliniko-template-builder-page .form-table,
+    .cliniko-template-builder-page .form-table tbody,
+    .cliniko-template-builder-page .form-table tr,
+    .cliniko-template-builder-page .form-table th,
+    .cliniko-template-builder-page .form-table td {
+        display: block;
+        width: auto;
+    }
+
+    .cliniko-template-builder-page .form-table th {
+        padding-bottom: 5px;
+    }
+
+    .cliniko-template-builder-page .form-table td {
+        padding-top: 5px;
+    }
+
+    .cliniko-template-builder-page .widefat {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+/* Keep the builder visually native to WordPress rather than app-like. */
+.cliniko-template-builder-nav {
+    margin-top: 20px;
+    border: 1px solid #dcdcde;
+    border-radius: 7px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+    overflow: hidden;
+}
+
+.cliniko-template-builder-nav__header {
+    padding: 20px 24px 18px;
+    background: #f6f7f7;
+    color: #1d2327;
+}
+
+.cliniko-template-builder-nav__eyebrow {
+    display: none;
+}
+
+.cliniko-template-builder-nav__header h1 {
+    color: #1d2327;
+    font-size: 23px;
+    font-weight: 600;
+    letter-spacing: normal;
+}
+
+.cliniko-template-builder-nav__header p {
+    margin-top: 5px;
+    color: #646970;
+    font-size: 13px;
+}
+
+.cliniko-template-builder-nav__hint {
+    display: none;
+    color: #646970;
+}
+
+.cliniko-template-builder-nav__tabs {
+    border-top: 1px solid #dcdcde;
+    border-bottom: 0;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+}
+
+.cliniko-template-builder-nav__tabs a {
+    min-height: 50px;
+    padding: 11px 13px 9px;
+    color: #50575e;
+}
+
+.cliniko-template-builder-nav__tabs a:last-child {
+    border-right: 0;
+}
+
+@media (max-width: 1100px) and (min-width: 783px) {
+    .cliniko-template-builder-nav__tabs {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .cliniko-template-builder-nav__tabs a:nth-child(3n) {
+        border-right: 0;
+    }
+
+    .cliniko-template-builder-nav__tabs a:nth-child(-n+3) {
+        border-bottom: 1px solid #e6ebf0;
+    }
+}
+
+.cliniko-template-builder-nav__tabs a:hover,
+.cliniko-template-builder-nav__tabs a.is-active {
+    background: #f6f7f7;
+    color: #2271b1;
+}
+
+.cliniko-template-builder-nav__tabs a.is-active {
+    box-shadow: inset 0 -3px 0 #2271b1;
+}
+
+.cliniko-template-builder-nav__tabs span {
+    font-weight: 600;
+}
+
+.cliniko-template-builder-page .widefat,
+.cliniko-template-builder-page .postbox,
+.cliniko-template-builder-page .form-table,
+.cliniko-shortcode-library form,
+body.cliniko-template-builder-screen .widefat,
+body.cliniko-template-builder-screen .postbox,
+body.cliniko-template-builder-screen .form-table {
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+}
+
+.cliniko-template-builder-subnav nav a {
+    padding: 7px 10px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+}
+
+.cliniko-template-builder-subnav nav a:hover,
+.cliniko-template-builder-subnav nav a.current {
+    border-color: #2271b1;
+    background: transparent;
+    color: #2271b1;
+}
+
+body.cliniko-template-builder-screen .cliniko-template-builder-subnav nav a {
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    background: transparent;
+}
+
+body.cliniko-template-builder-screen .cliniko-template-builder-subnav nav a:hover,
+body.cliniko-template-builder-screen .cliniko-template-builder-subnav nav a.current {
+    border-left-color: #2271b1;
+    background: #f0f6fc;
+    color: #135e96;
+}
+
+@media (max-width: 782px) {
+    .cliniko-template-builder-subnav {
+        float: none;
+        width: auto;
+        margin-right: 12px;
+    }
+
+    .cliniko-template-builder-subnav + .wrap {
+        margin-left: 0 !important;
+    }
+}
+
+/* Shared admin builder experience. Mirrors the onboarding editor shell. */
+.cliniko-unified-admin {
+    --builder-accent: #2271b1;
+    --builder-accent-soft: #eef6fc;
+    --builder-text: #1d2327;
+    --builder-muted: #646970;
+    --builder-border: #dcdcde;
+    width: auto;
+    max-width: 1240px !important;
+    color: var(--builder-text);
+}
+
+.cliniko-unified-admin__source-title,
+.cliniko-unified-admin__source-heading,
+.cliniko-unified-admin > .cliniko-form-builder > .cliniko-form-builder__tabs {
+    display: none !important;
+}
+
+.cliniko-unified-admin__hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 20px 0 16px;
+    padding: 24px 28px;
+    border: 1px solid var(--builder-border);
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fff 0%, #f6f9fc 100%);
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin__hero-copy {
+    min-width: 0;
+}
+
+.cliniko-unified-admin__hero h1 {
+    margin: 4px 0 6px !important;
+    padding: 0 !important;
+    color: var(--builder-text) !important;
+    font-size: 24px !important;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: normal !important;
+}
+
+.cliniko-unified-admin__eyebrow {
+    color: var(--builder-accent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.cliniko-unified-admin__hero .cliniko-unified-admin__description {
+    max-width: 720px;
+    margin: 0;
+    color: var(--builder-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.cliniko-unified-admin__hero-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 9px;
+}
+
+.cliniko-unified-admin__status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 5px 11px;
+    border: 1px solid var(--builder-border);
+    border-radius: 999px;
+    color: var(--builder-muted);
+    background: #fff;
+    box-sizing: border-box;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cliniko-unified-admin__status.is-ready {
+    border-color: #9bd5ae;
+    color: #0a5c2b;
+    background: #edfAF1;
+}
+
+.cliniko-unified-admin__hero .page-title-action,
+.cliniko-unified-admin__hero .button {
+    position: static;
+    top: auto;
+    min-height: 30px;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin__journey {
+    display: flex;
+    margin: 0 0 20px;
+    padding: 5px;
+    overflow-x: auto;
+    border: 1px solid var(--builder-border);
+    border-radius: 10px;
+    background: #fff;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+}
+
+.cliniko-unified-admin__journey button {
+    display: flex;
+    flex: 1 0 125px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 7px;
+    color: #50575e;
+    background: transparent;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.cliniko-unified-admin__journey button > span {
+    display: grid;
+    flex: 0 0 22px;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #c3c4c7;
+    border-radius: 50%;
+    box-sizing: border-box;
+    font-size: 11px;
+}
+
+.cliniko-unified-admin__journey button:hover {
+    color: var(--builder-accent);
+    background: #f6f7f7;
+}
+
+.cliniko-unified-admin__journey button.is-active {
+    color: #fff;
+    background: var(--builder-accent);
+}
+
+.cliniko-unified-admin__journey button.is-active > span {
+    border-color: rgb(255 255 255 / 65%);
+    background: rgb(255 255 255 / 12%);
+}
+
+.cliniko-unified-admin [id^="cliniko-builder-section-"] {
+    scroll-margin-top: 56px;
+}
+
+.cliniko-unified-admin > form,
+.cliniko-unified-admin > .cliniko-form-builder,
+.cliniko-unified-admin.cliniko-attachment-builder {
+    width: 100%;
+    max-width: 1240px !important;
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__name {
+    min-height: 48px;
+    margin: 0 0 18px;
+    padding: 8px 13px;
+    border-color: #8c8f94;
+    border-radius: 6px;
+    background: #fff;
+    box-sizing: border-box;
+    font-size: 18px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__layout,
+.cliniko-unified-admin .cliniko-attachment-builder__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    gap: 24px;
+    align-items: start;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__layout main,
+.cliniko-unified-admin .cliniko-attachment-builder__layout main {
+    min-width: 0;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__panel,
+.cliniko-unified-admin .cliniko-form-builder__sidebox,
+.cliniko-unified-admin .cliniko-attachment-builder__card,
+.cliniko-unified-admin .cliniko-attachment-builder__publish,
+.cliniko-unified-admin > form > .postbox {
+    overflow: hidden;
+    border: 1px solid var(--builder-border);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__panel > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 66px;
+    padding: 15px 22px;
+    border-bottom: 1px solid var(--builder-border);
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__panel > header strong {
+    color: var(--builder-text);
+    font-size: 16px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__panel [data-builder-panel],
+.cliniko-unified-admin .cliniko-form-builder__panel [data-module-builder-panel],
+.cliniko-unified-admin .cliniko-form-builder__panel [data-patient-details-builder-panel] {
+    padding: 24px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__sidebar {
+    position: sticky;
+    top: 46px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__sidebox {
+    padding: 18px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__sidebox h2,
+.cliniko-unified-admin .cliniko-attachment-builder__publish h2 {
+    margin: 0 0 8px;
+    color: var(--builder-text);
+    font-size: 16px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__sidebox p,
+.cliniko-unified-admin .cliniko-attachment-builder__publish p {
+    color: var(--builder-muted);
+}
+
+.cliniko-unified-admin .cliniko-form-builder__sidebox code,
+.cliniko-unified-admin .cliniko-attachment-builder__publish code {
+    display: block;
+    padding: 10px;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--builder-border);
+    border-radius: 5px;
+    color: var(--builder-text);
+    background: #f6f7f7;
+    user-select: all;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__workspace {
+    grid-template-columns: minmax(210px, .75fr) minmax(360px, 1.4fr);
+    gap: 20px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__available,
+.cliniko-unified-admin .cliniko-form-builder__selected,
+.cliniko-unified-admin .cliniko-form-builder__section,
+.cliniko-unified-admin .cliniko-dashboard-module-settings,
+.cliniko-unified-admin .cliniko-booking-input-editor__grid > article {
+    border-color: var(--builder-border);
+    border-radius: 8px;
+    background: #f8fafc;
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__available,
+.cliniko-unified-admin .cliniko-form-builder__selected {
+    padding: 18px;
+}
+
+.cliniko-unified-admin .cliniko-form-builder__field,
+.cliniko-unified-admin .cliniko-dashboard-column,
+.cliniko-unified-admin .cliniko-dashboard-module-preview-row {
+    border-color: var(--builder-border);
+    border-radius: 6px;
+    background: #fff;
+}
+
+.cliniko-unified-admin input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.cliniko-unified-admin select,
+.cliniko-unified-admin textarea {
+    max-width: 100%;
+    border-color: #8c8f94 !important;
+    border-radius: 5px !important;
+    color: var(--builder-text);
+    background-color: #fff;
+}
+
+.cliniko-unified-admin input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+.cliniko-unified-admin select:focus,
+.cliniko-unified-admin textarea:focus {
+    border-color: var(--builder-accent) !important;
+    box-shadow: 0 0 0 1px var(--builder-accent);
+}
+
+.cliniko-unified-admin > .widefat,
+.cliniko-unified-admin #cliniko-booking-aliases,
+.cliniko-unified-admin #cliniko-generic-booking-builder {
+    width: 100%;
+    max-width: 1240px !important;
+    margin-top: 0;
+    border: 1px solid var(--builder-border);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin > .widefat thead th {
+    padding: 13px 16px;
+    color: #50575e;
+    background: #f6f9fc;
+}
+
+.cliniko-unified-admin > .widefat td {
+    padding: 15px 16px;
+    vertical-align: middle;
+}
+
+.cliniko-unified-admin.cliniko-template-builder-editor > form {
+    width: 100%;
+    max-width: 1240px !important;
+    margin-top: 0;
+    border-color: var(--builder-border);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.cliniko-unified-admin .cliniko-booking-builder__section {
+    background: var(--builder-accent-soft);
+}
+
+.cliniko-unified-admin .cliniko-booking-builder__section th {
+    border-color: #c5d9e8;
+}
+
+.cliniko-unified-admin .cliniko-booking-builder__section th > span,
+.cliniko-unified-admin .cliniko-attachment-builder__card > header > span {
+    background: var(--builder-accent);
+}
+
+.cliniko-unified-admin .cliniko-attachment-builder__card {
+    padding: 0;
+}
+
+.cliniko-unified-admin .cliniko-attachment-builder__card > header {
+    min-height: 66px;
+    margin: 0;
+    padding: 15px 22px;
+    border-bottom: 1px solid var(--builder-border);
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin .cliniko-attachment-builder__card > :not(header) {
+    margin-right: 22px;
+    margin-left: 22px;
+}
+
+.cliniko-unified-admin .cliniko-attachment-builder__card > :last-child {
+    margin-bottom: 22px;
+}
+
+.cliniko-unified-admin .cliniko-attachment-builder__fields {
+    margin-top: 22px;
+}
+
+.cliniko-unified-admin .cliniko-attachment-builder__publish {
+    top: 46px;
+    padding: 18px;
+}
+
+.cliniko-unified-admin .es-email-builder__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+    max-width: 1240px;
+}
+
+.cliniko-unified-admin .es-email-panel {
+    overflow: hidden;
+    border: 1px solid var(--builder-border);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.cliniko-unified-admin .es-email-panel h2 {
+    color: var(--builder-text);
+    font-size: 16px;
+}
+
+.cliniko-unified-admin .es-email-builder__preview-column {
+    top: 46px;
+}
+
+.cliniko-unified-admin [data-custom-code-editor] {
+    width: 100%;
+    max-width: 1240px;
+}
+
+.cliniko-unified-admin [data-custom-code-editor] > .form-table {
+    width: 100%;
+    max-width: 1240px !important;
+    margin-top: 0;
+    border-color: var(--builder-border);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.cliniko-unified-admin [data-custom-code-snippets] {
+    display: grid;
+    gap: 16px;
+}
+
+.cliniko-unified-admin [data-custom-code-snippet] {
+    width: 100%;
+    max-width: 1240px !important;
+    margin: 0 !important;
+    border-color: var(--builder-border);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.cliniko-unified-admin.cliniko-shortcode-library > form,
+.cliniko-unified-admin.cliniko-shortcode-library > .notice,
+.cliniko-unified-admin.cliniko-shortcode-library > .widefat {
+    width: 100%;
+    max-width: 1240px !important;
+    box-sizing: border-box;
+}
+
+.cliniko-unified-admin.cliniko-shortcode-library > form > .widefat,
+.cliniko-unified-admin.cliniko-shortcode-library > .widefat {
+    overflow: hidden;
+    border-color: var(--builder-border);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+@media (max-width: 960px) {
+    .cliniko-unified-admin .cliniko-form-builder__layout,
+    .cliniko-unified-admin .cliniko-attachment-builder__layout {
+        grid-template-columns: 1fr;
+    }
+
+    .cliniko-unified-admin .cliniko-form-builder__sidebar,
+    .cliniko-unified-admin .cliniko-attachment-builder__publish {
+        position: static;
+    }
+}
+
+@media (max-width: 782px) {
+    body.cliniko-template-builder-screen .cliniko-unified-admin,
+    .cliniko-unified-admin {
+        width: auto;
+        margin-right: 10px !important;
+        margin-left: 0 !important;
+    }
+
+    .cliniko-unified-admin__hero {
+        flex-direction: column;
+        gap: 16px;
+        margin-top: 14px;
+        padding: 20px;
+    }
+
+    .cliniko-unified-admin__hero h1 {
+        font-size: 22px !important;
+    }
+
+    .cliniko-unified-admin__hero-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .cliniko-unified-admin__journey {
+        padding: 4px;
+    }
+
+    .cliniko-unified-admin__journey button {
+        flex: 0 0 auto;
+        min-width: 132px;
+    }
+
+    .cliniko-unified-admin .cliniko-form-builder__panel [data-builder-panel],
+    .cliniko-unified-admin .cliniko-form-builder__panel [data-module-builder-panel],
+    .cliniko-unified-admin .cliniko-form-builder__panel [data-patient-details-builder-panel] {
+        padding: 18px;
+    }
+
+    .cliniko-unified-admin .cliniko-form-builder__workspace,
+    .cliniko-unified-admin .cliniko-attachment-builder__fields,
+    .cliniko-unified-admin .cliniko-dashboard-module-settings,
+    .cliniko-unified-admin .cliniko-dashboard-module-types,
+    .cliniko-unified-admin .es-email-builder__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cliniko-unified-admin.cliniko-template-builder-editor > form {
+        padding: 14px;
+    }
+
+    .cliniko-unified-admin.cliniko-template-builder-editor > form.cliniko-booking-builder {
+        padding: 0 14px 14px;
+    }
+
+    .cliniko-unified-admin .cliniko-booking-builder__section {
+        margin-right: -14px;
+        margin-left: -14px;
+    }
+
+    .cliniko-unified-admin .cliniko-attachment-builder__card > header {
+        padding: 15px 18px;
+    }
+
+    .cliniko-unified-admin .cliniko-attachment-builder__card > :not(header) {
+        margin-right: 18px;
+        margin-left: 18px;
+    }
+}

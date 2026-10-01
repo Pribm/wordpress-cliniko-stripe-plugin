@@ -1,0 +1,165 @@
+.cliniko-patient-template-form {
+    --cliniko-form-border: var(--cliniko-component-border, #d1d5db);
+    --cliniko-form-primary: var(--cliniko-component-primary, var(--e-global-color-primary, #2563eb));
+    --cliniko-form-error: var(--cliniko-ui-feedback-error, #b32d2e);
+    --cliniko-form-success: var(--cliniko-ui-feedback-success, #008a20);
+    width: min(100%, 820px);
+    margin-inline: auto;
+    color: var(--cliniko-component-text, #111827);
+    font-family: var(--cliniko-ui-font-family, var(--e-global-typography-text-font-family, inherit));
+    font-size: var(--e-global-typography-text-font-size, 16px);
+    line-height: var(--e-global-typography-text-line-height, 1.5);
+}
+.cliniko-patient-template-form *, .cliniko-patient-template-form *::before, .cliniko-patient-template-form *::after { box-sizing: border-box; }
+.cliniko-patient-template-form > form { display: grid; gap: 20px; }
+
+.cliniko-patient-template-form__section {
+    margin: 0;
+    padding: clamp(20px, 4vw, 34px);
+    border: 1px solid var(--cliniko-form-border);
+    border-radius: var(--cliniko-ui-radius, 16px);
+    background: var(--cliniko-component-surface, #fff);
+    box-shadow: 0 12px 32px rgba(17, 24, 39, .07);
+}
+
+.cliniko-patient-template-form__section h2 {
+    margin-top: 0;
+    color: var(--cliniko-form-primary);
+    font-family: var(--cliniko-ui-font-family, var(--e-global-typography-primary-font-family, inherit));
+    font-weight: var(--e-global-typography-primary-font-weight, 700);
+}
+
+.cliniko-patient-template-form__description {
+    margin-bottom: 18px;
+}
+
+.cliniko-patient-template-form__field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 20px;
+    padding: 0;
+    border: 0;
+}
+
+.cliniko-patient-template-form__field legend {
+    margin-bottom: 7px;
+    color: var(--cliniko-component-text, #111827);
+    font-weight: 600;
+}
+.cliniko-patient-template-form__choices { display: grid; gap: 9px; }
+.cliniko-patient-template-form__field > label,
+.cliniko-patient-template-form__choices > label { display: flex; align-items: flex-start; gap: 9px; color: var(--cliniko-component-text, #111827); }
+.cliniko-patient-template-form__field input[type="checkbox"],
+.cliniko-patient-template-form__field input[type="radio"] { width: 19px; height: 19px; margin: 2px 0 0; accent-color: var(--cliniko-form-primary); }
+.cliniko-patient-template-form__other { display: grid; gap: 7px; margin: 4px 0 0 28px; }
+.cliniko-patient-template-form__other[hidden] { display: none; }
+
+.cliniko-patient-template-form__field input:not([type="checkbox"]):not([type="radio"]),
+.cliniko-patient-template-form__field select,
+.cliniko-patient-template-form__field textarea {
+    width: 100%;
+    min-height: var(--cliniko-ui-control-height, 48px);
+    padding: 11px 13px;
+    border: 1px solid var(--cliniko-component-border, #111827) !important;
+    border-radius: var(--cliniko-ui-radius, 8px);
+    color: var(--cliniko-component-text, #111827) !important;
+    background: var(--cliniko-component-surface, #fff) !important;
+    font: inherit;
+    opacity: 1 !important;
+    box-sizing: border-box;
+}
+
+.cliniko-patient-template-form__field input:focus,
+.cliniko-patient-template-form__field select:focus,
+.cliniko-patient-template-form__field textarea:focus {
+    border-color: var(--cliniko-form-primary) !important;
+    outline: 2px solid var(--cliniko-form-primary);
+    outline-offset: 1px;
+}
+
+.cliniko-patient-template-form__field textarea {
+    min-height: 120px;
+}
+.cliniko-patient-template-form > form > button[type="submit"] {
+    justify-self: start;
+    min-height: var(--cliniko-ui-control-height, 48px);
+    padding: 11px 24px;
+    border: 1px solid var(--cliniko-form-primary);
+    border-radius: var(--cliniko-ui-radius, 8px);
+    color: #fff;
+    background: var(--cliniko-form-primary);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+.cliniko-patient-template-form > form > button[type="submit"]:disabled { cursor: not-allowed; opacity: .55; }
+
+.cliniko-patient-template-form__hint {
+    margin: 0;
+    font-size: .9em;
+}
+
+.cliniko-patient-template-form__message {
+    padding: 10px 12px;
+    border-left: 4px solid currentColor;
+}
+
+.cliniko-patient-template-form__message.is-error {
+    color: var(--cliniko-form-error);
+}
+
+.cliniko-patient-template-form__message.is-success {
+    color: var(--cliniko-form-success);
+}
+
+.cliniko-patient-form-history {
+    max-width: 860px;
+}
+
+.cliniko-patient-form-history__form {
+    margin-bottom: var(--cliniko-ui-list-item-gap, 14px);
+    border: var(--cliniko-ui-list-card-border-width, 1px) solid var(--cliniko-ui-list-card-border, var(--cliniko-component-border, #dcdcde));
+    border-radius: var(--cliniko-ui-list-card-radius, var(--cliniko-ui-radius, 0));
+    color: var(--cliniko-ui-list-body-text, inherit);
+    background: var(--cliniko-ui-list-card-background, var(--cliniko-component-surface, #fff));
+    box-shadow: var(--cliniko-ui-list-card-shadow, none);
+    font-size: var(--cliniko-ui-list-body-size, 16px);
+}
+
+.cliniko-patient-form-history__form summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: var(--cliniko-ui-list-card-padding, 16px);
+    cursor: pointer;
+}
+
+.cliniko-patient-form-history__content {
+    padding: var(--cliniko-ui-list-card-padding, 16px);
+    border-top: var(--cliniko-ui-list-divider-width, 1px) solid var(--cliniko-ui-list-divider, var(--cliniko-component-border, #dcdcde));
+}
+
+.cliniko-patient-form-history__section {
+    margin-top: 20px;
+}
+
+.cliniko-patient-form-history__answer {
+    margin: 0;
+    padding: var(--cliniko-ui-list-row-spacing, 14px) var(--cliniko-ui-list-row-horizontal-spacing, 0);
+    border-bottom: var(--cliniko-ui-list-divider-width, 1px) solid var(--cliniko-ui-list-divider, var(--cliniko-component-border, #f0f0f1));
+}
+
+.cliniko-patient-form-history__pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    margin-top: 20px;
+}
+@media (max-width: 640px) {
+    .cliniko-patient-template-form { width: 100%; }
+    .cliniko-patient-template-form__section { padding: 18px 14px; border-radius: 10px; }
+    .cliniko-patient-template-form > form > button[type="submit"] { width: 100%; }
+    .cliniko-patient-template-form__other { margin-left: 0; }
+}

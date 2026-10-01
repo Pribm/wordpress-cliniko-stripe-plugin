@@ -1,0 +1,14 @@
+<?php
+use App\Admin\Modules\AccountBuilders\Forms\ShortcodeFormInputRules;
+if (!defined('ABSPATH')) exit; /** @var array<string,mixed> $module */
+$descriptionRules = is_array($descriptionRules ?? null) ? $descriptionRules : [];
+$descriptionOptions = (array) ($descriptionRules['select_options'] ?? []);
+?>
+<section class="cliniko-dashboard-module cliniko-patient-attachments-module cliniko-component cliniko-component-list" data-cliniko-attachment-list-module data-endpoint="<?php echo esc_url($endpoint); ?>" data-nonce="<?php echo esc_attr($nonce); ?>">
+    <?php if ((string) ($module['title'] ?? '') !== '') : ?><h2><?php echo esc_html((string) $module['title']); ?></h2><?php endif; ?>
+    <template data-cliniko-attachment-description-template>
+        <?php if (($descriptionRules['input_type'] ?? '') === 'select' && $descriptionOptions !== []) : ?><select aria-label="<?php echo esc_attr((string) ($module['description_label'] ?? 'Description')); ?>"><?php foreach ($descriptionOptions as $option) : ?><option value="<?php echo esc_attr((string) $option); ?>"><?php echo esc_html((string) $option); ?></option><?php endforeach; ?></select><?php else : ?><input type="text" aria-label="<?php echo esc_attr((string) ($module['description_label'] ?? 'Description')); ?>"<?php echo ShortcodeFormInputRules::inputAttributes($descriptionRules); ?>><?php endif; ?>
+    </template>
+    <p class="cliniko-dashboard-module__message cliniko-component-feedback" data-cliniko-attachment-message aria-live="polite"></p>
+    <div data-cliniko-attachment-list><p>Loading documents…</p></div>
+</section>

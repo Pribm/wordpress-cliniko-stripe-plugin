@@ -1,0 +1,341 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** @var string $id */
+/** @var array<string,mixed> $module */
+/** @var array<int,array<string,mixed>> $steps */
+/** @var array<string,array<string,mixed>> $definitions */
+/** @var array<string,mixed> $values */
+/** @var array<string,bool> $switchValues */
+/** @var array<int,array{key:string,label:string}> $missing */
+/** @var string $messageState */
+/** @var string $patientSaveAction */
+/** @var string $returnTo */
+/** @var string $welcomeContent */
+/** @var string $instanceId */
+$title = (string) ($module['title'] ?? 'Complete your profile');
+$subtitle = (string) ($module['subtitle'] ?? 'Please complete the required details before continuing.');
+$completionMessage = (string) ($module['completion_message'] ?? 'Your profile is complete.');
+$welcomeButtonLabel = trim((string) ($module['welcome_button_label'] ?? 'Get started'));
+$welcomeButtonLabel = $welcomeButtonLabel !== '' ? $welcomeButtonLabel : 'Get started';
+$hasWelcome = !empty($module['welcome_enabled']) && $messageState === '' && trim($welcomeContent) !== '';
+$stepCount = count($steps);
+$configuredPlacement = in_array((string) ($module['placement'] ?? 'inline'), ['inline', 'modal', 'blocking_overlay'], true)
+    ? (string) $module['placement']
+    : 'inline';
+$placement = $missing === [] ? 'inline' : $configuredPlacement;
+$overlaySize = (string) ($module['overlay_size'] ?? 'contained') === 'full_screen' ? 'full_screen' : 'contained';
+$isOverlay = in_array($placement, ['modal', 'blocking_overlay'], true);
+$titleId = 'cliniko-onboarding-title-' . sanitize_html_class($id);
+$styleVariables = [];
+$styleMap = [
+    'primary_color' => '--cliniko-onboarding-primary',
+    'title_color' => '--cliniko-onboarding-title',
+    'label_color' => '--cliniko-onboarding-label',
+    'text_color' => '--cliniko-onboarding-text',
+    'surface_color' => '--cliniko-onboarding-surface',
+    'border_color' => '--cliniko-onboarding-border',
+];
+if (!empty($module['colors_enabled'])) {
+    foreach ($styleMap as $setting => $variable) {
+        $color = sanitize_hex_color((string) ($module[$setting] ?? ''));
+        if ($color !== '') {
+            $styleVariables[] = $variable . ':' . $color;
+        }
+    }
+}
+$fontFamily = (string) ($module['font_family'] ?? '');
+if ($fontFamily !== '') {
+    $styleVariables[] = '--cliniko-onboarding-font-family:' . esc_attr($fontFamily);
+    $styleVariables[] = '--cliniko-onboarding-heading-family:' . esc_attr($fontFamily);
+}
+foreach (['heading_font_size' => '--cliniko-onboarding-heading-size', 'body_font_size' => '--cliniko-onboarding-body-size'] as $setting => $variable) {
+    $size = (int) ($module[$setting] ?? 0);
+    if ($size > 0) {
+        $styleVariables[] = $variable . ':' . $size . 'px';
+    }
+}
+$styleAttribute = $styleVariables !== [] ? ' style="' . esc_attr(implode(';', $styleVariables)) . '"' : '';
+$truthy = static fn($value): bool => $value === true || $value === 1 || in_array(strtolower((string) $value), ['1', 'yes', 'true', 'on'], true);
+$optionValue = static fn($option): string => is_array($option)
+    ? (string) ($option['value'] ?? $option['name'] ?? $option['label'] ?? '')
+    : (string) $option;
+$selectedValues = static function ($value): array {
+    if (is_array($value)) {
+        return array_values(array_filter(array_map('strval', $value), static fn(string $item): bool => $item !== ''));
+    }
+    return array_values(array_filter(array_map('trim', explode(',', (string) $value)), static fn(string $item): bool => $item !== ''));
+};
+$maskExample = static function (string $pattern, string $prefix, string $suffix): string {
+    $digit = 1;
+    $letter = 0;
+    $letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    $characters = preg_split('//u', $pattern, -1, PREG_SPLIT_NO_EMPTY);
+    if (!is_array($characters)) {
+        $characters = str_split($pattern);
+    }
+    $body = '';
+    foreach ($characters as $character) {
+        if ($character === '#') {
+            $body .= (string) $digit;
+            $digit = $digit === 9 ? 1 : $digit + 1;
+        } elseif ($character === 'A') {
+            $body .= $letters[$letter % strlen($letters)];
+            $letter++;
+        } elseif ($character === '*') {
+            $body .= $letter % 2 === 0 ? $letters[$letter % strlen($letters)] : (string) $digit;
+            $letter++;
+            $digit = $digit === 9 ? 1 : $digit + 1;
+        } else {
+            $body .= $character;
+        }
+    }
+    return $prefix . $body . $suffix;
+};
+$isoDateValue = static function ($value): string {
+    if (!is_scalar($value) || trim((string) $value) === '') {
+        return '';
+    }
+    $value = substr(trim((string) $value), 0, 10);
+    $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    $errors = \DateTimeImmutable::getLastErrors();
+    if (!$date instanceof \DateTimeImmutable
+        || (is_array($errors) && ((int) $errors['warning_count'] > 0 || (int) $errors['error_count'] > 0))
+        || $date->format('Y-m-d') !== $value) {
+        return '';
+    }
+    return $date->format('Y-m-d');
+};
+$displayDate = static function ($value, string $format) use ($isoDateValue): string {
+    $isoDate = $isoDateValue($value);
+    if ($isoDate === '') {
+        return is_scalar($value) ? (string) $value : '';
+    }
+    $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $isoDate);
+    $formats = [
+        'dmy_slash' => 'd/m/Y',
+        'mdy_slash' => 'm/d/Y',
+        'ymd_dash' => 'Y-m-d',
+        'dmy_dash' => 'd-m-Y',
+    ];
+    return $date instanceof \DateTimeImmutable ? $date->format($formats[$format] ?? $formats['dmy_slash']) : '';
+};
+?>
+<div id="<?php echo esc_attr($instanceId); ?>" class="cliniko-patient-onboarding cliniko-patient-onboarding--<?php echo esc_attr($placement); ?> cliniko-patient-onboarding--overlay-<?php echo esc_attr($overlaySize); ?> cliniko-component cliniko-component-form-fields"<?php echo $styleAttribute; ?> data-cliniko-patient-onboarding data-onboarding-id="<?php echo esc_attr($id); ?>" data-step-count="<?php echo esc_attr((string) $stepCount); ?>" data-missing-count="<?php echo esc_attr((string) count($missing)); ?>" data-mode="<?php echo esc_attr((string) ($module['mode'] ?? 'multistep')); ?>" data-onboarding-placement="<?php echo esc_attr($placement); ?>" data-onboarding-overlay-size="<?php echo esc_attr($overlaySize); ?>">
+    <?php if ($isOverlay) : ?>
+        <div class="cliniko-patient-onboarding__backdrop" data-onboarding-backdrop aria-hidden="true"></div>
+        <div class="cliniko-patient-onboarding__panel" role="dialog" aria-modal="true" aria-labelledby="<?php echo esc_attr($titleId); ?>" tabindex="-1">
+            <?php if ($placement === 'modal') : ?><button type="button" class="cliniko-patient-onboarding__close" data-onboarding-close aria-label="Close profile setup">&times;</button><?php endif; ?>
+    <?php endif; ?>
+    <!-- cliniko-code-slot:before_form -->
+    <?php if ($missing === []) : ?>
+        <section class="cliniko-patient-onboarding__complete" role="status">
+            <h2 id="<?php echo esc_attr($titleId); ?>"><?php echo esc_html($title); ?></h2>
+            <p><?php echo esc_html($completionMessage); ?></p>
+        </section>
+    <?php else : ?>
+        <?php if ($hasWelcome) : ?>
+            <section class="cliniko-patient-onboarding__welcome" data-onboarding-welcome>
+                <div class="cliniko-patient-onboarding__welcome-content">
+                    <?php echo $welcomeContent; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Sanitized HTML or trusted shortcode output. ?>
+                </div>
+                <button type="button" class="cliniko-patient-onboarding__welcome-start" data-onboarding-start><?php echo esc_html($welcomeButtonLabel); ?></button>
+            </section>
+        <?php endif; ?>
+        <div class="cliniko-patient-onboarding__flow" data-onboarding-flow <?php echo $hasWelcome ? 'hidden' : ''; ?>>
+        <header class="cliniko-patient-onboarding__header">
+            <h2 id="<?php echo esc_attr($titleId); ?>"><?php echo esc_html($title); ?></h2>
+            <?php if ($subtitle !== '') : ?><p><?php echo esc_html($subtitle); ?></p><?php endif; ?>
+        </header>
+
+        <?php if ($messageState === 'success') : ?>
+            <p class="cliniko-patient-onboarding__message cliniko-component-feedback is-success" role="status">Your details were saved. Please complete any remaining required fields.</p>
+        <?php elseif ($messageState === 'error') : ?>
+            <p class="cliniko-patient-onboarding__message cliniko-component-feedback is-error" role="alert">Your details could not be saved. Please review the required fields and try again.</p>
+        <?php endif; ?>
+
+        <div class="cliniko-patient-onboarding__progress cliniko-component-steps" data-onboarding-progress aria-live="polite">
+            <span data-onboarding-progress-label>Step 1 of <?php echo esc_html((string) $stepCount); ?></span>
+            <span class="cliniko-patient-onboarding__progress-track" aria-hidden="true"><span data-onboarding-progress-fill></span></span>
+        </div>
+
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cliniko-patient-onboarding__form" data-onboarding-form>
+            <input type="hidden" name="action" value="<?php echo esc_attr($patientSaveAction); ?>">
+            <input type="hidden" name="onboarding_id" value="<?php echo esc_attr($id); ?>">
+            <input type="hidden" name="return_to" value="<?php echo esc_attr($returnTo); ?>">
+            <?php wp_nonce_field('save_cliniko_patient_onboarding_' . $id); ?>
+
+            <?php foreach ($steps as $stepIndex => $step) : ?>
+                <section class="cliniko-patient-onboarding__step" data-onboarding-step="<?php echo esc_attr((string) $stepIndex); ?>" <?php echo $stepIndex === 0 ? '' : 'hidden'; ?> aria-hidden="<?php echo $stepIndex === 0 ? 'false' : 'true'; ?>">
+                    <div class="cliniko-patient-onboarding__step-header">
+                        <p class="cliniko-patient-onboarding__step-count">Step <?php echo esc_html((string) ($stepIndex + 1)); ?> of <?php echo esc_html((string) $stepCount); ?></p>
+                        <h3><?php echo esc_html((string) ($step['title'] ?? 'Step ' . ($stepIndex + 1))); ?></h3>
+                        <?php if ((string) ($step['subtitle'] ?? '') !== '') : ?><p><?php echo esc_html((string) $step['subtitle']); ?></p><?php endif; ?>
+                    </div>
+
+                    <div class="cliniko-patient-onboarding__fields">
+                    <?php foreach ((array) ($step['fields'] ?? []) as $fieldConfig) :
+                        $field = (string) ($fieldConfig['key'] ?? '');
+                        $isLogicSwitch = (string) ($fieldConfig['kind'] ?? '') === 'switch';
+                        if ($field === '') continue;
+                        $fieldId = 'cliniko-onboarding-' . sanitize_html_class($id) . '-' . sanitize_html_class($field);
+                        if ($isLogicSwitch) :
+                            $switchLabel = trim((string) ($fieldConfig['label'] ?? ''));
+                            $switchLabel = $switchLabel !== '' ? $switchLabel : 'Do you have additional details to provide?';
+                            $switchChecked = !empty($switchValues[$field]);
+                            $switchOnLabel = trim((string) ($fieldConfig['on_label'] ?? ''));
+                            $switchOnLabel = $switchOnLabel !== '' ? $switchOnLabel : 'Yes';
+                            $switchOffLabel = trim((string) ($fieldConfig['off_label'] ?? ''));
+                            $switchOffLabel = $switchOffLabel !== '' ? $switchOffLabel : 'No';
+                            $switchWidth = in_array((int) ($fieldConfig['width'] ?? 100), [50, 100], true) ? (int) $fieldConfig['width'] : 100;
+                            ?>
+                            <div class="cliniko-patient-onboarding__field cliniko-patient-onboarding__field--logic-switch" style="width:<?php echo esc_attr((string) $switchWidth); ?>%" data-onboarding-field="<?php echo esc_attr($field); ?>">
+                                <span class="cliniko-patient-onboarding__label" id="<?php echo esc_attr($fieldId . '-label'); ?>"><?php echo esc_html($switchLabel); ?><?php echo !empty($fieldConfig['required']) ? ' *' : ''; ?></span>
+                                <div class="cliniko-patient-onboarding__logic-options" role="radiogroup" aria-labelledby="<?php echo esc_attr($fieldId . '-label'); ?>">
+                                    <label class="cliniko-patient-onboarding__logic-option" for="<?php echo esc_attr($fieldId . '-on'); ?>">
+                                        <input id="<?php echo esc_attr($fieldId . '-on'); ?>" type="radio" name="onboarding_switches[<?php echo esc_attr($field); ?>]" value="1" data-onboarding-switch="<?php echo esc_attr($field); ?>" <?php checked($switchChecked); ?>>
+                                        <span><?php echo esc_html($switchOnLabel); ?></span>
+                                    </label>
+                                    <label class="cliniko-patient-onboarding__logic-option" for="<?php echo esc_attr($fieldId . '-off'); ?>">
+                                        <input id="<?php echo esc_attr($fieldId . '-off'); ?>" type="radio" name="onboarding_switches[<?php echo esc_attr($field); ?>]" value="0" data-onboarding-switch="<?php echo esc_attr($field); ?>" <?php checked(!$switchChecked); ?>>
+                                        <span><?php echo esc_html($switchOffLabel); ?></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <?php continue; ?>
+                        <?php endif;
+                        if (!isset($definitions[$field])) continue;
+                        $fieldIsRequired = !empty($fieldConfig['required']);
+                        $conditionSwitch = sanitize_key((string) ($fieldConfig['condition_switch'] ?? ''));
+                        $conditionValue = (string) ($fieldConfig['condition_value'] ?? 'on') === 'off' ? 'off' : 'on';
+                        $conditionVisible = $conditionSwitch === '' || (!empty($switchValues[$conditionSwitch]) === ($conditionValue === 'on'));
+                        $conditionalAttributes = '';
+                        if ($conditionSwitch !== '') {
+                            $conditionalAttributes = ' data-onboarding-conditional-field data-onboarding-condition-switch="' . esc_attr($conditionSwitch) . '" data-onboarding-condition-value="' . esc_attr($conditionValue) . '" data-onboarding-condition-required="' . ($fieldIsRequired ? '1' : '0') . '"';
+                            if (!$conditionVisible) {
+                                $conditionalAttributes .= ' hidden aria-hidden="true"';
+                            }
+                        }
+                        $definition = array_merge($definitions[$field], [
+                            'label' => (string) ($fieldConfig['label'] ?? $definitions[$field]['label'] ?? $field),
+                            'required' => $fieldIsRequired && $conditionVisible,
+                            'width' => (int) ($fieldConfig['width'] ?? 100),
+                        ]);
+                        $fieldType = strtolower((string) ($definition['type'] ?? 'text'));
+                        $clinikoFieldType = strtolower((string) ($definition['cliniko_field_type'] ?? ''));
+                        $isCustom = !empty($definition['custom']);
+                        $fieldValue = $values[$field] ?? '';
+                        $inputType = in_array((string) ($fieldConfig['input_type'] ?? 'default'), ['text', 'date', 'select'], true) ? (string) $fieldConfig['input_type'] : 'default';
+                        $dateFormat = in_array((string) ($fieldConfig['date_format'] ?? 'dmy_slash'), ['dmy_slash', 'mdy_slash', 'ymd_dash', 'dmy_dash'], true) ? (string) $fieldConfig['date_format'] : 'dmy_slash';
+                        $datePlaceholders = [
+                            'dmy_slash' => 'DD/MM/YYYY',
+                            'mdy_slash' => 'MM/DD/YYYY',
+                            'ymd_dash' => 'YYYY-MM-DD',
+                            'dmy_dash' => 'DD-MM-YYYY',
+                        ];
+                        $datePickerValue = $inputType === 'date' ? $isoDateValue($fieldValue) : '';
+                        if ($inputType === 'text') {
+                            $fieldType = 'text';
+                            $clinikoFieldType = '';
+                        } elseif ($inputType === 'date') {
+                            $fieldType = 'formatted_date';
+                            $clinikoFieldType = '';
+                        } elseif ($inputType === 'select') {
+                            $fieldType = 'select';
+                            $clinikoFieldType = '';
+                        }
+                        $selected = $selectedValues($fieldValue);
+                        $options = array_values(array_filter(array_map($optionValue, (array) ($definition['options'] ?? [])), static fn(string $option): bool => $option !== ''));
+                        if ($inputType === 'select') {
+                            $options = array_values(array_filter(array_map('strval', (array) ($fieldConfig['select_options'] ?? [])), static fn(string $option): bool => $option !== ''));
+                        }
+                        $isChoices = in_array($clinikoFieldType, ['radiobuttons', 'radio', 'checkboxes', 'multi_checkbox'], true);
+                        $inputFormat = in_array((string) ($fieldConfig['input_format'] ?? 'none'), ['numbers', 'pattern'], true) ? (string) $fieldConfig['input_format'] : 'none';
+                        $maxLength = max(0, min(5000, (int) ($fieldConfig['max_length'] ?? 0)));
+                        $maskPattern = $inputFormat === 'pattern' ? (string) ($fieldConfig['mask_pattern'] ?? '') : '';
+                        $maskPrefix = $inputFormat === 'pattern' ? (string) ($fieldConfig['mask_prefix'] ?? '') : '';
+                        $maskSuffix = $inputFormat === 'pattern' ? (string) ($fieldConfig['mask_suffix'] ?? '') : '';
+                        $maskHint = $inputFormat === 'pattern' && $maskPattern !== '' ? $maskExample($maskPattern, $maskPrefix, $maskSuffix) : '';
+                        $inputAttributes = $maxLength > 0 ? ' maxlength="' . esc_attr((string) $maxLength) . '" data-onboarding-max-length="' . esc_attr((string) $maxLength) . '"' : '';
+                        if ($inputFormat === 'numbers') {
+                            $inputAttributes .= ' inputmode="numeric" data-onboarding-input-rule="numbers"';
+                        } elseif ($inputFormat === 'pattern' && $maskPattern !== '') {
+                            $maskInputMode = preg_match('/[A*]/', $maskPattern) ? 'text' : 'numeric';
+                            $inputAttributes .= ' inputmode="' . $maskInputMode . '" data-onboarding-input-rule="pattern" data-onboarding-mask="' . esc_attr($maskPattern) . '" data-onboarding-mask-prefix="' . esc_attr($maskPrefix) . '" data-onboarding-mask-suffix="' . esc_attr($maskSuffix) . '" placeholder="' . esc_attr($maskHint) . '"';
+                        }
+                        $renderedInputType = $fieldType === 'number' && $inputFormat !== 'none' ? 'text' : $fieldType;
+                        ?>
+                        <?php if ($fieldType === 'paragraph') : ?>
+                            <p class="cliniko-patient-onboarding__paragraph" style="width:<?php echo esc_attr((string) $definition['width']); ?>%"<?php echo $conditionalAttributes; ?>><?php echo esc_html((string) $definition['label']); ?></p>
+                        <?php elseif ($fieldType === 'hidden') : ?>
+                            <span class="cliniko-patient-onboarding__hidden-field"<?php echo $conditionalAttributes; ?>><input type="hidden" name="<?php echo esc_attr($field); ?>" value="<?php echo esc_attr(is_scalar($fieldValue) ? (string) $fieldValue : ''); ?>"></span>
+                        <?php else : ?>
+                            <div class="cliniko-patient-onboarding__field" style="width:<?php echo esc_attr((string) $definition['width']); ?>%" data-onboarding-field="<?php echo esc_attr($field); ?>"<?php echo $conditionalAttributes; ?>>
+                                <label class="cliniko-patient-onboarding__label" for="<?php echo esc_attr($fieldId); ?>"><?php echo esc_html((string) $definition['label']); ?><?php echo $fieldIsRequired ? ' *' : ''; ?></label>
+                                <?php if ($isChoices && $options !== []) : ?>
+                                    <div id="<?php echo esc_attr($fieldId); ?>" class="cliniko-patient-onboarding__choices cliniko-patient-onboarding__choices--<?php echo esc_attr($clinikoFieldType === 'checkboxes' || $clinikoFieldType === 'multi_checkbox' ? 'checkbox' : 'radio'); ?>">
+                                        <?php foreach ($options as $optionIndex => $option) :
+                                            $optionId = $fieldId . '-' . $optionIndex;
+                                            $isCheckbox = $clinikoFieldType === 'checkboxes' || $clinikoFieldType === 'multi_checkbox';
+                                            ?>
+                                            <label class="cliniko-patient-onboarding__choice" for="<?php echo esc_attr($optionId); ?>">
+                                                <input id="<?php echo esc_attr($optionId); ?>" type="<?php echo $isCheckbox ? 'checkbox' : 'radio'; ?>" name="<?php echo esc_attr($field . ($isCheckbox ? '[]' : '')); ?>" value="<?php echo esc_attr($option); ?>" <?php checked(in_array($option, $selected, true)); ?> <?php echo !empty($definition['required']) && $optionIndex === 0 ? 'required' : ''; ?> data-cliniko-custom-field="<?php echo $isCustom ? '1' : '0'; ?>">
+                                                <span><?php echo esc_html($option); ?></span>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php elseif ($fieldType === 'formatted_date') : ?>
+                                    <div class="cliniko-patient-onboarding__date-control" data-onboarding-date-control>
+                                        <input id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($field); ?>" type="text" value="<?php echo esc_attr($displayDate($fieldValue, $dateFormat)); ?>" inputmode="numeric" maxlength="10" placeholder="<?php echo esc_attr($datePlaceholders[$dateFormat]); ?>" data-onboarding-date-input data-onboarding-date-format="<?php echo esc_attr($dateFormat); ?>" <?php echo !empty($definition['required']) ? 'required' : ''; ?> data-cliniko-custom-field="<?php echo $isCustom ? '1' : '0'; ?>" <?php echo $field === 'date_of_birth' ? 'autocomplete="bday"' : 'autocomplete="off"'; ?>>
+                                        <button type="button" class="cliniko-patient-onboarding__date-picker-button" data-onboarding-date-picker-trigger aria-label="Choose <?php echo esc_attr((string) $definition['label']); ?> from calendar" title="Choose date from calendar">
+                                            <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M7 2v2H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3h-2V2h-2v2H9V2H7Zm12 8H5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9ZM6 6h12a1 1 0 0 1 1 1v1H5V7a1 1 0 0 1 1-1Z"/></svg>
+                                        </button>
+                                        <input type="date" class="cliniko-patient-onboarding__native-date-picker" value="<?php echo esc_attr($datePickerValue); ?>" data-onboarding-native-date-picker tabindex="-1" aria-hidden="true">
+                                    </div>
+                                <?php elseif ($fieldType === 'select' && $options !== []) : ?>
+                                    <select id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($field); ?>" <?php echo !empty($definition['required']) ? 'required' : ''; ?> data-cliniko-custom-field="<?php echo $isCustom ? '1' : '0'; ?>">
+                                        <option value="">Select</option>
+                                        <?php foreach ($options as $option) : ?><option value="<?php echo esc_attr($option); ?>" <?php selected((string) $fieldValue, $option); ?>><?php echo esc_html($option); ?></option><?php endforeach; ?>
+                                    </select>
+                                <?php elseif (in_array($fieldType, ['multi_select'], true) && $options !== []) : ?>
+                                    <select id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($field . '[]'); ?>" multiple <?php echo !empty($definition['required']) ? 'required' : ''; ?> data-cliniko-custom-field="<?php echo $isCustom ? '1' : '0'; ?>">
+                                        <?php foreach ($options as $option) : ?><option value="<?php echo esc_attr($option); ?>" <?php selected(in_array($option, $selected, true)); ?>><?php echo esc_html($option); ?></option><?php endforeach; ?>
+                                    </select>
+                                <?php elseif ($fieldType === 'textarea') : ?>
+                                    <textarea id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($field); ?>" <?php echo !empty($definition['required']) ? 'required' : ''; ?> data-cliniko-custom-field="<?php echo $isCustom ? '1' : '0'; ?>"<?php echo $inputAttributes; ?>><?php echo esc_textarea(is_scalar($fieldValue) ? (string) $fieldValue : ''); ?></textarea>
+                                <?php elseif ($fieldType === 'checkbox') : ?>
+                                    <input type="hidden" name="<?php echo esc_attr($field); ?>" value="0">
+                                    <label class="cliniko-patient-onboarding__choice" for="<?php echo esc_attr($fieldId); ?>"><input id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($field); ?>" type="checkbox" value="1" <?php checked($truthy($fieldValue)); ?> <?php echo !empty($definition['required']) ? 'required' : ''; ?> data-cliniko-custom-field="<?php echo $isCustom ? '1' : '0'; ?>"><span>Yes</span></label>
+                                <?php else : ?>
+                                    <input id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($field); ?>" type="<?php echo esc_attr($renderedInputType); ?>" value="<?php echo esc_attr(is_scalar($fieldValue) ? (string) $fieldValue : ''); ?>" <?php echo !empty($definition['required']) ? 'required' : ''; ?> data-cliniko-custom-field="<?php echo $isCustom ? '1' : '0'; ?>"<?php echo $inputAttributes; ?>>
+                                <?php endif; ?>
+                                <?php if ($inputFormat === 'numbers') : ?><small class="cliniko-patient-onboarding__hint">Numbers only.</small><?php endif; ?>
+                                <?php if ($maskHint !== '') : ?><small class="cliniko-patient-onboarding__hint">Format: <?php echo esc_html($maskHint); ?></small><?php endif; ?>
+                                <?php if ($fieldType === 'formatted_date') : ?><small class="cliniko-patient-onboarding__hint">Enter the date as <?php echo esc_html($datePlaceholders[$dateFormat]); ?>. It is sent securely to Cliniko as YYYY-MM-DD.</small><?php endif; ?>
+                                <?php if ($field === 'email') : ?><small class="cliniko-patient-onboarding__hint">Changing your email address may require confirmation.</small><?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    </div>
+
+                    <div class="cliniko-patient-onboarding__controls">
+                        <?php if ($stepIndex > 0) : ?>
+                            <button type="button" class="cliniko-patient-onboarding__back" data-onboarding-back>Back</button>
+                        <?php endif; ?>
+                        <?php if ($stepIndex < $stepCount - 1) : ?>
+                            <button type="button" class="cliniko-patient-onboarding__next" data-onboarding-next>Continue</button>
+                        <?php else : ?>
+                            <button type="submit" class="cliniko-patient-onboarding__submit">Save and continue</button>
+                        <?php endif; ?>
+                    </div>
+                </section>
+            <?php endforeach; ?>
+        </form>
+        </div>
+    <?php endif; ?>
+    <?php if ($isOverlay) : ?></div><?php endif; ?>
+    <!-- cliniko-code-slot:after_form -->
+</div>

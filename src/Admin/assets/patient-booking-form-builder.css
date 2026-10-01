@@ -1,0 +1,72 @@
+.cliniko-template-builder-editor > h1 { margin-bottom: 6px; }
+.cliniko-booking-builder__intro { max-width: 760px; margin: 6px 0 18px; color: #50575e; font-size: 14px; }
+.cliniko-template-builder-editor > form {
+    width: min(100%, 1120px);
+    max-width: 1120px !important;
+    margin-top: 18px;
+    padding: 22px;
+    border: 1px solid #cfd8e1;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgb(15 23 42 / 6%);
+}
+.cliniko-template-builder-editor > form.cliniko-booking-builder { padding: 0 22px 22px; }
+.cliniko-template-builder-editor .form-table { margin: 0; }
+.cliniko-template-builder-editor .form-table tr { display: grid; grid-template-columns: minmax(180px, .38fr) minmax(320px, 1fr); border-bottom: 1px solid #edf0f2; }
+.cliniko-template-builder-editor .form-table tr:last-child { border-bottom: 0; }
+.cliniko-template-builder-editor .form-table th,
+.cliniko-template-builder-editor .form-table td { width: auto; padding: 17px 12px; }
+.cliniko-template-builder-editor .form-table th { color: #1d2327; }
+.cliniko-template-builder-editor .cliniko-booking-builder__section { margin: 0 -22px; border: 0; background: #f0f6fc; }
+.cliniko-template-builder-editor .cliniko-booking-builder__section th { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: 12px; padding: 18px 22px; border-top: 1px solid #c5d9e8; border-bottom: 1px solid #c5d9e8; }
+.cliniko-template-builder-editor .cliniko-booking-builder__section:first-child th { border-top: 0; }
+.cliniko-booking-builder__section th > span { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; border-radius: 50%; color: #fff; background: #2271b1; font-weight: 700; }
+.cliniko-booking-builder__section th strong,
+.cliniko-booking-builder__section th small { display: block; }
+.cliniko-booking-builder__section th strong { margin-bottom: 3px; font-size: 16px; }
+.cliniko-booking-builder__section th small { color: #50575e; font-weight: 400; }
+.cliniko-template-builder-editor .cliniko-booking-builder__wide-row { grid-template-columns: 1fr; }
+.cliniko-template-builder-editor .cliniko-booking-builder__wide-row > th { display: none; }
+.cliniko-template-builder-editor .cliniko-booking-builder__wide-row > td { padding-block: 22px; }
+.cliniko-booking-builder__reload-note { margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid #dba617; color: #614b00; background: #fcf9e8; }
+#cliniko-generic-booking-builder { padding: 24px !important; border: 1px solid #cfd8e1; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgb(15 23 42 / 6%); }
+#cliniko-generic-booking-builder > h2 { margin: 0 0 6px !important; font-size: 20px; }
+#cliniko-generic-booking-builder .form-table { margin-top: 20px; }
+#cliniko-generic-booking-builder .form-table tr { display: grid; grid-template-columns: minmax(190px, .42fr) minmax(320px, 1fr); border-top: 1px solid #edf0f2; }
+#cliniko-generic-booking-builder .form-table th,
+#cliniko-generic-booking-builder .form-table td { width: auto; padding: 16px 10px; }
+#cliniko-generic-booking-builder select { width: min(100%, 680px); min-width: 0 !important; }
+#cliniko-generic-booking-builder > p:has([data-generic-booking-shortcode]),
+#cliniko-generic-booking-builder > p:has([data-generic-booking-url-shortcode]) { padding: 16px; border: 1px solid #d8dce1; border-radius: 8px; background: #f8fafc; }
+#cliniko-generic-booking-builder [data-generic-booking-shortcode],
+#cliniko-generic-booking-builder [data-generic-booking-url-shortcode] { margin-top: 7px; }
+#cliniko-booking-aliases { border: 1px solid #cfd8e1; border-radius: 10px; box-shadow: 0 2px 8px rgb(15 23 42 / 6%); }
+#cliniko-booking-aliases > form { max-width: 900px; padding: 18px; border: 1px solid #d8dce1; border-radius: 8px; background: #f8fafc; }
+#cliniko-booking-aliases > form .form-table tr { display: grid; grid-template-columns: minmax(190px, .4fr) minmax(320px, 1fr); border-bottom: 1px solid #e1e5e9; }
+#cliniko-booking-aliases > form .form-table th,
+#cliniko-booking-aliases > form .form-table td { width: auto; padding: 15px 10px; }
+.cliniko-template-builder-editor .form-table td > input:not([type="checkbox"]),
+.cliniko-template-builder-editor .form-table td > select,
+.cliniko-template-builder-editor .form-table td > textarea { width: min(100%, 720px); max-width: 100%; }
+.cliniko-booking-input-editor { display: grid; gap: 22px; }
+.cliniko-booking-input-editor > header { padding: 15px 17px; border-left: 4px solid #2271b1; border-radius: 5px; background: #eef6fc; }
+.cliniko-booking-input-editor > header h3,
+.cliniko-booking-input-editor > header p,
+.cliniko-booking-input-editor section > h4 { margin: 0; }
+.cliniko-booking-input-editor > header p { margin-top: 5px; color: #506b7c; }
+.cliniko-booking-input-editor section { display: grid; gap: 12px; }
+.cliniko-booking-input-editor__grid { display: grid; gap: 12px; }
+.cliniko-booking-input-editor__grid > article { padding: 14px; border: 1px solid #d8dce1; border-radius: 8px; background: #f8fafc; }
+.cliniko-booking-input-editor__grid > article > strong,
+.cliniko-booking-input-editor__grid > article > small { display: block; }
+.cliniko-booking-input-editor__grid > article > small { margin-top: 3px; color: #646970; }
+@media (max-width: 782px) {
+    .cliniko-template-builder-editor > form { padding: 14px; }
+    .cliniko-template-builder-editor .form-table tr { grid-template-columns: 1fr; }
+    .cliniko-template-builder-editor .form-table th { padding-bottom: 0; }
+    #cliniko-generic-booking-builder { padding: 15px !important; }
+    #cliniko-generic-booking-builder .form-table tr,
+    #cliniko-booking-aliases > form .form-table tr { grid-template-columns: 1fr; }
+    #cliniko-generic-booking-builder .form-table th,
+    #cliniko-booking-aliases > form .form-table th { padding-bottom: 0; }
+}

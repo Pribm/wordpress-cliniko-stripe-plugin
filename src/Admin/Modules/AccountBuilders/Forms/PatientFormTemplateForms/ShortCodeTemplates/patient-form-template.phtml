@@ -1,0 +1,121 @@
+<?php
+
+use App\Model\PatientFormTemplate;
+use App\Admin\Modules\AccountBuilders\Forms\ShortcodeFormInputRules;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/** @var string $builderId */
+/** @var array<string,mixed> $form */
+/** @var PatientFormTemplate $template */
+/** @var array<string,array<string,mixed>> $fieldRules */
+/** @var string $returnTo */
+$hasUnsupportedQuestion = false;
+foreach ($template->getSections() as $section) {
+    foreach ($section->questions as $question) {
+        if (strtolower((string) $question->type) === 'signature') {
+            $hasUnsupportedQuestion = true;
+        }
+    }
+}
+?>
+<div class="cliniko-patient-template-form cliniko-component cliniko-component-form-fields">
+    <?php if (isset($_GET['cliniko_patient_form_submitted'])) : ?>
+        <?php if ((string) $_GET['cliniko_patient_form_submitted'] === '1') : ?>
+            <p class="cliniko-patient-template-form__message cliniko-component-feedback is-success"><?php echo esc_html((string) ($form['success_message'] ?? 'Your patient form was submitted.')); ?></p>
+        <?php else : ?>
+            <p class="cliniko-patient-template-form__message cliniko-component-feedback is-error">Your patient form could not be submitted. Please review your answers and try again.</p>
+        <?php endif; ?>
+    <?php endif; ?>
+
+    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <input type="hidden" name="action" value="wp_cliniko_patient_template_submit">
+        <input type="hidden" name="builder_id" value="<?php echo esc_attr($builderId); ?>">
+        <input type="hidden" name="return_to" value="<?php echo esc_attr($returnTo); ?>">
+        <?php wp_nonce_field('submit_patient_template_form_' . $builderId); ?>
+
+        <?php foreach ($template->getSections() as $sectionIndex => $section) : ?>
+            <section class="cliniko-patient-template-form__section">
+                <?php if ((string) $section->name !== '') : ?><h2><?php echo esc_html((string) $section->name); ?></h2><?php endif; ?>
+                <?php if ((string) $section->description !== '') : ?><div class="cliniko-patient-template-form__description"><?php echo wp_kses_post((string) $section->description); ?></div><?php endif; ?>
+
+                <?php foreach ($section->questions as $questionIndex => $question) :
+                    $type = strtolower((string) $question->type);
+                    $fieldName = 'answers[' . $sectionIndex . '][' . $questionIndex . ']';
+                    $fieldId = 'cliniko-template-' . sanitize_html_class($builderId) . '-' . $sectionIndex . '-' . $questionIndex;
+                    $ruleKey = 'section_' . $sectionIndex . '_question_' . $questionIndex;
+                    $rule = is_array($fieldRules[$ruleKey] ?? null) ? $fieldRules[$ruleKey] : [];
+                    $inputType = in_array((string) ($rule['input_type'] ?? 'default'), ['text', 'date', 'select'], true)
+                        ? (string) $rule['input_type']
+                        : 'default';
+                    $renderType = $inputType === 'default' ? $type : $inputType;
+                    $inputAttributes = ShortcodeFormInputRules::inputAttributes($rule);
+                    $inputHint = ShortcodeFormInputRules::hint($rule);
+                    $dateFormat = ShortcodeFormInputRules::normaliseDateFormat($rule['date_format'] ?? 'dmy_slash');
+                    $selectOptions = array_map('strval', (array) ($rule['select_options'] ?? []));
+                    ?>
+                    <fieldset class="cliniko-patient-template-form__field">
+                        <legend>
+                            <?php echo esc_html($question->name); ?>
+                            <?php if ($question->required) : ?><span aria-hidden="true">*</span><span class="screen-reader-text"> required</span><?php endif; ?>
+                        </legend>
+
+                        <?php if ($renderType === 'select' && $selectOptions !== []) : ?>
+                            <select id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($fieldName); ?>" <?php echo $question->required ? 'required' : ''; ?>>
+                                <option value="">Select</option>
+                                <?php foreach ($selectOptions as $option) : ?><option value="<?php echo esc_attr($option); ?>"><?php echo esc_html($option); ?></option><?php endforeach; ?>
+                            </select>
+                        <?php elseif ($renderType === 'date') : ?>
+                            <div class="cliniko-shortcode-date-control" data-cliniko-date-control>
+                                <input id="<?php echo esc_attr($fieldId); ?>" type="text" name="<?php echo esc_attr($fieldName); ?>" inputmode="numeric" maxlength="10" placeholder="<?php echo esc_attr(ShortcodeFormInputRules::datePlaceholder($dateFormat)); ?>" data-cliniko-date-input data-cliniko-date-format="<?php echo esc_attr($dateFormat); ?>" <?php echo $question->required ? 'required' : ''; ?>>
+                                <button type="button" class="cliniko-shortcode-date-picker" data-cliniko-date-picker-trigger aria-label="Choose <?php echo esc_attr((string) $question->name); ?> from calendar"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M7 2v2H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3h-2V2h-2v2H9V2H7Zm12 8H5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9ZM6 6h12a1 1 0 0 1 1 1v1H5V7a1 1 0 0 1 1-1Z"/></svg></button>
+                                <input type="date" class="cliniko-shortcode-native-date" data-cliniko-native-date-picker tabindex="-1" aria-hidden="true">
+                            </div>
+                            <small class="cliniko-shortcode-input-hint">Displayed as <?php echo esc_html(ShortcodeFormInputRules::datePlaceholder($dateFormat)); ?> and submitted as YYYY-MM-DD.</small>
+                        <?php elseif (in_array($type, ['textarea', 'paragraph', 'long_text', 'longtext', 'text_area', 'multiline'], true) && $renderType !== 'text') : ?>
+                            <textarea id="<?php echo esc_attr($fieldId); ?>" name="<?php echo esc_attr($fieldName); ?>" <?php echo $question->required ? 'required' : ''; ?><?php echo $inputAttributes; ?>></textarea>
+                        <?php elseif ($type === 'checkboxes') : ?>
+                            <div class="cliniko-patient-template-form__choices" <?php echo $question->required ? 'data-cliniko-required-choice-group="1"' : ''; ?>>
+                            <?php foreach ($question->answers as $answerIndex => $answer) :
+                                $value = (string) ($answer['value'] ?? '');
+                                $optionId = $fieldId . '-' . $answerIndex;
+                                ?>
+                                <label for="<?php echo esc_attr($optionId); ?>"><input id="<?php echo esc_attr($optionId); ?>" type="checkbox" name="<?php echo esc_attr($fieldName); ?>[]" value="<?php echo esc_attr($value); ?>"> <?php echo esc_html($value); ?></label>
+                            <?php endforeach; ?>
+                            <?php if ($question->other !== null && !empty($question->other->enabled)) : ?>
+                                <label for="<?php echo esc_attr($fieldId . '-other'); ?>"><input id="<?php echo esc_attr($fieldId . '-other'); ?>" type="checkbox" name="<?php echo esc_attr($fieldName); ?>[]" value="__other__" data-cliniko-other-toggle> Other</label>
+                                <div class="cliniko-patient-template-form__other" data-cliniko-other-control hidden><label for="<?php echo esc_attr($fieldId . '-other-value'); ?>">Please specify</label><input id="<?php echo esc_attr($fieldId . '-other-value'); ?>" type="text" name="other[<?php echo esc_attr((string) $sectionIndex); ?>][<?php echo esc_attr((string) $questionIndex); ?>]" aria-label="<?php echo esc_attr($question->name . ' other answer'); ?>" data-cliniko-other-input></div>
+                            <?php endif; ?>
+                            </div>
+                            <?php if ($question->required) : ?><p class="cliniko-patient-template-form__hint">Select at least one option.</p><?php endif; ?>
+                        <?php elseif ($type === 'radiobuttons') : ?>
+                            <?php foreach ($question->answers as $answerIndex => $answer) :
+                                $value = (string) ($answer['value'] ?? '');
+                                $optionId = $fieldId . '-' . $answerIndex;
+                                ?>
+                                <label for="<?php echo esc_attr($optionId); ?>"><input id="<?php echo esc_attr($optionId); ?>" type="radio" name="<?php echo esc_attr($fieldName); ?>" value="<?php echo esc_attr($value); ?>" <?php echo $question->required ? 'required' : ''; ?>> <?php echo esc_html($value); ?></label>
+                            <?php endforeach; ?>
+                            <?php if ($question->other !== null && !empty($question->other->enabled)) : ?>
+                                <label for="<?php echo esc_attr($fieldId . '-other'); ?>"><input id="<?php echo esc_attr($fieldId . '-other'); ?>" type="radio" name="<?php echo esc_attr($fieldName); ?>" value="__other__" data-cliniko-other-toggle <?php echo $question->required ? 'required' : ''; ?>> Other</label>
+                                <div class="cliniko-patient-template-form__other" data-cliniko-other-control hidden><label for="<?php echo esc_attr($fieldId . '-other-value'); ?>">Please specify</label><input id="<?php echo esc_attr($fieldId . '-other-value'); ?>" type="text" name="other[<?php echo esc_attr((string) $sectionIndex); ?>][<?php echo esc_attr((string) $questionIndex); ?>]" aria-label="<?php echo esc_attr($question->name . ' other answer'); ?>" data-cliniko-other-input></div>
+                            <?php endif; ?>
+                        <?php elseif ($type === 'signature') : ?>
+                            <p class="cliniko-patient-template-form__message is-error">This form contains a signature question that is not supported by this shortcode yet.</p>
+                        <?php else :
+                            $htmlInputType = $renderType === 'text' || (string) ($rule['input_format'] ?? 'none') !== 'none'
+                                ? 'text'
+                                : (in_array($type, ['email', 'number', 'tel', 'url'], true) ? $type : 'text');
+                            ?>
+                            <input id="<?php echo esc_attr($fieldId); ?>" type="<?php echo esc_attr($htmlInputType); ?>" name="<?php echo esc_attr($fieldName); ?>" <?php echo $question->required ? 'required' : ''; ?><?php echo $inputAttributes; ?>>
+                        <?php endif; ?>
+                        <?php if ($inputHint !== '') : ?><small class="cliniko-shortcode-input-hint"><?php echo esc_html($inputHint); ?></small><?php endif; ?>
+                    </fieldset>
+                <?php endforeach; ?>
+            </section>
+        <?php endforeach; ?>
+
+        <button type="submit" <?php echo $hasUnsupportedQuestion ? 'disabled' : ''; ?>><?php echo esc_html((string) ($form['submit_label'] ?? 'Submit form')); ?></button>
+    </form>
+</div>

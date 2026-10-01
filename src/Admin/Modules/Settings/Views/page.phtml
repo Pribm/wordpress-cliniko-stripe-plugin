@@ -1,0 +1,60 @@
+<?php
+/** @var string $currentTab */
+/** @var array<string,string> $tabs */
+?>
+<div class="wrap">
+    <h1>Cliniko + Stripe Integration Settings</h1>
+    <nav class="nav-tab-wrapper es-settings-tabs" aria-label="Settings sections">
+        <?php foreach ($tabs as $tab => $label) : ?>
+            <a href="<?php echo esc_url(add_query_arg(['page' => 'wp-cliniko-stripe-settings', 'tab' => $tab], admin_url('admin.php'))); ?>" class="nav-tab<?php echo $currentTab === $tab ? ' nav-tab-active' : ''; ?>" data-es-settings-tab="<?php echo esc_attr($tab); ?>"><?php echo esc_html($label); ?></a>
+        <?php endforeach; ?>
+    </nav>
+
+    <form method="post" action="options.php">
+        <?php settings_fields('wp_cliniko_stripe_group'); ?>
+        <?php do_settings_sections('wp-cliniko-stripe-settings'); ?>
+        <?php submit_button('Save Settings'); ?>
+    </form>
+</div>
+<style>
+    .es-settings-tabs { margin: 20px 0 0; }
+    .es-settings-tab-hidden { display: none !important; }
+</style>
+<script>
+    (function () {
+        const initialTab = <?php echo wp_json_encode($currentTab); ?>;
+        const tabs = document.querySelectorAll('[data-es-settings-tab]');
+        const tables = document.querySelectorAll('.wrap form .form-table');
+        const groups = [];
+
+        tables.forEach(function (table) {
+            let group = 'credentials';
+            if (table.querySelector('[name^="wp_cliniko_patient_"]')) group = 'patient-accounts';
+            const sectionNodes = [];
+            let node = table.previousElementSibling;
+            while (node) {
+                sectionNodes.unshift(node);
+                if (node.tagName === 'H2') break;
+                node = node.previousElementSibling;
+            }
+            sectionNodes.push(table);
+            groups.push({ group: group, nodes: sectionNodes });
+        });
+
+        function showTab(tab) {
+            groups.forEach(function (item) {
+                item.nodes.forEach(function (node) { node.classList.toggle('es-settings-tab-hidden', item.group !== tab); });
+            });
+            tabs.forEach(function (link) { link.classList.toggle('nav-tab-active', link.dataset.esSettingsTab === tab); });
+        }
+
+        tabs.forEach(function (link) {
+            link.addEventListener('click', function (event) {
+                event.preventDefault();
+                showTab(link.dataset.esSettingsTab);
+                window.history.replaceState({}, '', link.href);
+            });
+        });
+        showTab(initialTab);
+    }());
+</script>

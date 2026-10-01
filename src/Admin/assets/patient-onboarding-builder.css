@@ -1,0 +1,385 @@
+.cliniko-form-builder[data-cliniko-onboarding-builder] { max-width: 1240px; }
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    gap: 24px;
+}
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__panel,
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__sidebox {
+    border: 1px solid #ccd0d4;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__panel > header {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #dcdcde;
+}
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__sidebox { padding: 18px; }
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__sidebox h2 { margin-top: 0; }
+.cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__sidebox code { display: block; padding: 10px; word-break: break-word; }
+.cliniko-onboarding-editor {
+    --builder-accent: #2271b1;
+    --builder-accent-soft: #eef6fc;
+    --builder-text: #1d2327;
+    --builder-muted: #646970;
+    --builder-border: #dcdcde;
+    max-width: 1240px;
+    margin-top: 20px;
+}
+.cliniko-onboarding-editor__hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 16px;
+    padding: 24px 28px;
+    border: 1px solid var(--builder-border);
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fff 0%, #f6f9fc 100%);
+}
+.cliniko-onboarding-editor__hero h2 { margin: 4px 0 6px; color: var(--builder-text); font-size: 24px; line-height: 1.25; }
+.cliniko-onboarding-editor__hero p { max-width: 720px; margin: 0; color: var(--builder-muted); font-size: 14px; }
+.cliniko-onboarding-editor__eyebrow { color: var(--builder-accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.cliniko-onboarding-editor__status { padding: 6px 11px; border: 1px solid #dcdcde; border-radius: 999px; color: #646970; background: #fff; font-size: 12px; font-weight: 600; }
+.cliniko-onboarding-editor__status.is-enabled { border-color: #9bd5ae; color: #0a5c2b; background: #edfaF1; }
+
+.cliniko-onboarding-editor__tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 20px;
+    padding: 5px;
+    overflow-x: auto;
+    border: 1px solid var(--builder-border);
+    border-radius: 10px;
+    background: #fff;
+}
+.cliniko-onboarding-editor__tabs button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 125px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 7px;
+    color: #50575e;
+    background: transparent;
+    font-weight: 600;
+    cursor: pointer;
+}
+.cliniko-onboarding-editor__tabs button span {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #c3c4c7;
+    border-radius: 50%;
+    font-size: 11px;
+}
+.cliniko-onboarding-editor__tabs button:hover { color: var(--builder-accent); background: #f6f7f7; }
+.cliniko-onboarding-editor__tabs button.is-active { color: #fff; background: var(--builder-accent); }
+.cliniko-onboarding-editor__tabs button.is-active span { border-color: rgb(255 255 255 / 65%); background: rgb(255 255 255 / 12%); }
+
+.cliniko-onboarding-builder { align-items: start; }
+.cliniko-onboarding-builder main { min-width: 0; }
+.cliniko-onboarding-tab-panel { margin: 0; overflow: hidden; border-radius: 10px; }
+.cliniko-onboarding-tab-panel[hidden] { display: none !important; }
+.cliniko-onboarding-tab-panel > header {
+    align-items: center;
+    min-height: 66px;
+    padding: 15px 22px !important;
+    background: #fff;
+}
+.cliniko-onboarding-tab-panel > header > div { display: grid; gap: 3px; }
+.cliniko-onboarding-tab-panel > header strong { color: var(--builder-text); font-size: 16px; }
+.cliniko-onboarding-tab-panel > header span { color: var(--builder-muted); font-size: 12px; font-weight: 400; }
+.cliniko-onboarding-panel-body { display: grid; gap: 22px; padding: 24px; }
+.cliniko-onboarding-panel-body label { display: grid; gap: 6px; color: var(--builder-text); font-weight: 600; }
+.cliniko-onboarding-panel-body label small { color: var(--builder-muted); font-size: 12px; font-weight: 400; line-height: 1.45; }
+.cliniko-onboarding-panel-body input:not([type="checkbox"]):not([type="color"]),
+.cliniko-onboarding-panel-body select,
+.cliniko-onboarding-panel-body textarea {
+    width: 100%;
+    min-height: 40px;
+    max-width: 720px;
+    border-color: #8c8f94;
+}
+.cliniko-onboarding-panel-body textarea { min-height: 90px; }
+.cliniko-onboarding-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.cliniko-onboarding-field-stack { gap: 20px; }
+.cliniko-onboarding-field-stack > label { max-width: 760px; }
+.cliniko-onboarding-welcome-settings {
+    display: grid;
+    gap: 16px;
+    max-width: 760px;
+    padding: 18px;
+    border: 1px solid #c7d7e5;
+    border-radius: 10px;
+    background: #f8fbfe;
+}
+.cliniko-onboarding-welcome-settings h3 { margin: 0 0 4px; color: var(--builder-text); font-size: 15px; }
+.cliniko-onboarding-welcome-settings > div:first-child p { margin: 0; color: var(--builder-muted); }
+.cliniko-onboarding-welcome-controls { display: grid; gap: 16px; padding-top: 2px; }
+.cliniko-onboarding-welcome-controls[hidden],
+.cliniko-onboarding-welcome-controls [hidden] { display: none !important; }
+.cliniko-onboarding-welcome-controls textarea.code { min-height: 150px; font-family: Consolas, Monaco, monospace; font-size: 12px; }
+.cliniko-onboarding-builder__identity { padding-bottom: 22px; border-bottom: 1px solid #f0f0f1; }
+.cliniko-onboarding-builder__identity label { display: block; margin-bottom: 7px; font-size: 14px; }
+.cliniko-onboarding-builder__identity input { width: 100%; max-width: 720px; min-height: 46px; padding: 8px 12px; font-size: 16px; }
+.cliniko-onboarding-builder__identity p { margin: 7px 0 0; color: var(--builder-muted); }
+
+.cliniko-onboarding-switch {
+    display: flex !important;
+    align-items: flex-start;
+    gap: 11px !important;
+    max-width: 720px;
+    padding: 14px 16px;
+    border: 1px solid var(--builder-border);
+    border-radius: 8px;
+    background: #f8f9fa;
+    cursor: pointer;
+}
+.cliniko-onboarding-switch input { margin-top: 3px; }
+.cliniko-onboarding-switch span { display: grid; gap: 2px; }
+.cliniko-onboarding-switch strong { color: var(--builder-text); }
+.cliniko-onboarding-switch--accent { border-color: #a7cce5; background: var(--builder-accent-soft); }
+.cliniko-onboarding-theme-note,
+.cliniko-onboarding-builder-help {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 15px 16px;
+    border: 1px solid #a7cce5;
+    border-radius: 8px;
+    color: #174f78;
+    background: var(--builder-accent-soft);
+}
+.cliniko-onboarding-theme-note .dashicons { margin-top: 1px; color: var(--builder-accent); }
+.cliniko-onboarding-theme-note p,
+.cliniko-onboarding-builder-help p { margin: 3px 0 0; color: #3c6179; }
+.cliniko-onboarding-input-suffix { display: flex; max-width: 220px; }
+.cliniko-onboarding-input-suffix input { border-radius: 4px 0 0 4px; }
+.cliniko-onboarding-input-suffix em { display: grid; place-items: center; min-width: 42px; border: 1px solid #8c8f94; border-left: 0; border-radius: 0 4px 4px 0; color: var(--builder-muted); background: #f6f7f7; font-style: normal; font-weight: 400; }
+
+.cliniko-onboarding-builder-colors {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    max-width: 720px;
+}
+.cliniko-onboarding-builder-colors.is-disabled { opacity: .5; }
+.cliniko-onboarding-builder-colors label {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--builder-border);
+    border-radius: 7px;
+    background: #fff;
+    font-size: 12px;
+}
+.cliniko-onboarding-builder-colors input[type="color"] { width: 42px; height: 32px; padding: 2px; border: 1px solid #8c8f94; border-radius: 5px; background: #fff; }
+.cliniko-onboarding-logic { max-width: 360px; }
+.cliniko-onboarding-protected-pages {
+    display: grid;
+    gap: 18px;
+    margin-top: 2px;
+    padding-top: 22px;
+    border-top: 1px solid #f0f0f1;
+}
+.cliniko-onboarding-protected-pages > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+.cliniko-onboarding-protected-pages h3 { margin: 0 0 4px; color: var(--builder-text); font-size: 15px; }
+.cliniko-onboarding-protected-pages header p { margin: 0; color: var(--builder-muted); }
+
+.cliniko-onboarding-builder-conditions { display: grid; gap: 12px; }
+.cliniko-onboarding-builder-conditions > .description { margin: 0; padding: 20px; border: 1px dashed #b8bdc3; border-radius: 8px; text-align: center; background: #fafafa; }
+.cliniko-onboarding-builder-condition { display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 1px solid var(--builder-border); border-radius: 8px; background: #f8f9fa; }
+.cliniko-onboarding-builder-condition__main { display: grid; grid-template-columns: minmax(190px, .8fr) minmax(280px, 1.5fr); align-items: start; gap: 14px; flex: 1; }
+.cliniko-onboarding-builder-condition__main label { display: grid; gap: 5px; font-size: 12px; }
+.cliniko-onboarding-builder-condition__main select[multiple] { width: 100%; min-width: 0; }
+.cliniko-onboarding-builder-condition__main small { display: block; color: var(--builder-muted); font-weight: 400; }
+
+.cliniko-onboarding-builder-step { margin: 0 0 16px; padding: 18px; border: 1px solid var(--builder-border); border-radius: 9px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
+.cliniko-onboarding-builder-step:last-child { margin-bottom: 0; }
+.cliniko-onboarding-builder-step__head,
+.cliniko-onboarding-builder-step__actions,
+.cliniko-onboarding-builder-field,
+.cliniko-onboarding-builder-field__actions { display: flex; align-items: center; gap: 8px; }
+.cliniko-onboarding-builder-step__head { justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid #f0f0f1; }
+.cliniko-onboarding-builder-step__head > div:first-child { display: grid; gap: 2px; }
+.cliniko-onboarding-builder-step__head strong { color: var(--builder-accent); font-size: 14px; }
+.cliniko-onboarding-builder-step__head .description { color: var(--builder-muted); font-size: 12px; font-weight: 400; }
+.cliniko-onboarding-builder-step__settings { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(280px, 1.7fr); gap: 14px; padding: 16px 0; }
+.cliniko-onboarding-builder-step__settings label { display: grid; gap: 5px; font-weight: 600; }
+.cliniko-onboarding-builder-step__settings input,
+.cliniko-onboarding-builder-step__settings textarea,
+.cliniko-onboarding-builder-field input,
+.cliniko-onboarding-builder-field select { max-width: 100%; }
+.cliniko-onboarding-builder-fields { display: grid; gap: 10px; margin-bottom: 12px; }
+.cliniko-onboarding-builder-step__add-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cliniko-onboarding-builder-field { align-items: flex-start; padding: 13px; border: 1px solid #e2e4e7; border-radius: 7px; background: #f8f9fa; }
+.cliniko-onboarding-builder-field--switch { border-color: #9fc7e2; background: #f2f8fc; }
+.cliniko-onboarding-builder-field > .dashicons { margin-top: 23px; color: #8c8f94; }
+.cliniko-onboarding-builder-field--switch > .dashicons { color: var(--builder-accent); }
+.cliniko-onboarding-builder-field__drag { cursor: grab; touch-action: none; user-select: none; }
+.cliniko-onboarding-builder-field__drag:active { cursor: grabbing; }
+.cliniko-onboarding-builder-field.is-dragging { opacity: .94; pointer-events: none; box-shadow: 0 12px 30px rgb(15 23 42 / 20%); transform: rotate(.4deg); }
+.cliniko-onboarding-builder-field.is-drop-target { border-color: var(--builder-accent); box-shadow: 0 0 0 2px rgb(34 113 177 / 18%); }
+.cliniko-onboarding-builder-field__placeholder { min-height: 54px; border: 2px dashed #7fb0d1; border-radius: 7px; background: #eef6fc; box-sizing: border-box; }
+.cliniko-onboarding-builder-field__main { display: grid; grid-template-columns: minmax(170px, 1.2fr) minmax(170px, 1fr) 90px; align-items: end; gap: 10px; flex: 1; }
+.cliniko-onboarding-builder-field__main label { display: grid; gap: 4px; font-size: 12px; }
+.cliniko-onboarding-builder-field__required { grid-column: 1 / -1; display: flex !important; align-items: center; gap: 6px !important; }
+.cliniko-onboarding-builder-field__actions { align-self: center; flex-wrap: wrap; justify-content: flex-end; max-width: 180px; }
+
+.cliniko-onboarding-input-type {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(180px, .75fr) minmax(260px, 1.25fr);
+    gap: 14px 18px;
+    padding: 15px;
+    border: 1px solid #cfd8e1;
+    border-radius: 7px;
+    background: #f8fbfe;
+}
+.cliniko-onboarding-input-type__heading { grid-column: 1 / -1; display: grid; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid #dde6ed; }
+.cliniko-onboarding-input-type__heading strong { color: #1d2327; font-size: 13px; }
+.cliniko-onboarding-input-type__heading span { color: #646970; font-size: 11px; }
+.cliniko-onboarding-input-type > label { max-width: 360px; }
+.cliniko-onboarding-date-settings,
+.cliniko-onboarding-select-settings { min-width: 0; }
+.cliniko-onboarding-date-settings[hidden],
+.cliniko-onboarding-select-settings[hidden] { display: none !important; }
+.cliniko-onboarding-date-settings { padding: 12px; border: 1px solid #b8d2e5; border-radius: 6px; background: #fff; }
+.cliniko-onboarding-select-settings { grid-column: 1 / -1; display: grid; gap: 10px; padding: 13px; border: 1px solid #b8d2e5; border-radius: 6px; background: #fff; }
+.cliniko-onboarding-select-settings > div:first-child { display: grid; gap: 2px; }
+.cliniko-onboarding-select-settings > div:first-child strong { color: #174f78; font-size: 12px; }
+.cliniko-onboarding-select-settings > div:first-child span { color: #646970; font-size: 11px; }
+.cliniko-onboarding-select-settings > label { max-width: 620px; }
+.cliniko-onboarding-select-settings textarea { width: 100%; min-height: 150px; resize: vertical; }
+.cliniko-onboarding-builder-switch__main { grid-template-columns: minmax(260px, 1.5fr) minmax(120px, .5fr); }
+.cliniko-onboarding-builder-switch__heading { grid-column: 1 / -1; display: grid; gap: 2px; padding-bottom: 9px; border-bottom: 1px solid #cfe0eb; }
+.cliniko-onboarding-builder-switch__heading strong { color: #174f78; font-size: 13px; }
+.cliniko-onboarding-builder-switch__heading span { color: #506b7c; font-size: 11px; }
+.cliniko-onboarding-builder-switch__question { grid-column: 1 / -1; }
+.cliniko-onboarding-builder-switch__options {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    gap: 12px;
+    padding: 13px;
+    border: 1px solid #b8d2e5;
+    border-radius: 7px;
+    background: #fff;
+}
+.cliniko-onboarding-builder-switch__options label { display: grid; align-content: start; gap: 5px; }
+.cliniko-onboarding-builder-switch__options small { color: #646970; font-weight: 400; line-height: 1.35; }
+
+.cliniko-onboarding-condition-settings { grid-column: 1 / -1; margin-top: 4px; border: 1px solid #d8dce1; border-radius: 7px; background: #fff; }
+.cliniko-onboarding-condition-settings > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 42px; padding: 9px 12px; cursor: pointer; user-select: none; }
+.cliniko-onboarding-condition-settings > summary span { display: flex; align-items: center; gap: 7px; color: #1d2327; font-weight: 600; }
+.cliniko-onboarding-condition-settings > summary span::before { content: '›'; color: var(--builder-accent); font-size: 18px; line-height: 1; transition: transform .15s ease; }
+.cliniko-onboarding-condition-settings[open] > summary span::before { transform: rotate(90deg); }
+.cliniko-onboarding-condition-settings > summary small { padding: 2px 6px; border-radius: 999px; color: #50575e; background: #f0f0f1; font-size: 10px; font-weight: 500; }
+.cliniko-onboarding-condition-settings > summary em { color: #646970; font-size: 11px; font-style: normal; font-weight: 400; }
+.cliniko-onboarding-condition-settings[open] > summary { border-bottom: 1px solid #e2e8ee; background: #f8fbfe; }
+.cliniko-onboarding-condition-settings > div { padding: 14px; }
+.cliniko-onboarding-condition-settings label { display: grid; gap: 5px; max-width: 620px; }
+.cliniko-onboarding-condition-settings label small { color: #646970; font-weight: 400; line-height: 1.4; }
+
+.cliniko-onboarding-input-rules {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    border: 1px solid #cfd8e1;
+    border-radius: 7px;
+    background: #fff;
+}
+.cliniko-onboarding-input-rules > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 42px;
+    padding: 9px 12px;
+    color: #1d2327;
+    cursor: pointer;
+    user-select: none;
+}
+.cliniko-onboarding-input-rules > summary:hover { background: #f6f9fc; }
+.cliniko-onboarding-input-rules > summary span { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.cliniko-onboarding-input-rules > summary span::before { content: '›'; color: var(--builder-accent); font-size: 18px; line-height: 1; transform-origin: center; transition: transform .15s ease; }
+.cliniko-onboarding-input-rules[open] > summary span::before { transform: rotate(90deg); }
+.cliniko-onboarding-input-rules > summary small { padding: 2px 6px; border-radius: 999px; color: #50575e; background: #f0f0f1; font-size: 10px; font-weight: 500; }
+.cliniko-onboarding-input-rules > summary em { color: #646970; font-size: 11px; font-style: normal; font-weight: 400; text-align: right; }
+.cliniko-onboarding-input-rules[open] > summary { border-bottom: 1px solid #e2e8ee; background: #f8fbfe; }
+.cliniko-onboarding-input-rules__body { display: grid; gap: 15px; padding: 15px; }
+.cliniko-onboarding-input-rules__basic { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(240px, 1.3fr); gap: 14px; }
+.cliniko-onboarding-input-rules__basic label,
+.cliniko-onboarding-mask-builder__fields label { align-content: start; }
+.cliniko-onboarding-input-rules__body label small { color: #646970; font-weight: 400; line-height: 1.4; }
+.cliniko-onboarding-input-rules__unavailable { margin: 0; }
+.cliniko-onboarding-mask-builder { display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid #e8ecef; }
+.cliniko-onboarding-mask-builder[hidden] { display: none !important; }
+.cliniko-onboarding-mask-builder__guide { padding: 12px 14px; border-left: 4px solid var(--builder-accent); border-radius: 4px; color: #2c4558; background: #eef6fc; }
+.cliniko-onboarding-mask-builder__guide strong { color: #174f78; }
+.cliniko-onboarding-mask-builder__guide p { margin: 5px 0 0; font-size: 12px; line-height: 1.45; }
+.cliniko-onboarding-mask-builder__guide code { padding: 1px 4px; color: #1d2327; background: #fff; }
+.cliniko-onboarding-mask-builder__fields { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(240px, 1.5fr) minmax(130px, .7fr); gap: 12px; }
+.cliniko-onboarding-mask-builder__preview { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 11px 13px; border: 1px dashed #9eb6c8; border-radius: 6px; background: #fbfdff; }
+.cliniko-onboarding-mask-builder__preview span { color: #50575e; font-size: 11px; font-weight: 600; }
+.cliniko-onboarding-mask-builder__preview output { min-width: 0; overflow-wrap: anywhere; color: #111827; font-family: Consolas, Monaco, monospace; font-size: 14px; font-weight: 600; }
+
+.cliniko-onboarding-editor__sidebar { position: sticky; top: 42px; }
+.cliniko-onboarding-editor__sidebar .cliniko-form-builder__sidebox { border-radius: 9px; }
+.cliniko-onboarding-publish-card h2 { margin: 5px 0 7px; }
+.cliniko-onboarding-publish-card p,
+.cliniko-onboarding-shortcode-card p { color: var(--builder-muted); }
+.cliniko-onboarding-publish-card .button { width: 100%; justify-content: center; margin-top: 8px; }
+.cliniko-onboarding-shortcode-card code { border: 1px solid #dcdcde; border-radius: 6px; background: #f6f7f7; user-select: all; }
+.cliniko-onboarding-checklist ol { margin: 0 0 0 20px; color: #50575e; }
+.cliniko-onboarding-checklist li { margin-bottom: 8px; }
+
+@media (max-width: 960px) {
+    .cliniko-form-builder[data-cliniko-onboarding-builder] .cliniko-form-builder__layout { grid-template-columns: 1fr; }
+    .cliniko-onboarding-editor__tabs { grid-template-columns: repeat(4, 145px); }
+    .cliniko-onboarding-field-grid,
+    .cliniko-onboarding-builder-colors,
+    .cliniko-onboarding-builder-condition__main,
+    .cliniko-onboarding-builder-step__settings,
+    .cliniko-onboarding-builder-field__main,
+    .cliniko-onboarding-builder-switch__main,
+    .cliniko-onboarding-builder-switch__options,
+    .cliniko-onboarding-input-type,
+    .cliniko-onboarding-input-rules__basic,
+    .cliniko-onboarding-mask-builder__fields { grid-template-columns: 1fr; }
+    .cliniko-onboarding-editor__sidebar { position: static; }
+}
+@media (max-width: 782px) {
+    .cliniko-onboarding-editor__hero { padding: 20px; }
+    .cliniko-onboarding-editor__status { display: none; }
+    .cliniko-onboarding-panel-body { padding: 18px; }
+    .cliniko-onboarding-welcome-settings { padding: 14px; }
+    .cliniko-onboarding-tab-panel > header { align-items: flex-start; gap: 10px; padding: 14px 18px !important; }
+    .cliniko-onboarding-builder-condition,
+    .cliniko-onboarding-builder-step__head { flex-direction: column; }
+    .cliniko-onboarding-protected-pages > header { flex-direction: column; }
+    .cliniko-onboarding-builder-step__actions,
+    .cliniko-onboarding-builder-field__actions { width: 100%; justify-content: flex-start; max-width: none; flex-wrap: wrap; }
+    .cliniko-onboarding-builder-field { flex-wrap: wrap; }
+    .cliniko-onboarding-builder-field > .dashicons { margin-top: 0; }
+    .cliniko-onboarding-input-rules > summary { align-items: flex-start; flex-direction: column; gap: 4px; }
+    .cliniko-onboarding-input-rules > summary em { text-align: left; }
+    .cliniko-onboarding-mask-builder__preview { grid-template-columns: 1fr; gap: 5px; }
+    .cliniko-onboarding-condition-settings > summary { align-items: flex-start; flex-direction: column; gap: 4px; }
+    .cliniko-onboarding-condition-settings > summary em { text-align: left; }
+}

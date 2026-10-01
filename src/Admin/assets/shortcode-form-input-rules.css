@@ -1,0 +1,33 @@
+.cliniko-shortcode-date-control { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 8px; }
+.cliniko-shortcode-date-picker {
+    display: grid !important;
+    place-items: center;
+    width: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 1px solid #111827 !important;
+    border-radius: 8px !important;
+    color: #111827 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+.cliniko-shortcode-date-picker:hover,
+.cliniko-shortcode-date-picker:focus { border-color: var(--e-global-color-primary, #2563eb) !important; color: var(--e-global-color-primary, #2563eb) !important; }
+.cliniko-shortcode-date-picker svg { display: block; fill: currentColor; pointer-events: none; }
+.cliniko-shortcode-native-date {
+    position: absolute !important;
+    width: 1px !important;
+    min-width: 1px !important;
+    height: 1px !important;
+    min-height: 1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    opacity: 0 !important;
+    pointer-events: none;
+}
+.cliniko-shortcode-input-hint { display: block; margin-top: 7px; color: #4b5563; font-size: .84rem; }

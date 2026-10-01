@@ -33,13 +33,33 @@ $payment_details = AppointmentType::find($settings['module_id'], cliniko_client(
       Enter your card details below to confirm your booking.
     </p>
 
-    <div id="payment-element" style="
+    <div id="payment-element-shell" style="
         background: #fff;
         border: 1px solid #dcdcdc;
         border-radius: 8px;
         padding: 16px;
         margin-bottom: 24px;
-      "></div>
+      ">
+      <div id="payment-element" aria-busy="true"></div>
+      <div id="payment-element-status" data-es-stripe-status role="status" aria-live="polite" style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:10px;
+          min-height:44px;
+          color:#475569;
+          font-size:14px;
+          line-height:1.4;
+          text-align:center;
+        ">
+        <span class="cliniko-stripe-skeleton" aria-hidden="true">
+          <span class="cliniko-stripe-skeleton__line cliniko-stripe-skeleton__line--long"></span>
+          <span class="cliniko-stripe-skeleton__line cliniko-stripe-skeleton__line--medium"></span>
+          <span class="cliniko-stripe-skeleton__line cliniko-stripe-skeleton__line--short"></span>
+        </span>
+        <span>Loading Payment details</span>
+      </div>
+    </div>
 
     <button id="payment-button" style="<?php echo $style_button; ?>; width: 100%; font-size: 16px; padding: 12px 0; cursor: pointer; border-radius: 5px;">
       <?php echo $button_label; ?>
@@ -93,3 +113,25 @@ $payment_details = AppointmentType::find($settings['module_id'], cliniko_client(
     <!-- END BACK BUTTON -->
   </div>
 </div>
+
+<style>
+  .cliniko-stripe-skeleton {
+    display: grid;
+    gap: 7px;
+    width: min(100%, 280px);
+  }
+  .cliniko-stripe-skeleton__line {
+    display: block;
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e9eef2 25%, #f8fafb 50%, #e9eef2 75%);
+    background-size: 200% 100%;
+    animation: clinikoStripeSkeleton 1.25s ease-in-out infinite;
+  }
+  .cliniko-stripe-skeleton__line--long { width: 100%; }
+  .cliniko-stripe-skeleton__line--medium { width: 78%; }
+  .cliniko-stripe-skeleton__line--short { width: 54%; }
+  @keyframes clinikoStripeSkeleton {
+    to { background-position: -200% 0; }
+  }
+</style>

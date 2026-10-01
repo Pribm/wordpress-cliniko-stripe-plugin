@@ -178,9 +178,13 @@
   function buildRequestHeaders(attemptToken = "") {
     const headers = { "Content-Type": "application/json" };
     const attempt = String(attemptToken || "").trim();
+    const restNonce = String(window.formHandlerData?.rest_nonce || "").trim();
 
     if (attempt) {
       headers["X-ES-Attempt-Token"] = attempt;
+    }
+    if (restNonce) {
+      headers["X-WP-Nonce"] = restNonce;
     }
 
     return headers;
@@ -198,6 +202,7 @@
     try {
       data = text ? JSON.parse(text) : {};
     } catch (_) {}
+    window.ClinikoConnectionNotice?.inspectResponse(res, data);
     if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
     return data;
   }
@@ -267,6 +272,22 @@
       typeof normalizePatientForSubmission === "function"
         ? normalizePatientForSubmission(parsed?.patient || {})
         : parsed?.patient || {};
+    const authenticatedBooking =
+      window.formHandlerData?.authenticated_patient_booking || {};
+    const useAuthenticatedPatientBooking = !!authenticatedBooking?.enabled;
+    const bookingPatient = useAuthenticatedPatientBooking
+      ? ["appointment_start", "appointment_date", "practitioner_id", "patient_booked_time"]
+          .reduce((output, key) => {
+            if (
+              patient[key] !== undefined &&
+              patient[key] !== null &&
+              String(patient[key]).trim() !== ""
+            ) {
+              output[key] = patient[key];
+            }
+            return output;
+          }, {})
+      : patient;
 
     return {
       gateway: "tyrohealth",
@@ -274,8 +295,11 @@
       patient_form_template_id: String(
         window.formHandlerData?.patient_form_template_id || ""
       ),
-      patient,
+      patient: bookingPatient,
       content,
+      ...(useAuthenticatedPatientBooking
+        ? { authenticated_booking_nonce: authenticatedBooking.nonce }
+        : {}),
     };
   }
 
@@ -289,8 +313,12 @@
       return cachedAttempt;
     }
 
-    const url = window.TyroHealthData.attempt_preflight_url;
-    if (!url) throw new Error("TyroHealthData.attempt_preflight_url missing.");
+    const authenticatedBooking =
+      window.formHandlerData?.authenticated_patient_booking || {};
+    const url = authenticatedBooking?.enabled
+      ? authenticatedBooking.preflight_url
+      : window.TyroHealthData.attempt_preflight_url;
+    if (!url) throw new Error("TyroHealth booking preflight URL missing.");
 
     const resp = await postJson(url, buildAttemptPayload());
     if (!resp?.ok || !resp?.attempt?.id || !resp?.attempt?.token || !resp?.payment) {
@@ -314,7 +342,12 @@
       await ensureConfigured();
 
       const patient = collectPatient();
-      if (!patient.firstName || !patient.lastName || !patient.dob) {
+      const useAuthenticatedPatientBooking =
+        !!window.formHandlerData?.authenticated_patient_booking?.enabled;
+      if (
+        !useAuthenticatedPatientBooking &&
+        (!patient.firstName || !patient.lastName || !patient.dob)
+      ) {
         throw new Error(
           "Please complete First name, Last name, and Date of Birth before continuing."
         );
@@ -415,8 +448,6 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     attachHandlers();
-    const mo = new MutationObserver(() => attachHandlers());
-    mo.observe(document.documentElement, { childList: true, subtree: true });
   });
 })();
 

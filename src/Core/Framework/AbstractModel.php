@@ -72,6 +72,12 @@ abstract class AbstractModel
         return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $input));
     }
 
+    private static function appendQueryParam(string $url, string $key, string $value): string
+    {
+        $separator = str_contains($url, '?') ? '&' : '?';
+        return $url . $separator . rawurlencode($key) . '=' . rawurlencode($value);
+    }
+
     // -----------------------------
     // Instance getters
     // -----------------------------
@@ -113,7 +119,8 @@ abstract class AbstractModel
     public static function find(string $id, ApiClientInterface $client, bool $throwOnError = false): ?static
     {
         $path = static::getResourcePath();
-        $response = $client->get("{$path}/{$id}");
+        $url = "{$path}/{$id}";
+        $response = $client->get($url);
 
         if (!$response->isSuccessful()) {
 
@@ -144,32 +151,44 @@ abstract class AbstractModel
     public static function all(ApiClientInterface $client, bool $throwOnError = false): array
     {
         $path = static::getResourcePath();
-        $response = $client->get($path);
-
-        if (!$response->isSuccessful()) {
-            if ($throwOnError) {
-                throw new ApiException(
-                    "Failed to list resources at {$path}.",
-                    self::buildResponseErrorContext($response)
-                );
-            }
-            return [];
-        }
-
         $items = [];
         $dtoClass = static::getDtoClass();
-        $listKey = $path;
+        $listKey = static::getListKey();
+        $url = self::appendQueryParam($path, 'per_page', '100');
+        $seenUrls = [];
 
-        $rows = $response->data[$listKey] ?? [];
-        if (!is_array($rows)) {
-            // Defensive: unexpected payload -> empty list
-            return [];
-        }
+        while ($url !== '') {
+            if (isset($seenUrls[$url])) {
+                break;
+            }
+            $seenUrls[$url] = true;
 
-        foreach ($rows as $item) {
-            /** @var object $dto */
-            $dto = $dtoClass::fromArray($item);
-            $items[] = static::newInstance($dto, $client);
+            $response = $client->get($url);
+
+            if (!$response->isSuccessful()) {
+                if ($throwOnError) {
+                    throw new ApiException(
+                        "Failed to list resources at {$url}.",
+                        self::buildResponseErrorContext($response)
+                    );
+                }
+                return $items;
+            }
+
+            $data = is_array($response->data) ? $response->data : [];
+            $rows = $data[$listKey] ?? [];
+            if (!is_array($rows)) {
+                return $items;
+            }
+
+            foreach ($rows as $item) {
+                /** @var object $dto */
+                $dto = $dtoClass::fromArray($item);
+                $items[] = static::newInstance($dto, $client);
+            }
+
+            $nextUrl = $data['links']['next'] ?? null;
+            $url = is_string($nextUrl) && trim($nextUrl) !== '' ? trim($nextUrl) : '';
         }
 
         return $items;
@@ -238,7 +257,15 @@ abstract class AbstractModel
         $payload = $data ?? [];
 
         $response = $client->put("{$path}/{$id}", $payload);
-
+    
+        // echo "<pre>";
+        // print_r($payload);
+        // echo "</pre>";
+        // echo "<pre>";
+        // print_r($response);
+        // echo "</pre>";
+        // die();
+    
         if (!$response->isSuccessful()) {
             throw new ApiException(
                 "Failed to update resource at {$path}/{$id}.",

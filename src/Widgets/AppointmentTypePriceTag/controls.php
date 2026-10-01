@@ -10,7 +10,7 @@ $this->start_controls_section(
 );
 
 $client = cliniko_client(true);
-$types = AppointmentType::all($client, true);
+$types = AppointmentType::all($client);
 
 $options = [];
 foreach ($types as $type) {

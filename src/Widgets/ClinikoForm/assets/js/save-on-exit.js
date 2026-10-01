@@ -9,6 +9,9 @@
   const formType = String(window.formHandlerData?.form_type || "multi").toLowerCase();
   if (formType === "headless") return;
   const isSingleStep = formType === "single" || formType === "unstyled";
+  const showDisabledPrev = Boolean(
+    window.formHandlerData?.appearance?.buttons_show_disabled_prev
+  );
 
   // ✅ Unique storage key per form/page
   const STORAGE_KEY = `clinikoFormProgress:v9:${window.location.pathname}`;
@@ -64,6 +67,11 @@
 
   function progressTo(index, total) {
     if (isSingleStep) return;
+    if (typeof window.updateStepIndicator === "function") {
+      window.updateStepIndicator(index);
+      return;
+    }
+
     const bar = $("#form-progress-indicator .progress-fill");
     if (!bar || !total) return;
     bar.style.width = ((index + 1) / total) * 100 + "%";
@@ -86,8 +94,15 @@
 
     if (OVERRIDE_NAV_BUTTONS) {
       if (prev) {
-        prev.style.display = idx === 0 ? "none" : "flex";
-        prev.setAttribute("aria-hidden", idx === 0 ? "true" : "false");
+        const keepVisible = idx === 0 && showDisabledPrev;
+        prev.style.display = idx === 0 && !keepVisible ? "none" : "flex";
+        prev.disabled = keepVisible;
+        prev.setAttribute("aria-hidden", idx === 0 && !keepVisible ? "true" : "false");
+        if (keepVisible) {
+          prev.setAttribute("aria-disabled", "true");
+        } else {
+          prev.removeAttribute("aria-disabled");
+        }
       }
 
       if (next && !isClinikoForm) {
@@ -362,13 +377,6 @@
       syncNavButtons(root);
     }, 60);
 
-    const mo = new MutationObserver(() => update());
-    mo.observe(root, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["style", "class"],
-    });
-
     const prev = $(PREV_BTN_SEL),
       next = $(NEXT_BTN_SEL);
     [prev, next].forEach((btn) => {
@@ -384,7 +392,7 @@
     });
 
     update();
-    return mo;
+    return null;
   }
 
   // ===== Boot =====

@@ -1,0 +1,26 @@
+<?php if (!defined('ABSPATH')) exit; /** @var array<string,mixed> $module */ $messageFieldId = wp_unique_id('cliniko-communication-message-'); $modalTitleId = wp_unique_id('cliniko-email-modal-title-'); ?>
+<section class="cliniko-patient-communications cliniko-component cliniko-component-list" data-cliniko-patient-communications data-endpoint="<?php echo esc_url($endpoint); ?>" data-nonce="<?php echo esc_attr($nonce); ?>" data-clinic-label="<?php echo esc_attr((string) ($module['clinic_label'] ?? 'Clinic')); ?>" data-per-page="<?php echo esc_attr((string) ($module['items_per_page'] ?? 20)); ?>">
+    <?php if ((string) ($module['title'] ?? '') !== '') : ?><h2><?php echo esc_html((string) $module['title']); ?></h2><?php endif; ?>
+    <?php if ((string) ($module['description'] ?? '') !== '') : ?><p class="cliniko-patient-communications__intro"><?php echo esc_html((string) $module['description']); ?></p><?php endif; ?>
+    <nav class="cliniko-patient-communications__tabs" role="tablist" aria-label="Communication types">
+        <button type="button" role="tab" aria-selected="true" data-cliniko-communication-tab="general">Messages <span class="cliniko-patient-communications__unread-badge" data-cliniko-unread-badge="general" hidden></span></button>
+        <button type="button" role="tab" aria-selected="false" data-cliniko-communication-tab="email">Email <span class="cliniko-patient-communications__unread-badge" data-cliniko-unread-badge="email" hidden></span></button>
+        <button type="button" role="tab" aria-selected="false" data-cliniko-communication-tab="sms">SMS <span class="cliniko-patient-communications__unread-badge" data-cliniko-unread-badge="sms" hidden></span></button>
+    </nav>
+    <section role="tabpanel" data-cliniko-communication-panel="general">
+        <form class="cliniko-patient-communications__composer cliniko-component-form-fields" data-cliniko-communication-form>
+            <label for="<?php echo esc_attr($messageFieldId); ?>"><span>Message for <?php echo esc_html((string) ($module['clinic_label'] ?? 'Clinic')); ?></span><textarea id="<?php echo esc_attr($messageFieldId); ?>" rows="5" maxlength="5000" required data-cliniko-communication-content placeholder="<?php echo esc_attr((string) ($module['message_placeholder'] ?? 'Write a non-urgent message for your care team…')); ?>"></textarea><small>This sends a non-urgent message record to your clinic in Cliniko. Do not use this for emergencies.</small></label>
+            <button type="submit"><?php echo esc_html((string) ($module['submit_label'] ?? 'Send message')); ?></button>
+        </form>
+        <p class="cliniko-patient-communications__message cliniko-component-feedback" data-cliniko-communication-status aria-live="polite"></p>
+        <?php if (!empty($module['show_history'])) : ?><div class="cliniko-patient-communications__timeline" data-cliniko-communication-list="general"><p>Loading messages…</p></div><?php endif; ?>
+    </section>
+    <?php foreach (['email' => 'Email communications are read-only.', 'sms' => 'SMS communications are read-only.'] as $view => $notice) : ?><section role="tabpanel" data-cliniko-communication-panel="<?php echo esc_attr($view); ?>" hidden><p class="cliniko-patient-communications__read-only"><?php echo esc_html($notice); ?></p><?php if (!empty($module['show_history'])) : ?><div class="cliniko-patient-communications__timeline" data-cliniko-communication-list="<?php echo esc_attr($view); ?>"><p>Loading communications…</p></div><?php endif; ?></section><?php endforeach; ?>
+    <div class="cliniko-patient-communications__email-modal" data-cliniko-email-modal hidden>
+        <div class="cliniko-patient-communications__email-modal-backdrop" data-cliniko-email-modal-close></div>
+        <section class="cliniko-patient-communications__item-content is-email-html cliniko-patient-communications__email-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="<?php echo esc_attr($modalTitleId); ?>" tabindex="-1">
+            <header><strong id="<?php echo esc_attr($modalTitleId); ?>" data-cliniko-email-modal-title>Email</strong><button type="button" data-cliniko-email-modal-close aria-label="Close email">Close</button></header>
+            <div data-cliniko-email-modal-content></div>
+        </section>
+    </div>
+</section>

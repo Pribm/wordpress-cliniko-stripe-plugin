@@ -31,4 +31,35 @@ class IndividualAppointment extends AbstractModel
         return $this->dto->telehealthUrl;
     }
 
+    public function getNotes(): ?string
+    {
+        return $this->dto->notes;
+    }
+
+    public function getPatientId(): ?string
+    {
+        return $this->linkedResourceId($this->dto->patientUrl);
+    }
+
+    public function getAppointmentTypeId(): ?string
+    {
+        return $this->linkedResourceId($this->dto->appointmentTypeUrl);
+    }
+
+    public function getPractitionerUrl(): ?string
+    {
+        return $this->dto->practitionerUrl;
+    }
+
+    private function linkedResourceId(?string $url): ?string
+    {
+        $path = $url ? parse_url($url, PHP_URL_PATH) : null;
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+
+        $parts = array_values(array_filter(explode('/', trim($path, '/'))));
+        return $parts === [] ? null : (string) end($parts);
+    }
+
 }

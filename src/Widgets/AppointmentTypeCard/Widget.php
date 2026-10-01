@@ -32,7 +32,7 @@ class Widget extends Widget_Base {
     $settings = $this->get_settings_for_display();
 
     $client = cliniko_client(true);
-    $types = AppointmentType::all($client, true);
+    $types = AppointmentType::all($client);
     
     $selected = $settings['selected_appointment_type'] ?? null;
     $type = array_filter($types, fn(AppointmentType $t) => $t->getId() === $selected);

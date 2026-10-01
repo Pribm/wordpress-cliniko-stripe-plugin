@@ -2,7 +2,7 @@
 
 namespace App\Service;
 
-use App\Admin\Modules\Credentials;
+use App\Admin\Modules\Settings\Credentials;
 use App\DTO\TyroHealthTransactionDTO;
 
 if (!defined('ABSPATH')) {
