@@ -32,6 +32,7 @@ final class AccountBuilders
     public const TAB_REDIRECTS = 'redirects';
     public const TAB_EMAILS = 'emails';
     public const TAB_CUSTOM_CODE = 'custom-code';
+    public const TAB_MIGRATION = 'migration';
     public const FORMS_PATIENT_DETAILS = 'patient-details';
     public const FORMS_PATIENT_FORMS = 'patient-forms';
     public const FORMS_PATIENT_FORM_TEMPLATES = 'patient-form-templates';
@@ -44,6 +45,7 @@ final class AccountBuilders
     public static function init(): void
     {
         CustomCode::init();
+        TemplateMigration::init();
         ComponentStyles::init();
         add_action('admin_menu', [self::class, 'registerMenu']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
@@ -107,7 +109,7 @@ final class AccountBuilders
         }
 
         $tab = sanitize_key((string) ($_GET['builder_tab'] ?? self::TAB_PATIENT_FORMS));
-        if (!in_array($tab, [self::TAB_PATIENT_FORMS, self::TAB_ONBOARDING, self::TAB_BOOKING_FORMS, self::TAB_DASHBOARD_MODULES, self::TAB_COMPONENTS, self::TAB_SHORTCODES, self::TAB_REDIRECTS, self::TAB_EMAILS, self::TAB_CUSTOM_CODE], true)) {
+        if (!in_array($tab, [self::TAB_PATIENT_FORMS, self::TAB_ONBOARDING, self::TAB_BOOKING_FORMS, self::TAB_DASHBOARD_MODULES, self::TAB_COMPONENTS, self::TAB_SHORTCODES, self::TAB_REDIRECTS, self::TAB_EMAILS, self::TAB_CUSTOM_CODE, self::TAB_MIGRATION], true)) {
             $tab = self::TAB_PATIENT_FORMS;
         }
 
@@ -132,6 +134,10 @@ final class AccountBuilders
         }
         if ($tab === self::TAB_CUSTOM_CODE) {
             CustomCode::renderPage();
+            return;
+        }
+        if ($tab === self::TAB_MIGRATION) {
+            TemplateMigration::renderPage();
             return;
         }
         if ($tab === self::TAB_BOOKING_FORMS) {
@@ -200,6 +206,7 @@ final class AccountBuilders
                 self::TAB_REDIRECTS => 'Redirects',
                 self::TAB_EMAILS => 'Email Templates',
                 self::TAB_CUSTOM_CODE => 'Custom Code',
+                self::TAB_MIGRATION => 'Import / Export',
             ],
             'url' => [self::class, 'url'],
         ]);
