@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-02
+### Added
+- Added a Template Builder Import / Export screen for moving patient forms, onboarding flows, booking forms and aliases, dashboard modules, component styles, redirects, email templates, and custom-code bundles between sites using a versioned JSON file.
+- Template imports support merge and confirmed replace modes, enforce administrator permissions and nonces, accept only whitelisted Template Builder options, and exclude credentials, patient data, account settings, and uploaded-font references.
+
 ## [2.0.0] - 2026-10-01
 ### Added
 - Added an Ultimate Member-backed patient-account system with Cliniko matching/creation, one-time email verification, configurable patient roles, pending-review handling, strict login protection, and Nextend Social Login compatibility.

@@ -8,6 +8,64 @@
     overflow: hidden;
 }
 
+.cliniko-template-migration__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    max-width: 1200px;
+    margin-top: 24px;
+}
+
+.cliniko-template-migration__card {
+    max-width: none;
+    margin: 0;
+    padding: 24px;
+}
+
+.cliniko-template-migration__card h2 {
+    margin-top: 0;
+}
+
+.cliniko-template-migration__choice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid #e8eaed;
+}
+
+.cliniko-template-migration__choice:last-child {
+    border-bottom: 0;
+}
+
+.cliniko-template-migration__choice input {
+    margin-top: 3px;
+}
+
+.cliniko-template-migration__choice span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.cliniko-template-migration__choice small {
+    color: #646970;
+}
+
+.cliniko-template-migration__confirm {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 16px 0;
+    font-weight: 600;
+}
+
+@media (max-width: 900px) {
+    .cliniko-template-migration__grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .cliniko-template-builder-nav__header {
     display: flex;
     align-items: flex-end;

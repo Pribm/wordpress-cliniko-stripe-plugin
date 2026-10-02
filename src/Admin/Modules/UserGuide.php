@@ -387,6 +387,8 @@ final class UserGuide
             <p>Customise the patient verification email, account-closure confirmation, and account-closure receipt. Each template has its own message, branding, and live mobile/desktop preview. The plugin places secure verification and closure URLs on their respective buttons automatically.</p>
             <h3>Custom Code</h3>
             <p>Store small named code snippets or integration values made available by the plugin’s supported extension points. Only administrators can manage this area.</p>
+            <h3>Import / Export</h3>
+            <p>Move saved Template Builder configurations between sites with a versioned JSON bundle. Export only the groups you need, then use <strong>Merge</strong> to preserve destination-only templates or confirmed <strong>Replace</strong> mode to overwrite the groups included in the file. Credentials, patient records, patient-account settings, verification-page settings, and uploaded font files are excluded. Review page and media URLs, Cliniko IDs, and Elementor IDs on the destination site after import.</p>
 
             <h2 id="shortcodes">7. Shortcodes</h2>
             <p>Place these in a WordPress page, post, widget, or Elementor Shortcode element. Replace IDs with the IDs shown in the builder.</p>

@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `2.0.0`
+- Current plugin version: `2.1.0`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -14,13 +14,11 @@ For custom form mode, appointment scheduling can use:
 - `Next Available Time`
 - `Calendar Selection` with practitioner-aware availability
 
-## What Is New in 2.0.0
-- A complete Ultimate Member-backed patient account and verification workflow, including Nextend Social Login compatibility and protected Cliniko patient sessions.
-- Patient portal builders and shortcodes for profiles, onboarding, appointments, patient forms, attachments, communications, account closure, and patient variables.
-- Guest, authenticated-patient, and renewal booking shortcodes with saved aliases, patient-detail review, calendar controls, and Stripe or Tyro Health payments.
-- Protected patient APIs, encrypted dashboard caching, safer Cliniko attachment/custom-field handling, and explicit route authorization policies.
-- A reorganised admin experience with API Credentials, Patient Accounts, Template Builder, Patient Booking Forms, Tools, Debug, and an in-plugin User Guide.
-- Expanded responsive booking-form styling and a machine-readable OpenAPI document in [`docs/openapi.yaml`](docs/openapi.yaml).
+## What Is New in 2.1.0
+- Template Builder configurations can now be exported selectively to a versioned JSON bundle and imported on another site.
+- Migration covers patient forms, onboarding, booking forms and aliases, dashboard modules, component styles, redirects, email templates, and custom-code bundles.
+- Merge mode preserves destination-only templates, while confirmed replace mode overwrites only the groups included in the export.
+- Imports are restricted to whitelisted Template Builder data and exclude credentials, patient records, account settings, and uploaded-font references.
 
 ## Core Features
 - Shard-aware Cliniko API integration.
@@ -84,6 +82,12 @@ Version 2.0.0 adds configurable shortcode builders for:
 - Patient verification and account closure.
 
 Authenticated shortcodes resolve the linked Cliniko patient on the server. Patient identifiers and profile data are not embedded into public page configuration, and protected mutations require the appropriate WordPress session, verification state, nonce, and authorization policy.
+
+## Template Migration
+
+Open `Cliniko + Stripe -> Template Builder -> Import / Export` to download a versioned JSON bundle or import one on another site. Exports can include patient forms, onboarding, booking forms and aliases, dashboard modules, component styles, redirects, email templates, and custom-code bundles.
+
+Merge mode preserves destination-only templates and replaces matching template IDs or fields. Replace mode overwrites each group included in the file and requires explicit confirmation. Credentials, patient records, patient-account settings, verification-page settings, and uploaded font files are never included. Review destination-specific URLs and external IDs after importing.
 
 ## Elementor Widgets
 

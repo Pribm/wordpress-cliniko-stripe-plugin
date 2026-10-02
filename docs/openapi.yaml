@@ -10,7 +10,7 @@ info:
     Replace the server URL with the WordPress site URL. The WordPress REST
     base is normally `/wp-json`, so a route such as `/v2/patient/me` is
     requested from `/wp-json/v2/patient/me`.
-  version: 2.0.0
+  version: 2.1.0
 servers:
   - url: https://example.com/wp-json
     description: Replace with the WordPress REST base URL
