@@ -67,8 +67,15 @@ class CreatePatientDTO
         );
 
         $result = [];
+        // Cliniko separates address line numbers with underscores.
+        $fieldNames = [
+            'address1' => 'address_1',
+            'address2' => 'address_2',
+            'address3' => 'address_3',
+        ];
         foreach ($payload as $property => $value) {
-            $key = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $property));
+            $key = $fieldNames[$property]
+                ?? strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $property));
             $result[$key] = $value;
         }
         return $result;

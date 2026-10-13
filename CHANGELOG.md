@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-13
+### Fixed
+- Corrected patient creation payloads to send street address lines as `address_1`, `address_2`, and `address_3`, as required by Cliniko.
+
 ## [2.1.0] - 2026-10-02
 ### Added
 - Added a Template Builder Import / Export screen for moving patient forms, onboarding flows, booking forms and aliases, dashboard modules, component styles, redirects, email templates, and custom-code bundles between sites using a versioned JSON file.
