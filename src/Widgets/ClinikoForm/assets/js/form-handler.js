@@ -5615,11 +5615,11 @@ function mountForm() {
 }
 
 /**
- * Backwards compatible:
- * - Stripe calls: submitBookingForm("tok_123", errorEl)
+ * Payment callers:
+ * - Stripe calls: submitBookingForm({ gateway:"stripe" }, errorEl)
  * - Tyro calls:   submitBookingForm({ gateway:"tyrohealth", transactionId:"..." , invoiceReference?: "..." }, errorEl)
  *
- * @param {string|{gateway:'stripe', token:string}|{gateway:'tyrohealth', transactionId:string, invoiceReference?:string}|null} paymentArg
+ * @param {{gateway:'stripe'}|{gateway:'tyrohealth', transactionId:string, invoiceReference?:string}|null} paymentArg
  * @param {HTMLElement|null} errorEl
  * @param {boolean} isClinikoIframe
  * @param {{ patientBookedTime?: string|Date, attemptId?: string, attemptToken?: string }} opts
@@ -5946,14 +5946,9 @@ async function submitBookingForm(
       ? formHandlerData.headless_patient_fields
       : [];
 
-  // ---- normalize payment input (string token OR object) ----
+  // ---- normalize payment input ----
   const payment = (() => {
     if (!paymentArg) return { gateway: null };
-
-    if (typeof paymentArg === "string") {
-      // Stripe legacy call
-      return { gateway: "stripe", token: paymentArg };
-    }
 
     if (typeof paymentArg === "object" && paymentArg) {
       return paymentArg; // expected tyrohealth or stripe object
@@ -5965,13 +5960,6 @@ async function submitBookingForm(
   // ---- basic validation for tyrohealth payload (avoid silent bad submits) ----
   if (!isClinikoIframe && payment.gateway === "tyrohealth" && !payment.transactionId) {
     const msg = "Missing Tyro transactionId.";
-    if (errorEl) errorEl.textContent = msg;
-    else showToast(msg, "error");
-    return;
-  }
-
-  if (!isClinikoIframe && payment.gateway === "stripe" && !payment.token) {
-    const msg = "Missing Stripe token.";
     if (errorEl) errorEl.textContent = msg;
     else showToast(msg, "error");
     return;
@@ -6013,7 +6001,6 @@ async function submitBookingForm(
     payment: payment.gateway
       ? {
           gateway: payment.gateway,
-          ...(payment.gateway === "stripe" ? { token: payment.token || null } : {}),
           ...(payment.gateway === "tyrohealth"
             ? {
                 transactionId: payment.transactionId || null,
@@ -6022,9 +6009,6 @@ async function submitBookingForm(
             : {}),
         }
       : null,
-
-    // ✅ keep old field for Stripe backend compatibility
-    stripeToken: payment.gateway === "stripe" ? (payment.token || null) : null,
 
     // ✅ keep old Tyro fields for backend compatibility
     paymentGateway: payment.gateway === "tyrohealth" ? "tyrohealth" : null,
@@ -6134,12 +6118,41 @@ async function submitBookingForm(
         38
       );
 
+      if (!paymentResult.client_secret || typeof window.ClinikoConfirmStripePayment !== "function") {
+        handleChargeErrors(
+          { message: "Stripe payment details are unavailable. Please reload the form and try again." },
+          errorEl
+        );
+        return;
+      }
+
+      const fullName = [patient?.first_name, patient?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const confirmation = await window.ClinikoConfirmStripePayment(
+        paymentResult.client_secret,
+        {
+          ...(fullName ? { name: fullName } : {}),
+          ...(patient?.email ? { email: patient.email } : {}),
+          ...(patient?.phone ? { phone: patient.phone } : {}),
+        }
+      );
+
+      if (confirmation?.error) {
+        handleChargeErrors({ message: confirmation.error.message }, errorEl);
+        return;
+      }
+      if (confirmation?.paymentIntent?.status !== "succeeded") {
+        handleChargeErrors({ message: "Payment could not be confirmed. Please try again." }, errorEl);
+        return;
+      }
+
       const { response: chargeResponse, result: chargeResult } = await postJsonExpectJson(
         formHandlerData.booking_attempt_charge_stripe_url,
         {
           attempt_id: attemptId,
           attempt_token: attemptToken,
-          stripeToken: payment.token || null,
         },
         attemptToken
       );
