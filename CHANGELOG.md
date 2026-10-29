@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-29
+### Fixed
+- Active Stripe booking attempts now use PaymentIntents linked to a reused or created Stripe Customer, with the patient's name, contact details, and address recorded on the Customer.
+
 ## [2.1.1] - 2026-10-13
 ### Fixed
 - Corrected patient creation payloads to send street address lines as `address_1`, `address_2`, and `address_3`, as required by Cliniko.

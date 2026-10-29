@@ -77,7 +77,7 @@ The Elementor booking form's front-end code calls the `v2` booking-attempt endpo
 
 1. The route invokes [`BookingAttemptController`](../src/Controller/BookingAttemptController.php), which delegates booking operations to [`BookingAttemptService`](../src/Service/BookingAttemptService.php).
 2. Preflight sanitizes and validates the submitted patient/form data, checks the appointment type and template with Cliniko, validates practitioner and slot selection, and resolves the patient. It creates a draft patient form and stores a booking-attempt record through [`BookingAttemptStore`](../src/Service/BookingAttemptStore.php).
-3. The browser completes payment through Stripe or Tyro Health. The server verifies the payment and records its result on the attempt.
+3. For a priced Stripe attempt, preflight reuses or creates a Stripe Customer with the patient's name, email, phone, and address, then creates a PaymentIntent linked to it. Submitted guest name/address fields take precedence, with the Cliniko patient record as a fallback. The browser confirms the intent with Stripe.js; the server retrieves it, checks its status, amount, currency, customer, and attempt metadata, then records the Charge reference on the attempt. Tyro Health follows its separate provider-confirmation flow.
 4. Finalization creates the Cliniko appointment, links the patient form, updates attempt state, and emits configured booking webhooks.
 
 Booking attempts are currently stored as individual, non-autoloaded WordPress options. Attempt access uses an attempt token whose hash is stored with the record. The preflight flow also queues cleanup for unfinished attempts.
@@ -90,7 +90,7 @@ Some earlier website payment and form paths use [`SchedulingDispatchService`](..
 
 The shared Cliniko [`Client`](../src/Client/Cliniko/Client.php) uses WordPress HTTP functions and implements the plugin API-client contract. Models such as `Patient`, `AppointmentType`, and `IndividualAppointment` use that client, commonly through the shared [`AbstractModel`](../src/Core/Framework/AbstractModel.php) resource operations. DTOs handle payload mapping. [`ClinikoService`](../src/Service/ClinikoService.php) contains higher-level Cliniko operations used across features.
 
-Stripe and Tyro-specific behavior lives in payment services and controllers, including [`StripeService`](../src/Service/StripeService.php) and [`TyroHealthService`](../src/Service/TyroHealthService.php). Booking logic coordinates the gateway with the Cliniko workflow. Keep secrets and server-side verification in PHP; browser code should only handle the provider SDK flow and pass the appropriate provider token/reference back to the server.
+Stripe and Tyro-specific behavior lives in payment services and controllers, including [`StripeService`](../src/Service/StripeService.php) and [`TyroHealthService`](../src/Service/TyroHealthService.php). The active v2 attempt flow uses PaymentIntents and keeps a Stripe Customer ID mapping per Cliniko patient; appointment and patient metadata stays on the PaymentIntent. Future off-session payment setup is not enabled because the checkout does not collect that consent. The deprecated v1 `/payments/charge` compatibility endpoint still uses the older Charges API. Keep secrets and payment verification in PHP; browser code should only use the provider SDK and return to the server for verification.
 
 ## Patient accounts and authorization
 

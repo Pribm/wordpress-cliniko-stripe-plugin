@@ -680,9 +680,21 @@
         let payment = preflight.result.payment || {};
         if (payment.required && config.gateway === "stripe") {
           if (!stripeState) throw new Error("Payment is required but Stripe could not be initialized.");
-          const tokenResult = await stripeState.stripe.createToken(stripeState.card);
-          if (tokenResult.error) throw new Error(tokenResult.error.message);
-          const charged = await post(config.charge_url, { attempt_id: attemptId, stripeToken: tokenResult.token.id }, attemptToken);
+          if (!payment.client_secret) throw new Error("Stripe did not return payment details. Please try again.");
+          const patientName = [patient.first_name, patient.last_name].filter(Boolean).join(" ").trim();
+          const confirmation = await stripeState.stripe.confirmCardPayment(payment.client_secret, {
+            payment_method: {
+              card: stripeState.card,
+              billing_details: {
+                ...(patientName ? { name: patientName } : {}),
+                ...(patient.email ? { email: patient.email } : {}),
+                ...(patient.phone ? { phone: patient.phone } : {}),
+              },
+            },
+          });
+          if (confirmation.error) throw new Error(confirmation.error.message);
+          if (confirmation.paymentIntent?.status !== "succeeded") throw new Error("Payment could not be confirmed. Please try again.");
+          const charged = await post(config.charge_url, { attempt_id: attemptId }, attemptToken);
           if (!charged.response.ok || !charged.result.ok) throw new Error(charged.result.detail || charged.result.message || "Payment failed.");
           payment = charged.result.payment || payment;
         } else if (payment.required && config.gateway === "tyrohealth") {

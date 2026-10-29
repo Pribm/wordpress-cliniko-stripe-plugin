@@ -46,8 +46,7 @@ class BookingAttemptController
     {
         $body = json_decode($request->get_body(), true) ?: $request->get_params();
         $attemptId = trim((string) ($body['attempt_id'] ?? ''));
-        $stripeToken = trim((string) ($body['stripeToken'] ?? ''));
-        $result = $this->service->chargeStripe($attemptId, $stripeToken);
+        $result = $this->service->chargeStripe($attemptId);
         return new WP_REST_Response($this->withoutMeta($result), (int) ($result['status'] ?? 500));
     }
 

@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `2.1.1`
+- Current plugin version: `2.1.2`
 
 ## Overview
 This plugin supports two booking approaches:

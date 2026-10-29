@@ -625,15 +625,15 @@ class Widget extends Widget_Base
           'https://js.stripe.com/v3/',
           [],
           null,
-          ['strategy' => 'async']
+          true
         );
 
         wp_enqueue_script(
           'cliniko-stripe-js',
           plugin_dir_url(__FILE__) . 'assets/js/stripe.js',
-          ["jquery"],
+          ['jquery', 'form-handler-js', 'stripe-js'],
           $stripe_asset_version,
-          []
+          true
         );
       } elseif ($gateway === 'tyrohealth') {
         wp_enqueue_script(

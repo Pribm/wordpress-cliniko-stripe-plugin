@@ -133,13 +133,7 @@ function handlePaymentAndFormSubmission(stripe) {
     try {
       await ensureCardMounted();
 
-      const { token, error } = await stripe.createToken(stripeCardElement);
-      if (error) {
-        if (stripeErrorElement) stripeErrorElement.textContent = error.message;
-        return;
-      }
-
-      await submitBookingForm(token.id, stripeErrorElement);
+      await submitBookingForm({ gateway: "stripe" }, stripeErrorElement);
     } catch (err) {
       console.error("Payment or booking error:", err);
       if (stripeErrorElement) {
@@ -194,3 +188,12 @@ async function initStripe() {
 // payment panel after page load, so it cannot rely only on the initial load
 // watcher to mount Stripe Elements.
 window.ClinikoInitStripe = initStripe;
+window.ClinikoConfirmStripePayment = async (clientSecret, billingDetails = {}) => {
+  await ensureCardMounted();
+  return getStripe().confirmCardPayment(clientSecret, {
+    payment_method: {
+      card: stripeCardElement,
+      billing_details: billingDetails,
+    },
+  });
+};

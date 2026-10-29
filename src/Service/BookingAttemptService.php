@@ -261,7 +261,116 @@ class BookingAttemptService
             $attempt['attempt_id']
         );
 
+        $paymentClientSecret = null;
+        if ($gatewayForAttempt === 'stripe' && $amount > 0) {
+            $stripeMeta = $patient;
+            unset(
+                $stripeMeta['medicare'],
+                $stripeMeta['medicare_reference_number'],
+                $stripeMeta['medicare_mode'],
+                $stripeMeta['medicare_provider'],
+                $stripeMeta['health_identifier_number'],
+                $stripeMeta['custom_fields']
+            );
+            // Authenticated booking requests deliberately contain scheduling
+            // fields only. Prefer submitted guest identity/address values, and
+            // use the resolved Cliniko record as the fallback.
+            $patientFirstName = trim((string) ($patient['first_name'] ?? ''));
+            if ($patientFirstName === '') {
+                $patientFirstName = trim($resolvedPatient->getFirstName());
+            }
+            $patientLastName = trim((string) ($patient['last_name'] ?? ''));
+            if ($patientLastName === '') {
+                $patientLastName = trim($resolvedPatient->getLastName());
+            }
+            $patientName = trim($patientFirstName . ' ' . $patientLastName);
+            $patientEmail = trim((string) $resolvedPatient->getEmail());
+            $patientPhone = trim((string) $resolvedPatient->getPhone());
+            $addressField = static function ($submitted, $existing): string {
+                $submitted = trim((string) ($submitted ?? ''));
+                return $submitted !== '' ? $submitted : trim((string) ($existing ?? ''));
+            };
+            $customerAddress = array_filter([
+                'line1' => $addressField($patient['address_1'] ?? null, $resolvedPatient->getAddress1()),
+                'line2' => $addressField($patient['address_2'] ?? null, $resolvedPatient->getAddress2()),
+                'city' => $addressField($patient['city'] ?? null, $resolvedPatient->getCity()),
+                'state' => $addressField($patient['state'] ?? null, $resolvedPatient->getState()),
+                'postal_code' => $addressField($patient['post_code'] ?? null, $resolvedPatient->getPostCode()),
+            ], static fn (string $value): bool => $value !== '');
+            $countryCode = PatientSubmissionSanitizer::countryCode($patient['country'] ?? null)
+                ?? PatientSubmissionSanitizer::countryCode($resolvedPatient->getCountry());
+            if ($countryCode !== null) {
+                $customerAddress['country'] = $countryCode;
+            }
+
+            foreach ([
+                'first_name' => $patientFirstName,
+                'last_name' => $patientLastName,
+                'email' => $patientEmail,
+                'phone' => $patientPhone,
+            ] as $identityKey => $identityValue) {
+                if (!isset($stripeMeta[$identityKey]) || trim((string) $stripeMeta[$identityKey]) === '') {
+                    $stripeMeta[$identityKey] = $identityValue;
+                }
+            }
+            $stripeMeta['booking_attempt_id'] = (string) $attempt['attempt_id'];
+            $stripeMeta['patient_form_id'] = (string) ($attempt['patient_form_id'] ?? '');
+            $stripeMeta['module_id'] = (string) ($attempt['module_id'] ?? '');
+
+            try {
+                $intent = (new StripeService())->createPaymentIntentForPatient(
+                    (string) $attempt['patient_id'],
+                    $patientName,
+                    $patientEmail,
+                    $patientPhone,
+                    (int) $attempt['amount'],
+                    (string) ($attempt['appointment_label'] ?? ''),
+                    $stripeMeta,
+                    'cliniko-attempt-' . (string) $attempt['attempt_id'],
+                    $customerAddress
+                );
+
+                if (empty($intent->id) || empty($intent->client_secret) || empty($intent->customer)) {
+                    throw new \RuntimeException('Stripe did not return a complete PaymentIntent.');
+                }
+
+                $attempt = $this->store->update((string) $attempt['attempt_id'], [
+                    'stripe_customer_id' => (string) $intent->customer,
+                    'stripe_payment_intent_id' => (string) $intent->id,
+                    'payment' => ['payment_intent_id' => (string) $intent->id],
+                ]) ?? $attempt;
+                $paymentClientSecret = (string) $intent->client_secret;
+            } catch (\Throwable $e) {
+                Runtime::logException('booking_stripe_intent_setup_failed', $e, [
+                    'attempt_id' => (string) $attempt['attempt_id'],
+                    'amount' => (int) $attempt['amount'],
+                ]);
+                $this->store->update((string) $attempt['attempt_id'], [
+                    'status' => 'failed',
+                    'progress' => ['code' => 'payment_setup_failed', 'message' => 'Stripe payment setup failed.'],
+                    'payment' => ['status' => 'setup_failed'],
+                ]);
+
+                return $this->errorResponse(
+                    503,
+                    'Payment could not be set up. Please try again.',
+                    ['code' => 'stripe_payment_setup_failed']
+                );
+            }
+        }
+
         $this->webhooks()->queue('booking.preflighted', $attempt);
+
+        $paymentResponse = [
+            'required' => $amount > 0,
+            'gateway' => $gatewayForAttempt,
+            'amount' => $amount,
+            'currency' => 'aud',
+            'invoice_reference' => $invoiceReference,
+        ];
+        if ($paymentClientSecret !== null) {
+            $paymentResponse['client_secret'] = $paymentClientSecret;
+        }
 
         return [
             'ok' => true,
@@ -271,13 +380,7 @@ class BookingAttemptService
                 'status' => $attempt['status'],
                 'token' => $attemptToken,
             ],
-            'payment' => [
-                'required' => $amount > 0,
-                'gateway' => $gatewayForAttempt,
-                'amount' => $amount,
-                'currency' => 'aud',
-                'invoice_reference' => $invoiceReference,
-            ],
+            'payment' => $paymentResponse,
             'booking' => [
                 'appointment_label' => (string) $apptType->getName(),
                 'patient_form_id' => (string) $patientForm->getId(),
@@ -409,7 +512,7 @@ class BookingAttemptService
     /**
      * @return array<string,mixed>
      */
-    public function chargeStripe(string $attemptId, string $stripeToken): array
+    public function chargeStripe(string $attemptId): array
     {
         $attempt = $this->store->get($attemptId);
         if (!$attempt) {
@@ -424,25 +527,16 @@ class BookingAttemptService
             return ['ok' => false, 'status' => 422, 'message' => 'This booking attempt does not require payment.'];
         }
 
-        if (!preg_match('/^(tok_|pm_)/', $stripeToken)) {
-            return ['ok' => false, 'status' => 422, 'message' => 'Invalid payment token.'];
+        $paymentIntentId = trim((string) ($attempt['stripe_payment_intent_id'] ?? ''));
+        $customerId = trim((string) ($attempt['stripe_customer_id'] ?? ''));
+        if ($paymentIntentId === '' || $customerId === '') {
+            return ['ok' => false, 'status' => 409, 'message' => 'Stripe payment setup is missing for this attempt.'];
         }
 
-        $patient = is_array($attempt['patient'] ?? null) ? $attempt['patient'] : [];
-        $stripeMeta = $patient;
-        unset($stripeMeta['medicare'], $stripeMeta['medicare_reference_number'], $stripeMeta['medicare_mode'], $stripeMeta['medicare_provider'], $stripeMeta['health_identifier_number'], $stripeMeta['custom_fields']);
-        $stripeMeta['booking_attempt_id'] = $attemptId;
-        $stripeMeta['patient_form_id'] = (string) ($attempt['patient_form_id'] ?? '');
-        $stripeMeta['module_id'] = (string) ($attempt['module_id'] ?? '');
-
         try {
-            $charge = (new StripeService())->createChargeFromToken(
-                $stripeToken,
-                (int) $attempt['amount'],
-                (string) ($attempt['appointment_label'] ?? ''),
-                $stripeMeta,
-                (string) ($patient['email'] ?? '')
-            );
+            $stripe = new StripeService();
+            $intent = $stripe->retrievePaymentIntent($paymentIntentId);
+            $charge = $this->stripeChargeForAttempt($attempt, $stripe, $intent);
         } catch (\Throwable $e) {
             Runtime::logException('booking_stripe_payment_failed', $e, [
                 'attempt_id' => $attemptId,
@@ -456,20 +550,11 @@ class BookingAttemptService
             ];
         }
 
-        if (empty($charge->id)) {
-            return ['ok' => false, 'status' => 402, 'message' => 'Payment failed.'];
+        if (!$charge) {
+            return ['ok' => false, 'status' => 402, 'message' => 'Payment could not be verified. Please try again.'];
         }
 
-        $payment = [
-            'status' => 'verified',
-            'gateway' => 'stripe',
-            'reference' => (string) $charge->id,
-            'receipt_url' => $charge->receipt_url ?? null,
-            'amount' => (int) $attempt['amount'],
-            'currency' => (string) ($attempt['currency'] ?? 'aud'),
-            'card_last4' => $charge->payment_method_details->card->last4 ?? null,
-            'brand' => $charge->payment_method_details->card->brand ?? null,
-        ];
+        $payment = $this->stripePaymentRecord($attempt, $paymentIntentId, $charge);
 
         $updatedAttempt = $this->store->update($attemptId, [
             'status' => 'paid',
@@ -482,6 +567,61 @@ class BookingAttemptService
         }
 
         return ['ok' => true, 'status' => 200, 'payment' => $payment];
+    }
+
+    /** @return object|null The Charge only when its PaymentIntent matches this attempt. */
+    private function stripeChargeForAttempt(array $attempt, StripeService $stripe, object $intent): ?object
+    {
+        $attemptId = (string) ($attempt['attempt_id'] ?? '');
+        $paymentIntentId = (string) ($attempt['stripe_payment_intent_id'] ?? '');
+        $customerId = (string) ($attempt['stripe_customer_id'] ?? '');
+        $intentCustomer = $intent->customer ?? '';
+        if (is_object($intentCustomer)) {
+            $intentCustomer = (string) ($intentCustomer->id ?? '');
+        }
+
+        $intentMetadata = $intent->metadata ?? null;
+        $metadataAttemptId = is_object($intentMetadata)
+            ? (string) ($intentMetadata->booking_attempt_id ?? '')
+            : (string) (is_array($intentMetadata) ? ($intentMetadata['booking_attempt_id'] ?? '') : '');
+
+        if (
+            $attemptId === ''
+            || $paymentIntentId === ''
+            || $customerId === ''
+            || (string) ($intent->id ?? '') !== $paymentIntentId
+            || (string) ($intent->status ?? '') !== 'succeeded'
+            || (int) ($intent->amount ?? 0) !== (int) ($attempt['amount'] ?? 0)
+            || (int) ($intent->amount_received ?? 0) !== (int) ($attempt['amount'] ?? 0)
+            || strtolower((string) ($intent->currency ?? '')) !== strtolower((string) ($attempt['currency'] ?? 'aud'))
+            || !hash_equals($customerId, (string) $intentCustomer)
+            || !hash_equals($attemptId, $metadataAttemptId)
+        ) {
+            return null;
+        }
+
+        $charge = $intent->latest_charge ?? null;
+        if (is_string($charge) && $charge !== '') {
+            $charge = $stripe->retrieveCharge($charge);
+        }
+
+        return is_object($charge) && !empty($charge->id) ? $charge : null;
+    }
+
+    /** @return array<string,mixed> */
+    private function stripePaymentRecord(array $attempt, string $paymentIntentId, object $charge): array
+    {
+        return [
+            'status' => 'verified',
+            'gateway' => 'stripe',
+            'reference' => (string) $charge->id,
+            'payment_intent_id' => $paymentIntentId,
+            'receipt_url' => $charge->receipt_url ?? null,
+            'amount' => (int) ($attempt['amount'] ?? 0),
+            'currency' => (string) ($attempt['currency'] ?? 'aud'),
+            'card_last4' => $charge->payment_method_details->card->last4 ?? null,
+            'brand' => $charge->payment_method_details->card->brand ?? null,
+        ];
     }
 
     /**
@@ -769,6 +909,58 @@ class BookingAttemptService
         $paymentRef = trim((string) ($payment['reference'] ?? ''));
         $refundStatus = null;
 
+        if (
+            $paymentGateway === 'stripe'
+            && $paymentStatus !== 'verified'
+            && !empty($attempt['stripe_payment_intent_id'])
+        ) {
+            try {
+                $stripe = new StripeService();
+                $intent = $stripe->retrievePaymentIntent((string) $attempt['stripe_payment_intent_id']);
+                $intentStatus = (string) ($intent->status ?? '');
+
+                if ($intentStatus === 'succeeded') {
+                    $charge = $this->stripeChargeForAttempt($attempt, $stripe, $intent);
+                    if (!$charge) {
+                        $this->store->update($attemptId, [
+                            'status' => 'payment_review',
+                            'progress' => ['code' => 'stripe_payment_review', 'message' => 'Payment needs review before cleanup.'],
+                            'cleanup' => ['payment_review_required' => true],
+                        ]);
+                        Runtime::logEvent([
+                            'event' => 'abandoned_stripe_payment_mismatch',
+                            'attempt_id' => $attemptId,
+                            'payment_intent_id' => (string) ($intent->id ?? ''),
+                        ]);
+                        return;
+                    }
+
+                    $paymentRef = (string) $charge->id;
+                    $paymentStatus = 'verified';
+                    $payment = $this->stripePaymentRecord($attempt, (string) $intent->id, $charge);
+                    $attempt = $this->store->update($attemptId, [
+                        'status' => 'paid',
+                        'payment' => $payment,
+                    ]) ?? $attempt;
+                } elseif ($intentStatus === 'processing') {
+                    $this->retryStripeCleanup($attemptId, $attempt);
+                    return;
+                } elseif (in_array($intentStatus, ['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture'], true)) {
+                    $stripe->cancelPaymentIntent((string) $intent->id);
+                } elseif ($intentStatus !== 'canceled') {
+                    $this->retryStripeCleanup($attemptId, $attempt);
+                    return;
+                }
+            } catch (\Throwable $e) {
+                Runtime::logException('abandoned_stripe_payment_recheck_failed', $e, [
+                    'attempt_id' => $attemptId,
+                    'payment_intent_id' => (string) ($attempt['stripe_payment_intent_id'] ?? ''),
+                ]);
+                $this->retryStripeCleanup($attemptId, $attempt);
+                return;
+            }
+        }
+
         if ($paymentStatus === 'verified' && $paymentGateway === 'stripe' && $paymentRef !== '') {
             try {
                 (new StripeService())->refundCharge(
@@ -808,6 +1000,34 @@ class BookingAttemptService
                 'cleaned_at' => gmdate(DATE_ATOM),
             ],
         ]);
+    }
+
+    /** Retry cleanup rather than archive records while Stripe cannot confirm payment state. */
+    private function retryStripeCleanup(string $attemptId, array $attempt): void
+    {
+        $retryCount = (int) ($attempt['cleanup']['stripe_recheck_count'] ?? 0) + 1;
+        if ($retryCount > 12) {
+            $this->store->update($attemptId, [
+                'status' => 'payment_review',
+                'progress' => ['code' => 'stripe_payment_review', 'message' => 'Payment needs review before cleanup.'],
+                'cleanup' => [
+                    'stripe_recheck_count' => $retryCount,
+                    'payment_review_required' => true,
+                ],
+            ]);
+            return;
+        }
+
+        $this->store->update($attemptId, [
+            'progress' => ['code' => 'stripe_payment_recheck', 'message' => 'Checking payment status before cleanup.'],
+            'cleanup' => ['stripe_recheck_count' => $retryCount],
+        ]);
+        (new \App\Infra\JobDispatcher())->enqueue(
+            'cliniko_cleanup_booking_attempt',
+            ['attempt_id' => $attemptId],
+            300,
+            'stripe-cleanup-' . $attemptId . '-' . $retryCount
+        );
     }
 
     /**
