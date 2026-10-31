@@ -4,6 +4,7 @@ namespace App\Admin;
 
 use App\Admin\Modules\AccountBuilders\AccountBuilders;
 use App\Admin\Modules\Settings\Credentials;
+use App\Admin\Modules\ApiAccess\ApiAccess;
 use App\Admin\Modules\Debug;
 use App\Admin\Modules\Integrations\ElementorTemplateSync;
 use App\Admin\Modules\AccountBuilders\Forms\PatientAccountForms;
@@ -65,9 +66,11 @@ class PluginFacade
             WebhookDeliveryWorker::register();
         });
 
+        AdminWorkspace::init();
         ElementorTemplateSync::init();
         Settings::init();
         Credentials::init();
+        ApiAccess::init();
         AccountBuilders::init();
         ShortcodeCatalog::init();
         PatientAccountForms::init();

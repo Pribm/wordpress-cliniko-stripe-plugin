@@ -2,6 +2,7 @@
 
 namespace App\Admin\Modules;
 
+use App\Admin\AdminWorkspace;
 use App\Service\PatientLinkService;
 use App\Service\PatientVerificationEmailTemplate;
 
@@ -45,7 +46,7 @@ final class UserGuide
         wp_enqueue_style(
             'cliniko-user-guide-admin',
             plugins_url('../assets/user-guide-admin.css', __FILE__),
-            [],
+            ['cliniko-admin-pages'],
             is_file($stylePath) ? (string) filemtime($stylePath) : null
         );
         wp_enqueue_script(
@@ -81,12 +82,13 @@ final class UserGuide
         $setupProgress = $setupSteps !== []
             ? (int) round(($completedSteps / count($setupSteps)) * 100)
             : 0;
+        AdminWorkspace::begin(self::PAGE, 'Getting started', 'Follow the setup journey and find guidance for each part of your patient portal.');
         ?>
-        <div class="wrap cliniko-user-guide">
+        <div class="cliniko-admin-page cliniko-user-guide">
             <header class="cliniko-docs-hero" id="cliniko-docs-top">
                 <div class="cliniko-docs-hero__copy">
                     <span class="cliniko-docs-eyebrow">EasyScripts documentation<?php echo $version !== '' ? ' / v' . esc_html($version) : ''; ?></span>
-                    <h1>Getting Started with Cliniko + Stripe</h1>
+                    <h2>Getting Started with Cliniko + Stripe</h2>
                     <p>Follow the setup journey, then use the documentation to build patient accounts, social login, bookings, payments, and dashboard modules.</p>
                 </div>
                 <nav class="cliniko-docs-quick-links" aria-label="Quick documentation links">
@@ -388,7 +390,7 @@ final class UserGuide
             <h3>Custom Code</h3>
             <p>Store small named code snippets or integration values made available by the plugin’s supported extension points. Only administrators can manage this area.</p>
             <h3>Import / Export</h3>
-            <p>Move saved Template Builder configurations between sites with a versioned JSON bundle. Export only the groups you need, then use <strong>Merge</strong> to preserve destination-only templates or confirmed <strong>Replace</strong> mode to overwrite the groups included in the file. Credentials, patient records, patient-account settings, verification-page settings, and uploaded font files are excluded. Review page and media URLs, Cliniko IDs, and Elementor IDs on the destination site after import.</p>
+            <p>Move saved Template Builder configurations between sites with a versioned JSON bundle. Export only the groups you need, then use <strong>Merge</strong> to preserve destination-only templates or confirmed <strong>Replace</strong> mode to overwrite the groups included in the file. When local-development URLs are detected, the import pauses before saving and asks whether to update them to the current site URL (or another HTTP/HTTPS destination) or keep them unchanged. Paths, queries, and fragments are preserved. Credentials, patient records, patient-account settings, verification-page settings, and uploaded font files are excluded. Review other page and media URLs, Cliniko IDs, and Elementor IDs on the destination site after import.</p>
 
             <h2 id="shortcodes">7. Shortcodes</h2>
             <p>Place these in a WordPress page, post, widget, or Elementor Shortcode element. Replace IDs with the IDs shown in the builder.</p>
@@ -497,6 +499,7 @@ final class UserGuide
             </div>
         </div>
         <?php
+        AdminWorkspace::end();
     }
 
     /**

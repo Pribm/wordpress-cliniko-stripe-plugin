@@ -31,7 +31,7 @@ class PatientAccessService
     ) {
         $this->notifications = $notifications ?: new NotificationService();
         $this->tokens = $tokens ?: new PatientAccessTokenService();
-        $this->requestStates = $requestStates ?: new PatientAccessRequestStateService($this->tokens);
+        $this->requestStates = $requestStates ?: new PatientAccessRequestStateService();
         $this->requestLookupCache = $requestLookupCache ?: new PatientAccessRequestLookupCacheService($this->tokens);
     }
 
@@ -44,8 +44,7 @@ class PatientAccessService
         $email = $this->tokens->normalizeEmail((string) ($body['email'] ?? ''));
         $appointmentTypeId = trim((string) ($body['appointment_type_id'] ?? $body['module_id'] ?? ''));
         $returnUrl = trim((string) ($body['return_url'] ?? ''));
-        $rawRequestId = trim((string) ($body['request_id'] ?? ''));
-        $requestId = $rawRequestId !== '' ? $this->requestStates->normalizeRequestId($rawRequestId) : '';
+        // Caller-selected correlation IDs must never receive patient bearer tokens.
 
         if ($email === '' || (function_exists('is_email') && !is_email($email))) {
             return [
@@ -60,14 +59,6 @@ class PatientAccessService
                 'ok' => false,
                 'status' => 422,
                 'message' => 'Appointment type is required.',
-            ];
-        }
-
-        if ($rawRequestId !== '' && $requestId === '') {
-            return [
-                'ok' => false,
-                'status' => 422,
-                'message' => 'Invalid patient access request. Reload the page and try again.',
             ];
         }
 
@@ -115,8 +106,7 @@ class PatientAccessService
         $magicLink = '';
         $requestStateId = '';
         if ($accessToken !== '') {
-            $linkParams = $requestId !== '' ? ['request_id' => $requestId] : [];
-            $magicLink = $this->tokens->buildMagicHashLink($returnUrl, $accessToken, $linkParams);
+            $magicLink = $this->tokens->buildMagicHashLink($returnUrl, $accessToken);
         }
 
         $ttlSeconds = max(1, (int) $challenge['expires_in']);
@@ -145,10 +135,6 @@ class PatientAccessService
                 'status' => 502,
                 'message' => 'We could not send the verification email.',
             ];
-        }
-
-        if ($requestId !== '' && $magicLink !== '' && $this->requestStates->start($requestId, $this->tokens->ttl())) {
-            $requestStateId = $requestId;
         }
 
         return [

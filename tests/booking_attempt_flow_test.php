@@ -509,6 +509,9 @@ function run_test(string $name, callable $test): bool
     }
 }
 
+// Allow focused API tests to reuse these synthetic Cliniko fixtures without running this suite.
+if (defined('CLINIKO_BOOKING_TEST_BOOTSTRAP_ONLY')) return;
+
 $tests = [
     'preflight_creates_attempt_and_finalize_attaches_form' => 'test_preflight_creates_attempt_and_finalize_attaches_form',
     'preflight_maps_headless_custom_fields_into_cliniko_payload' => 'test_preflight_maps_headless_custom_fields_into_cliniko_payload',

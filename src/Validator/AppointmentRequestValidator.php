@@ -117,7 +117,7 @@ class AppointmentRequestValidator
         }
     }
 
-    public static function validate($payload, bool $validateContent = true): array
+    public static function validate($payload, bool $validateContent = true, bool $authenticatedPatient = false): array
     {
         $errors = [];
 
@@ -187,66 +187,82 @@ class AppointmentRequestValidator
             }
 
             // --- Medicare fields ---
-            $medicareMode = self::normalizeMedicareMode(
-                $patient['medicare_mode'] ?? ($patient['has_medicare'] ?? null),
-                $patient
-            );
+            // Website/guest flows retain the historic Medicare rules. For a
+            // verified account booking, identity and profile data come from
+            // the linked Cliniko patient and the API payload is deliberately
+            // not allowed to provide these fields. Do not turn an absent
+            // optional Medicare profile into a booking error. If the clinic
+            // requires profile fields, the API onboarding gate enforces that
+            // requirement before this validator runs.
+            $hasExplicitMedicareMode = array_key_exists('medicare_mode', $patient)
+                || array_key_exists('has_medicare', $patient);
+            $hasMedicareData = self::normalizeString($patient['medicare'] ?? '') !== ''
+                || self::normalizeString($patient['medicare_reference_number'] ?? '') !== ''
+                || self::normalizeString($patient['medicare_provider'] ?? '') !== ''
+                || self::normalizeString($patient['health_identifier_number'] ?? '') !== '';
 
-            if ($medicareMode === self::MEDICARE_MODE_NONE) {
-                if (!array_key_exists('medicare_provider', $patient) || self::normalizeString($patient['medicare_provider']) === '') {
-                    $errors[] = self::makeError(
-                        'patient.medicare_provider',
-                        'Medicare Provider',
-                        'required',
-                        'Medicare provider is required.'
-                    );
-                }
+            if (!$authenticatedPatient || $hasExplicitMedicareMode || $hasMedicareData) {
+                $medicareMode = self::normalizeMedicareMode(
+                    $patient['medicare_mode'] ?? ($patient['has_medicare'] ?? null),
+                    $patient
+                );
 
-                if (!array_key_exists('health_identifier_number', $patient)
-                    || self::normalizeString($patient['health_identifier_number']) === '') {
-                    $errors[] = self::makeError(
-                        'patient.health_identifier_number',
-                        'Health Identifier Number',
-                        'required',
-                        'Health Identifier Number is required.'
-                    );
-                }
-            } else {
-                $medicare = array_key_exists('medicare', $patient) ? (string) $patient['medicare'] : '';
-
-                if ($medicare === '') {
-                    $errors[] = self::makeError('patient.medicare', 'Medicare', 'required', 'Medicare number is required.');
-                } else {
-                    $medicareValid = self::isValidMedicareNumber($medicare);
-                    if (!$medicareValid) {
+                if ($medicareMode === self::MEDICARE_MODE_NONE) {
+                    if (!array_key_exists('medicare_provider', $patient) || self::normalizeString($patient['medicare_provider']) === '') {
                         $errors[] = self::makeError(
-                            'patient.medicare',
-                            'Medicare',
-                            'invalid',
-                            'Medicare must be 10 digits in Cliniko format (e.g. 1234 56789 0).'
+                            'patient.medicare_provider',
+                            'Medicare Provider',
+                            'required',
+                            'Medicare provider is required.'
                         );
                     }
-                }
 
-                if (!array_key_exists('medicare_reference_number', $patient)
-                    || $patient['medicare_reference_number'] === ''
-                    || $patient['medicare_reference_number'] === null) {
-                    $errors[] = self::makeError(
-                        'patient.medicare_reference_number',
-                        'Medicare Reference Number',
-                        'required',
-                        'Medicare reference number is required.'
-                    );
+                    if (!array_key_exists('health_identifier_number', $patient)
+                        || self::normalizeString($patient['health_identifier_number']) === '') {
+                        $errors[] = self::makeError(
+                            'patient.health_identifier_number',
+                            'Health Identifier Number',
+                            'required',
+                            'Health Identifier Number is required.'
+                        );
+                    }
                 } else {
-                    $ref = (string)$patient['medicare_reference_number'];
-                    $refValid = Validator::regex('/^\d$/')->validate($ref);
-                    if (!$refValid) {
+                    $medicare = array_key_exists('medicare', $patient) ? (string) $patient['medicare'] : '';
+
+                    if ($medicare === '') {
+                        $errors[] = self::makeError('patient.medicare', 'Medicare', 'required', 'Medicare number is required.');
+                    } else {
+                        $medicareValid = self::isValidMedicareNumber($medicare);
+                        if (!$medicareValid) {
+                            $errors[] = self::makeError(
+                                'patient.medicare',
+                                'Medicare',
+                                'invalid',
+                                'Medicare must be 10 digits in Cliniko format (e.g. 1234 56789 0).'
+                            );
+                        }
+                    }
+
+                    if (!array_key_exists('medicare_reference_number', $patient)
+                        || $patient['medicare_reference_number'] === ''
+                        || $patient['medicare_reference_number'] === null) {
                         $errors[] = self::makeError(
                             'patient.medicare_reference_number',
                             'Medicare Reference Number',
-                            'invalid',
-                            'Medicare reference number must be a single digit between 0 and 9.'
+                            'required',
+                            'Medicare reference number is required.'
                         );
+                    } else {
+                        $ref = (string)$patient['medicare_reference_number'];
+                        $refValid = Validator::regex('/^\d$/')->validate($ref);
+                        if (!$refValid) {
+                            $errors[] = self::makeError(
+                                'patient.medicare_reference_number',
+                                'Medicare Reference Number',
+                                'invalid',
+                                'Medicare reference number must be a single digit between 0 and 9.'
+                            );
+                        }
                     }
                 }
             }

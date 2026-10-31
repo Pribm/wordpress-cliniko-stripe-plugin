@@ -1,13 +1,13 @@
 .cliniko-user-guide {
-    --docs-accent: #2563eb;
-    --docs-accent-dark: #1d4ed8;
-    --docs-ink: #172033;
-    --docs-muted: #596579;
-    --docs-border: #dfe5ee;
+    --docs-accent: var(--cliniko-admin-accent);
+    --docs-accent-dark: var(--cliniko-admin-link);
+    --docs-ink: var(--cliniko-admin-ink);
+    --docs-muted: var(--cliniko-admin-muted);
+    --docs-border: var(--cliniko-admin-line);
     --docs-surface: #fff;
-    --docs-soft: #f5f7fb;
-    max-width: 1440px;
-    margin: 20px 24px 40px 2px;
+    --docs-soft: var(--cliniko-admin-surface);
+    min-width: 0;
+    margin: 0;
     color: var(--docs-ink);
 }
 
@@ -17,33 +17,32 @@
     justify-content: space-between;
     gap: 32px;
     overflow: hidden;
-    padding: 36px 40px;
-    border-radius: 16px;
-    color: #fff;
-    background:
-        radial-gradient(circle at 88% 18%, rgba(125, 211, 252, .32), transparent 26%),
-        linear-gradient(135deg, #172554 0%, #1d4ed8 58%, #0284c7 100%);
-    box-shadow: 0 16px 38px rgba(30, 64, 175, .18);
+    padding: 24px;
+    border: 1px solid var(--docs-border);
+    border-radius: 8px;
+    color: var(--docs-ink);
+    background: var(--docs-surface);
 }
 
 .cliniko-docs-hero__copy {
     max-width: 760px;
+    min-width: 0;
 }
 
 .cliniko-docs-eyebrow {
     display: block;
     margin-bottom: 10px;
-    color: #bfdbfe;
+    color: var(--docs-muted);
     font-size: 12px;
     font-weight: 700;
     letter-spacing: .12em;
     text-transform: uppercase;
 }
 
-.cliniko-docs-hero h1 {
+.cliniko-docs-hero h2 {
     margin: 0;
-    color: #fff;
-    font-size: clamp(30px, 4vw, 44px);
+    color: var(--docs-ink);
+    font-size: 24px;
     font-weight: 700;
     line-height: 1.12;
 }
@@ -51,7 +50,7 @@
 .cliniko-docs-hero p {
     max-width: 720px;
     margin: 14px 0 0;
-    color: #dbeafe;
+    color: var(--docs-muted);
     font-size: 16px;
     line-height: 1.65;
 }
@@ -69,19 +68,19 @@
     justify-content: space-between;
     gap: 24px;
     padding: 11px 14px;
-    border: 1px solid rgba(255, 255, 255, .25);
+    border: 1px solid var(--docs-border);
     border-radius: 9px;
-    color: #fff;
-    background: rgba(255, 255, 255, .1);
+    color: var(--docs-accent-dark);
+    background: var(--docs-soft);
     text-decoration: none;
     transition: background .15s ease, border-color .15s ease, transform .15s ease;
 }
 
 .cliniko-docs-quick-links a:hover,
 .cliniko-docs-quick-links a:focus {
-    border-color: rgba(255, 255, 255, .55);
-    color: #fff;
-    background: rgba(255, 255, 255, .18);
+    border-color: var(--cliniko-admin-accent-border);
+    color: var(--docs-accent-dark);
+    background: var(--cliniko-admin-accent-soft);
     transform: translateY(-1px);
 }
 
@@ -89,9 +88,9 @@
     margin-top: 24px;
     padding: 28px;
     border: 1px solid var(--docs-border);
-    border-radius: 14px;
+    border-radius: 8px;
     background: var(--docs-surface);
-    box-shadow: 0 4px 18px rgba(15, 23, 42, .045);
+    box-shadow: 0 1px 3px rgb(37 37 60 / 3%);
 }
 
 .cliniko-setup-flow__header {
@@ -110,7 +109,7 @@
 .cliniko-setup-flow h2 {
     margin: 0;
     color: var(--docs-ink);
-    font-size: 25px;
+    font-size: 20px;
     line-height: 1.25;
 }
 
@@ -143,14 +142,14 @@
     margin-top: 9px;
     overflow: hidden;
     border-radius: 999px;
-    background: #e5eaf1;
+    background: var(--docs-border);
 }
 
 .cliniko-setup-progress__track span {
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: linear-gradient(90deg, #2563eb, #0ea5e9);
+    background: var(--docs-accent);
     transition: width .25s ease;
 }
 
@@ -170,9 +169,9 @@
     gap: 16px;
     margin: 0;
     padding: 20px;
-    border: 1px solid #e1e7ef;
+    border: 1px solid var(--docs-border);
     border-radius: 11px;
-    background: #f8fafc;
+    background: var(--docs-soft);
 }
 
 .cliniko-setup-step.is-complete {
@@ -233,7 +232,7 @@
 
 .cliniko-setup-step h3 {
     margin: 5px 0 0;
-    color: #24324a;
+    color: var(--docs-ink);
     font-size: 17px;
     line-height: 1.35;
 }
@@ -247,7 +246,7 @@
 
 .cliniko-setup-step h4 {
     margin: 18px 0 8px;
-    color: #475569;
+    color: var(--docs-muted);
     font-size: 11px;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -301,13 +300,13 @@
 }
 
 .cliniko-setup-check__copy strong {
-    color: #26344b;
+    color: var(--docs-ink);
     font-size: 12px;
     line-height: 1.45;
 }
 
 .cliniko-setup-check__copy > span {
-    color: #64748b;
+    color: var(--docs-muted);
     font-size: 11px;
     line-height: 1.5;
 }
@@ -332,9 +331,9 @@
     align-items: flex-start;
     margin-top: 12px;
     padding: 10px 12px;
-    border-left: 3px solid #60a5fa;
-    color: #334155;
-    background: #eff6ff;
+    border-left: 3px solid var(--docs-accent);
+    color: var(--docs-ink);
+    background: var(--cliniko-admin-accent-soft);
     font-size: 11px;
     line-height: 1.55;
 }
@@ -343,7 +342,7 @@
     flex: 0 0 17px;
     width: 17px;
     height: 17px;
-    color: #2563eb;
+    color: var(--docs-accent);
     font-size: 17px;
 }
 
@@ -361,23 +360,21 @@
 
 .cliniko-docs-layout {
     display: grid;
-    grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 24px;
     align-items: start;
     margin-top: 24px;
 }
 
 .cliniko-docs-sidebar {
-    position: sticky;
-    top: 48px;
-    max-height: calc(100vh - 72px);
+    position: static;
     overflow: auto;
     box-sizing: border-box;
     padding: 18px;
     border: 1px solid var(--docs-border);
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--docs-surface);
-    box-shadow: 0 3px 14px rgba(15, 23, 42, .045);
+    box-shadow: none;
 }
 
 .cliniko-docs-search {
@@ -393,7 +390,7 @@
     width: 18px;
     height: 18px;
     margin-top: -9px;
-    color: #6b7280;
+    color: var(--docs-muted);
     font-size: 18px;
     pointer-events: none;
 }
@@ -402,9 +399,9 @@
     width: 100%;
     min-height: 40px;
     padding: 7px 10px 7px 36px;
-    border-color: #cbd5e1;
+    border-color: var(--docs-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--docs-soft);
 }
 
 .cliniko-docs-search input[type="search"]:focus {
@@ -413,16 +410,18 @@
     box-shadow: 0 0 0 1px var(--docs-accent);
 }
 
-.cliniko-docs-nav__group + .cliniko-docs-nav__group {
-    margin-top: 20px;
-    padding-top: 18px;
-    border-top: 1px solid #edf0f5;
+.cliniko-docs-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
 }
+
+.cliniko-docs-nav__group { min-width: 0; }
 
 .cliniko-docs-nav__group > strong {
     display: block;
     margin: 0 10px 7px;
-    color: #8993a3;
+    color: var(--docs-muted);
     font-size: 10px;
     letter-spacing: .1em;
     text-transform: uppercase;
@@ -434,7 +433,7 @@
     margin: 2px 0;
     padding: 7px 10px;
     border-radius: 7px;
-    color: #425066;
+    color: var(--docs-ink);
     font-size: 13px;
     line-height: 1.35;
     text-decoration: none;
@@ -444,12 +443,12 @@
 .cliniko-docs-nav a:hover,
 .cliniko-docs-nav a:focus {
     color: var(--docs-accent-dark);
-    background: #eff6ff;
+    background: var(--cliniko-admin-accent-soft);
 }
 
 .cliniko-docs-nav a.is-active {
-    color: var(--docs-accent-dark);
-    background: #dbeafe;
+    color: var(--cliniko-admin-highlight);
+    background: var(--cliniko-admin-accent-soft);
     font-weight: 600;
 }
 
@@ -471,9 +470,9 @@
 .cliniko-docs-section {
     box-sizing: border-box;
     margin: 0 0 20px;
-    padding: 30px 34px;
+    padding: 24px;
     border: 1px solid var(--docs-border);
-    border-radius: 13px;
+    border-radius: 8px;
     background: var(--docs-surface);
     box-shadow: 0 4px 18px rgba(15, 23, 42, .045);
     scroll-margin-top: 48px;
@@ -489,7 +488,7 @@
     gap: 9px;
     margin: 0 0 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid #e9edf3;
+    border-bottom: 1px solid var(--docs-border);
     color: var(--docs-ink);
     font-size: 25px;
     line-height: 1.25;
@@ -512,7 +511,7 @@
 
 .cliniko-docs-section h3 {
     margin: 28px 0 10px;
-    color: #24324a;
+    color: var(--docs-ink);
     font-size: 17px;
     line-height: 1.4;
 }
@@ -557,10 +556,10 @@
 
 .cliniko-docs-section code {
     padding: 2px 6px;
-    border: 1px solid #dbe3ef;
+    border: 1px solid var(--docs-border);
     border-radius: 5px;
-    color: #24446f;
-    background: #f1f5f9;
+    color: var(--docs-ink);
+    background: var(--docs-soft);
     font-size: 12px;
 }
 
@@ -582,8 +581,8 @@
 }
 
 .cliniko-docs-section table.widefat th {
-    color: #334155;
-    background: #f8fafc;
+    color: var(--docs-ink);
+    background: var(--docs-soft);
 }
 
 .cliniko-docs-section table.widefat th,
@@ -593,10 +592,10 @@
 }
 
 .cliniko-docs-empty {
-    margin: 24px 0 0 294px;
+    margin: 24px 0 0;
     padding: 64px 24px;
-    border: 1px dashed #cbd5e1;
-    border-radius: 12px;
+    border: 1px dashed var(--docs-border);
+    border-radius: 8px;
     color: var(--docs-muted);
     background: #fff;
     text-align: center;
@@ -631,6 +630,8 @@
         margin-top: 24px;
     }
 
+    .cliniko-setup-checks { grid-template-columns: 1fr; }
+
     .cliniko-setup-step__heading {
         grid-template-columns: 1fr;
         gap: 8px;
@@ -638,9 +639,6 @@
 }
 
 @media (max-width: 900px) {
-    .cliniko-user-guide {
-        margin-right: 12px;
-    }
 
     .cliniko-docs-layout {
         grid-template-columns: 1fr;
@@ -670,7 +668,7 @@
 
 @media (max-width: 600px) {
     .cliniko-docs-hero {
-        padding: 28px 22px;
+        padding: 18px 14px;
     }
 
     .cliniko-docs-quick-links,
@@ -681,6 +679,8 @@
     .cliniko-setup-flow {
         padding: 22px 18px;
     }
+
+    .cliniko-docs-quick-links { min-width: 0; }
 
     .cliniko-setup-flow__header {
         display: block;
@@ -716,7 +716,7 @@
     }
 
     .cliniko-docs-section {
-        padding: 24px 20px;
+        padding: 18px 14px;
     }
 
     .cliniko-docs-section > h2 {
@@ -743,7 +743,7 @@
         box-shadow: none;
     }
 
-    .cliniko-docs-hero h1,
+    .cliniko-docs-hero h2,
     .cliniko-docs-hero p,
     .cliniko-docs-eyebrow {
         color: #000;

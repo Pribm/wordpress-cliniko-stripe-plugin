@@ -38,6 +38,7 @@ class PatientService
     private const OPTION_ALLOW_FAILURE = 'wp_cliniko_patient_allow_user_without_sync';
     private const OPTION_PRIVACY_META_KEY = 'wp_cliniko_patient_privacy_meta_key';
     private const OPTION_STRICT_ROLE = 'wp_cliniko_patient_strict_role';
+    private static int $registrationSyncDeferrals = 0;
 
     private ApiClientInterface $client;
     private ApiClientInterface $authenticatedPatientClient;
@@ -116,6 +117,7 @@ class PatientService
 
     public static function handleUserRegistered(int $userId): void
     {
+        if (self::$registrationSyncDeferrals > 0) return;
         $service = new self();
         if (!$service->shouldSyncUser($userId)) {
             return;
@@ -151,6 +153,7 @@ class PatientService
      */
     public static function handleIdentityMetaChanged($metaId, $userId, $metaKey, $metaValue): void
     {
+        if (self::$registrationSyncDeferrals > 0) return;
         if (function_exists('doing_action') && doing_action('um_user_register')) {
             return;
         }
@@ -179,6 +182,7 @@ class PatientService
      */
     public static function handleUltimateMemberRegistration(int $userId, $submitted = [], $formData = []): void
     {
+        if (self::$registrationSyncDeferrals > 0) return;
         $service = new self();
         if (!$service->shouldSyncUser($userId)) {
             return;
@@ -715,11 +719,42 @@ class PatientService
                     continue;
                 }
 
+                $type = strtolower(trim((string) ($field['type'] ?? '')));
+                if (in_array($type, ['checkboxes', 'radiobuttons', 'checkbox', 'radio'], true)) {
+                    $selected = [];
+                    foreach ((array) ($field['options'] ?? []) as $option) {
+                        if (!is_array($option) || empty($option['selected'])) {
+                            continue;
+                        }
+
+                        $name = trim((string) ($option['name'] ?? $option['value'] ?? ''));
+                        if ($name !== '') {
+                            $selected[] = $name;
+                        }
+                    }
+
+                    $other = is_array($field['other'] ?? null) ? $field['other'] : [];
+                    if (!empty($other['selected']) && trim((string) ($other['value'] ?? '')) !== '') {
+                        $selected[] = trim((string) $other['value']);
+                    }
+
+                    $values['custom_' . $token] = implode(', ', $selected);
+                    continue;
+                }
+
                 $values['custom_' . $token] = $field['value'] ?? '';
             }
         }
 
         return $values;
+    }
+
+    /** API registration supplies complete data first, then invokes the existing sync once. */
+    public static function withDeferredRegistrationSync(callable $callback)
+    {
+        self::$registrationSyncDeferrals++;
+        try { return $callback(); }
+        finally { self::$registrationSyncDeferrals--; }
     }
 
     private function shouldSyncUser(int $userId): bool

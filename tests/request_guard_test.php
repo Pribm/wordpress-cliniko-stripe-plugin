@@ -261,7 +261,7 @@ function test_patient_access_request_is_rate_limited(): void
     assert_true($denied->get_error_data()['status'] === 429, 'Expected a 429 rate-limit response');
 }
 
-function test_patient_access_verify_is_rate_limited_without_limiting_status_polling(): void
+function test_patient_access_verify_is_rate_limited_and_status_handoff_is_retired(): void
 {
     $guard = new PublicRequestGuard(new BookingAttemptStore());
     $verify = new WP_REST_Request('POST', '/v2/patient-access/verify');
@@ -278,12 +278,31 @@ function test_patient_access_verify_is_rate_limited_without_limiting_status_poll
     assert_true($denied->get_error_data()['status'] === 429, 'Expected a 429 verification rate-limit response');
 
     $status = new WP_REST_Request('GET', '/v2/patient-access/request-status');
-    for ($poll = 1; $poll <= 200; $poll++) {
-        assert_true(
-            $guard->allowPatientAccessRequest($status) === true,
-            'Expected patient access status polling to retain its existing behavior'
-        );
+    $retired = $guard->allowPatientAccessRequest($status);
+    assert_true($retired instanceof WP_Error && $retired->get_error_data()['status'] === 410, 'Public bearer-token handoff must be retired');
+    $complete = new WP_REST_Request('POST', '/v2/patient-access/request-complete');
+    $retired = $guard->allowPatientAccessRead($complete);
+    assert_true($retired instanceof WP_Error && $retired->get_error_data()['status'] === 410, 'Token publication through completion must be retired');
+}
+
+function test_retired_legacy_mutations_and_forwarded_ip_spoofing(): void
+{
+    $guard = new PublicRequestGuard(new BookingAttemptStore());
+    foreach (['/v1/send-patient-form', '/v1/tyrohealth/charge'] as $route) {
+        $denied = $guard->allowPublicMutation(new WP_REST_Request('POST', $route));
+        assert_true($denied instanceof WP_Error && $denied->get_error_data()['status'] === 410, 'Unsafe legacy mutation must return 410');
     }
+    $request = new WP_REST_Request('POST', '/v2/booking-attempts/preflight');
+    for ($i = 0; $i < 40; $i++) {
+        $_SERVER['HTTP_CF_CONNECTING_IP'] = '192.0.2.' . ($i + 1);
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.' . ($i + 1);
+        $_SERVER['HTTP_USER_AGENT'] = 'different-' . $i;
+        assert_true($guard->allowPublicMutation($request) === true, 'Requests within limit should pass');
+    }
+    $_SERVER['HTTP_CF_CONNECTING_IP'] = '203.0.113.200';
+    $_SERVER['HTTP_USER_AGENT'] = 'another-agent';
+    $denied = $guard->allowPublicMutation($request);
+    assert_true($denied instanceof WP_Error && $denied->get_error_data()['status'] === 429, 'Caller-controlled forwarding headers/UA must not reset the limit');
 }
 
 function run_test(string $name, callable $test): bool
@@ -305,7 +324,8 @@ $tests = [
     'attempt_mutation_requires_matching_attempt_token' => 'test_attempt_mutation_requires_matching_attempt_token',
     'public_read_without_guard_token' => 'test_public_read_without_guard_token',
     'patient_access_request_is_rate_limited' => 'test_patient_access_request_is_rate_limited',
-    'patient_access_verify_is_rate_limited_without_limiting_status_polling' => 'test_patient_access_verify_is_rate_limited_without_limiting_status_polling',
+    'patient_access_verify_is_rate_limited_and_status_handoff_is_retired' => 'test_patient_access_verify_is_rate_limited_and_status_handoff_is_retired',
+    'retired_legacy_mutations_and_forwarded_ip_spoofing' => 'test_retired_legacy_mutations_and_forwarded_ip_spoofing',
 ];
 
 $passed = 0;

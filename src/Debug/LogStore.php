@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) {
 
 class LogStore
 {
-    private const SCHEMA_VERSION = '1';
+    private const SCHEMA_VERSION = '2';
     private const SCHEMA_OPTION = 'wp_cliniko_debug_log_schema_version';
     private const PRUNE_TRANSIENT = 'wp_cliniko_debug_log_pruned_at';
 
@@ -54,6 +54,7 @@ class LogStore
           KEY idx_trace_id (trace_id),
           KEY idx_channel (channel),
           KEY idx_level (level),
+          KEY idx_event (event),
           KEY idx_route (route(100))
         ) {$charset};";
 
@@ -202,6 +203,20 @@ class LogStore
         return is_array($rows) ? array_values(array_filter(array_map('strval', $rows))) : [];
     }
 
+    /**
+     * @return array<int,string>
+     */
+    public function distinctEvents(): array
+    {
+        if (!$this->ensureTable()) {
+            return [];
+        }
+
+        global $wpdb;
+        $rows = $wpdb->get_col("SELECT DISTINCT event FROM {$this->table()} WHERE event <> '' ORDER BY event ASC");
+        return is_array($rows) ? array_values(array_filter(array_map('strval', $rows))) : [];
+    }
+
     public function clear(): void
     {
         if (!$this->ensureTable()) {
@@ -220,6 +235,24 @@ class LogStore
     {
         $result = $this->query($filters, 1, max(1, min(5000, $limit)));
         return $result['rows'];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function find(int $id): ?array
+    {
+        if ($id < 1 || !$this->ensureTable()) {
+            return null;
+        }
+
+        global $wpdb;
+        $row = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM {$this->table()} WHERE id = %d", $id),
+            ARRAY_A
+        );
+
+        return is_array($row) ? $row : null;
     }
 
     public function table(): string
@@ -241,6 +274,12 @@ class LogStore
         if ($channel !== '') {
             $clauses[] = 'AND channel = %s';
             $params[] = $channel;
+        }
+
+        $event = trim((string) ($filters['event'] ?? ''));
+        if ($event !== '') {
+            $clauses[] = 'AND event = %s';
+            $params[] = $event;
         }
 
         $level = trim((string) ($filters['level'] ?? ''));

@@ -2,6 +2,8 @@
 
 namespace App\Admin\Modules;
 
+use App\Admin\AdminWorkspace;
+
 use App\Debug\LogStore;
 use App\Debug\Settings as DebugSettings;
 
@@ -17,6 +19,7 @@ class Debug
         add_action('admin_init', [self::class, 'registerSettings']);
         add_action('admin_post_wp_cliniko_debug_clear_logs', [self::class, 'clearLogs']);
         add_action('admin_post_wp_cliniko_debug_export_logs', [self::class, 'exportLogs']);
+        add_action('admin_post_wp_cliniko_debug_export_context', [self::class, 'exportContext']);
     }
 
     public static function registerMenu(): void
@@ -59,14 +62,11 @@ class Debug
         $result = $store->query($filters, $page, 50);
         $summary = $store->summary();
         $channels = $store->distinctChannels();
+        $events = $store->distinctEvents();
 
+        AdminWorkspace::begin('wp-cliniko-debug', 'Debug & observability', 'Review plugin activity and errors. Sensitive values are excluded or redacted.');
         ?>
-        <div class="wrap">
-            <h1>Cliniko Plugin Debug</h1>
-            <p>
-                Passive observability for plugin REST flows, external API timing, client calls, mail outcomes, and fatal shutdowns.
-                Sensitive values are excluded or redacted.
-            </p>
+        <div class="cliniko-admin-page cliniko-debug-page">
 
             <?php if (isset($_GET['debug_cleared'])): ?>
                 <div class="notice notice-success is-dismissible"><p>Debug logs were cleared.</p></div>
@@ -76,14 +76,14 @@ class Debug
                 <div class="notice notice-warning"><p>Debug capture is currently disabled.</p></div>
             <?php endif; ?>
 
-            <div style="display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px;max-width:1000px;margin:20px 0;">
+            <div class="cliniko-debug-metrics">
                 <?php self::renderMetricCard('Stored Logs', (string) $summary['total']); ?>
                 <?php self::renderMetricCard('Errors', (string) $summary['errors']); ?>
                 <?php self::renderMetricCard('Warnings', (string) $summary['warnings']); ?>
                 <?php self::renderMetricCard('Slow Events (>=1s)', (string) $summary['slow']); ?>
             </div>
 
-            <div class="postbox" style="padding:20px;margin-top:20px;max-width:1000px;">
+            <div class="cliniko-admin-card">
                 <h2>Debug Settings</h2>
                 <form method="post" action="options.php">
                     <?php settings_fields('wp_cliniko_debug_group'); ?>
@@ -174,9 +174,9 @@ class Debug
                 </form>
             </div>
 
-            <div class="postbox" style="padding:20px;margin-top:20px;max-width:1000px;">
+            <div class="cliniko-admin-card">
                 <h2>Log Actions</h2>
-                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <div class="cliniko-admin-actions">
                     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                         <?php wp_nonce_field('wp_cliniko_debug_clear_logs'); ?>
                         <input type="hidden" name="action" value="wp_cliniko_debug_clear_logs" />
@@ -194,10 +194,10 @@ class Debug
                 </div>
             </div>
 
-            <div class="postbox" style="padding:20px;margin-top:20px;max-width:1200px;">
+            <div class="cliniko-admin-card">
                 <h2>Recent Logs</h2>
 
-                <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+                <form method="get" class="cliniko-debug-filters">
                     <input type="hidden" name="page" value="wp-cliniko-debug" />
 
                     <label>
@@ -207,6 +207,18 @@ class Debug
                             <?php foreach ($channels as $channel): ?>
                                 <option value="<?php echo esc_attr($channel); ?>" <?php selected($filters['channel'], $channel); ?>>
                                     <?php echo esc_html($channel); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <label>
+                        <span style="display:block;margin-bottom:4px;">Event</span>
+                        <select name="event">
+                            <option value="">All</option>
+                            <?php foreach ($events as $event): ?>
+                                <option value="<?php echo esc_attr($event); ?>" <?php selected($filters['event'], $event); ?>>
+                                    <?php echo esc_html($event); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -243,7 +255,8 @@ class Debug
                     <a class="button button-link" href="<?php echo esc_url(admin_url('admin.php?page=wp-cliniko-debug')); ?>">Reset</a>
                 </form>
 
-                <table class="widefat striped">
+                <div class="cliniko-admin-table-scroll" role="region" aria-label="Recent logs table" tabindex="0">
+                <table class="widefat striped cliniko-debug-table">
                     <thead>
                         <tr>
                             <th style="width:150px;">Time</th>
@@ -286,12 +299,21 @@ class Debug
                                                 <pre style="white-space:pre-wrap;margin-top:8px;"><?php echo esc_html(self::prettyContext((string) $row['context'])); ?></pre>
                                             </details>
                                         <?php endif; ?>
+                                        <?php if (!empty($row['id'])): ?>
+                                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top:8px;">
+                                                <?php wp_nonce_field('wp_cliniko_debug_export_context_' . (int) $row['id']); ?>
+                                                <input type="hidden" name="action" value="wp_cliniko_debug_export_context" />
+                                                <input type="hidden" name="log_id" value="<?php echo esc_attr((string) $row['id']); ?>" />
+                                                <button type="submit" class="button-link">Download full context JSON</button>
+                                            </form>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                 </table>
+                </div>
 
                 <?php if ($result['pages'] > 1): ?>
                     <div class="tablenav" style="margin-top:16px;">
@@ -310,6 +332,7 @@ class Debug
             </div>
         </div>
         <?php
+        AdminWorkspace::end();
     }
 
     public static function clearLogs(): void
@@ -349,9 +372,50 @@ class Debug
         exit;
     }
 
+    public static function exportContext(): void
+    {
+        if (!current_user_can('manage_options')) {
+            wp_die('Unauthorized');
+        }
+
+        $logId = absint($_POST['log_id'] ?? 0);
+        check_admin_referer('wp_cliniko_debug_export_context_' . $logId);
+
+        $store = new LogStore();
+        $row = $store->find($logId);
+        if ($row === null) {
+            wp_die('Debug log entry not found.');
+        }
+
+        $context = json_decode((string) ($row['context'] ?? ''), true);
+        $download = [
+            'id' => (int) ($row['id'] ?? $logId),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'event' => (string) ($row['event'] ?? ''),
+            'level' => (string) ($row['level'] ?? ''),
+            'trace_id' => (string) ($row['trace_id'] ?? ''),
+            'method' => (string) ($row['method'] ?? ''),
+            'route' => (string) ($row['route'] ?? ''),
+            'target' => (string) ($row['target'] ?? ''),
+            'request_kind' => (string) ($row['request_kind'] ?? ''),
+            'status_code' => $row['status_code'] !== null ? (int) $row['status_code'] : null,
+            'duration_ms' => $row['duration_ms'] !== null ? (int) $row['duration_ms'] : null,
+            'message' => (string) ($row['message'] ?? ''),
+            'context' => is_array($context) ? $context : (string) ($row['context'] ?? ''),
+        ];
+
+        $event = sanitize_file_name((string) ($row['event'] ?? 'debug')) ?: 'debug';
+        nocache_headers();
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="cliniko-debug-' . $event . '-' . $logId . '.json"');
+
+        echo wp_json_encode($download, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     /**
      * @param array<string,mixed>|null $source
-     * @return array{channel:string,level:string,trace_id:string,route:string,search:string}
+     * @return array{channel:string,event:string,level:string,trace_id:string,route:string,search:string}
      */
     private static function readFilters(?array $source = null): array
     {
@@ -359,6 +423,7 @@ class Debug
 
         return [
             'channel' => sanitize_text_field((string) ($data['channel'] ?? '')),
+            'event' => sanitize_text_field((string) ($data['event'] ?? '')),
             'level' => sanitize_text_field((string) ($data['level'] ?? '')),
             'trace_id' => sanitize_text_field((string) ($data['trace_id'] ?? '')),
             'route' => sanitize_text_field((string) ($data['route'] ?? '')),
@@ -380,9 +445,9 @@ class Debug
     private static function renderMetricCard(string $label, string $value): void
     {
         ?>
-        <div class="postbox" style="padding:16px;margin:0;">
-            <div style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.04em;"><?php echo esc_html($label); ?></div>
-            <div style="font-size:28px;font-weight:700;margin-top:8px;"><?php echo esc_html($value); ?></div>
+        <div class="cliniko-admin-card cliniko-debug-metric">
+            <div class="cliniko-debug-metric__label"><?php echo esc_html($label); ?></div>
+            <div class="cliniko-debug-metric__value"><?php echo esc_html($value); ?></div>
         </div>
         <?php
     }

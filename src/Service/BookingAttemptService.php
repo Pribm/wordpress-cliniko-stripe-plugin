@@ -77,7 +77,11 @@ class BookingAttemptService
             'content' => $content,
         ];
 
-        $errors = AppointmentRequestValidator::validate($validationPayload, false);
+        $errors = AppointmentRequestValidator::validate(
+            $validationPayload,
+            false,
+            $authenticatedPatientData !== null
+        );
         $errors = array_merge($errors, PatientFormValidator::validateContentSections($content));
         $errors = array_merge(
             $errors,
@@ -439,6 +443,13 @@ class BookingAttemptService
         return $this->preflightWithAuthenticatedPatient($body);
     }
 
+    /** API authentication is enforced by AccessPolicy; identity still comes from Auth. */
+    public function preflightApiPatient(array $body): array
+    {
+        if (!function_exists('is_user_logged_in') || !is_user_logged_in()) return $this->errorResponse(403, 'You must be logged in.');
+        return $this->preflightWithAuthenticatedPatient($body);
+    }
+
     /**
      * Resolve the linked patient on the server and retain only scheduling
      * fields from the browser request. This keeps patient identity out of the
@@ -733,7 +744,8 @@ class BookingAttemptService
                 throw new \RuntimeException('Booking attempt is incomplete.');
             }
 
-            Patient::update($patientId, $patient, $client);
+            // Booking is not authority to overwrite an existing patient profile.
+            // New patients were populated at creation; account edits use PatientService.
 
             $apptType = AppointmentType::find($moduleId, $client);
             if (!$apptType) {

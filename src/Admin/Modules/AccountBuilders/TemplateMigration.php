@@ -16,6 +16,10 @@ final class TemplateMigration
     private const EXPORT_NONCE = 'export_wp_cliniko_templates';
     private const IMPORT_NONCE = 'import_wp_cliniko_templates';
     private const COMPONENT_STYLES_OPTION = 'wp_cliniko_component_styles';
+    private const REVIEW_TRANSIENT_PREFIX = 'wp_cliniko_template_import_review_';
+    private const REVIEW_TTL = 900;
+    private const LOCALHOST_URL_PATTERN = "~(?:(?:https?:)?//)(?:localhost|(?:[a-z0-9-]+\\.)+localhost|127\\.0\\.0\\.1|\\[::1\\])(?::\\d{1,5})?(?=$|[/?#\\s\"'<>),])(?:[/?#][^\\s\"'<>)]*)?~i";
+    private const LOCALHOST_ORIGIN_PATTERN = "~^(?:(?:https?:)?//)(?:localhost|(?:[a-z0-9-]+\\.)+localhost|127\\.0\\.0\\.1|\\[::1\\])(?::\\d{1,5})?~i";
 
     public static function init(): void
     {
@@ -112,21 +116,41 @@ final class TemplateMigration
             'invalid_bundle' => 'The selected file is not a supported Cliniko Template Builder export.',
             'empty_bundle' => 'The export does not contain any supported template data.',
             'replace_confirmation' => 'Confirm that imported groups may replace their existing destination data.',
+            'review_expired' => 'The localhost URL review expired. Upload the export file again.',
+            'invalid_destination' => 'Enter a valid HTTP or HTTPS destination site URL.',
         ];
+        $reviewToken = sanitize_key((string) ($_GET['migration_review'] ?? ''));
+        $review = $reviewToken !== '' ? self::pendingReview($reviewToken) : null;
         ?>
         <div class="wrap cliniko-template-builder-page cliniko-template-migration">
             <h1>Import / Export Templates</h1>
             <p>Move Template Builder configurations between WordPress sites without exporting credentials, patient records, or account settings.</p>
 
             <?php if (isset($_GET['migration_imported'])) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php echo esc_html(sprintf(
+                <?php
+                $successMessage = sprintf(
                     'Imported %d template groups using %s mode.',
                     max(0, (int) $_GET['migration_imported']),
                     sanitize_key((string) ($_GET['migration_mode'] ?? 'merge')) === 'replace' ? 'replace' : 'merge'
-                )); ?></p></div>
+                );
+                $replacedUrls = max(0, (int) ($_GET['migration_urls_replaced'] ?? 0));
+                if ($replacedUrls > 0) {
+                    $successMessage .= sprintf(' Updated %d localhost URL occurrences to the destination site.', $replacedUrls);
+                }
+                ?>
+                <div class="notice notice-success is-dismissible"><p><?php echo esc_html($successMessage); ?></p></div>
             <?php elseif ($error !== '' && isset($errors[$error])) : ?>
                 <div class="notice notice-error is-dismissible"><p><?php echo esc_html($errors[$error]); ?></p></div>
             <?php endif; ?>
+
+            <?php if ($reviewToken !== '') : ?>
+                <?php if ($review === null) : ?>
+                    <div class="notice notice-error"><p><?php echo esc_html($errors['review_expired']); ?></p></div>
+                <?php else : ?>
+                    <?php self::renderLocalhostReview($reviewToken, $review); ?>
+                <?php endif; ?>
+            </div>
+            <?php return; endif; ?>
 
             <div class="cliniko-template-migration__grid">
                 <section class="card cliniko-template-migration__card">
@@ -171,7 +195,7 @@ final class TemplateMigration
                             <input type="checkbox" name="confirm_replace" value="1">
                             I understand that replace mode can remove destination templates.
                         </label>
-                        <p class="description">The import does not copy media files or rewrite site URLs, page IDs, Cliniko IDs, or Elementor IDs.</p>
+                        <p class="description">The import does not copy media files. Localhost URLs are detected for review; other site URLs, page IDs, Cliniko IDs, and Elementor IDs remain unchanged.</p>
                         <p><button class="button button-primary" type="submit">Import templates</button></p>
                     </form>
                 </section>
@@ -214,6 +238,11 @@ final class TemplateMigration
     {
         self::requireAdministrator();
         check_admin_referer(self::IMPORT_NONCE);
+        $reviewToken = sanitize_key((string) ($_POST['review_token'] ?? ''));
+        if ($reviewToken !== '') {
+            self::completeReviewedImport($reviewToken);
+        }
+
         $mode = sanitize_key((string) ($_POST['import_mode'] ?? 'merge')) === 'replace' ? 'replace' : 'merge';
         if ($mode === 'replace' && (string) ($_POST['confirm_replace'] ?? '') !== '1') {
             self::redirectError('replace_confirmation');
@@ -250,15 +279,284 @@ final class TemplateMigration
         }
 
         try {
+            self::validateImportBundle($payload, $mode);
+        } catch (\InvalidArgumentException $exception) {
+            self::redirectError($exception->getMessage() === 'empty_bundle' ? 'empty_bundle' : 'invalid_bundle');
+        }
+
+        $preview = self::rewriteLocalhostUrls($payload, self::currentSiteOrigin());
+        if ($preview['count'] > 0) {
+            $token = sanitize_key(wp_generate_password(32, false, false));
+            $stored = set_transient(self::reviewKey($token), [
+                'payload' => $payload,
+                'mode' => $mode,
+            ], self::REVIEW_TTL);
+            if (!$stored) {
+                self::redirectError('invalid_bundle');
+            }
+            wp_safe_redirect(AccountBuilders::url(AccountBuilders::TAB_MIGRATION, [
+                'migration_review' => $token,
+            ]));
+            exit;
+        }
+
+        self::completeImport($payload, $mode);
+    }
+
+    /**
+     * @param array{payload:array<string,mixed>,mode:string} $review
+     */
+    private static function renderLocalhostReview(string $reviewToken, array $review): void
+    {
+        $destination = self::currentSiteOrigin();
+        $preview = self::rewriteLocalhostUrls($review['payload'], $destination);
+        ?>
+        <section class="card cliniko-template-migration__card cliniko-template-migration__review">
+            <h2>Review localhost URLs</h2>
+            <p>
+                The import contains <?php echo esc_html((string) $preview['count']); ?>
+                <?php echo $preview['count'] === 1 ? 'URL occurrence' : 'URL occurrences'; ?> pointing to a local development site.
+                Nothing has been imported yet.
+            </p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="<?php echo esc_attr(self::IMPORT_ACTION); ?>">
+                <input type="hidden" name="review_token" value="<?php echo esc_attr($reviewToken); ?>">
+                <?php wp_nonce_field(self::IMPORT_NONCE); ?>
+
+                <label for="cliniko-template-migration-destination"><strong>Destination site URL</strong></label>
+                <input
+                    class="regular-text code"
+                    id="cliniko-template-migration-destination"
+                    name="destination_url"
+                    type="url"
+                    value="<?php echo esc_attr($destination); ?>"
+                    required
+                >
+                <p class="description">The current site is suggested. You can change it before continuing.</p>
+
+                <div class="cliniko-template-migration__url-list">
+                    <table class="widefat striped">
+                        <thead>
+                            <tr><th>Found in import</th><th>Proposed replacement</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($preview['replacements'] as $source => $replacement) : ?>
+                                <tr>
+                                    <td><code><?php echo esc_html($source); ?></code></td>
+                                    <td><code><?php echo esc_html($replacement); ?></code></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <fieldset>
+                    <legend><strong>How should these URLs be imported?</strong></legend>
+                    <label class="cliniko-template-migration__choice">
+                        <input type="radio" name="localhost_action" value="replace" checked>
+                        <span><strong>Update to the destination site</strong><small>Replace every detected local URL while preserving its path, query, and fragment.</small></span>
+                    </label>
+                    <label class="cliniko-template-migration__choice">
+                        <input type="radio" name="localhost_action" value="keep">
+                        <span><strong>Keep localhost URLs</strong><small>Import the file exactly as supplied.</small></span>
+                    </label>
+                </fieldset>
+
+                <p>
+                    <button class="button button-primary" type="submit">Continue import</button>
+                    <a class="button" href="<?php echo esc_url(AccountBuilders::url(AccountBuilders::TAB_MIGRATION)); ?>">Cancel</a>
+                </p>
+            </form>
+        </section>
+        <?php
+    }
+
+    /** @return array{payload:array<string,mixed>,mode:string}|null */
+    private static function pendingReview(string $reviewToken): ?array
+    {
+        $stored = get_transient(self::reviewKey($reviewToken));
+        if (
+            !is_array($stored)
+            || !is_array($stored['payload'] ?? null)
+            || !is_string($stored['mode'] ?? null)
+            || !in_array($stored['mode'], ['merge', 'replace'], true)
+        ) {
+            return null;
+        }
+
+        return [
+            'payload' => $stored['payload'],
+            'mode' => $stored['mode'],
+        ];
+    }
+
+    private static function reviewKey(string $reviewToken): string
+    {
+        return self::REVIEW_TRANSIENT_PREFIX . get_current_user_id() . '_' . sanitize_key($reviewToken);
+    }
+
+    private static function completeReviewedImport(string $reviewToken): void
+    {
+        $review = self::pendingReview($reviewToken);
+        if ($review === null) {
+            self::redirectError('review_expired');
+        }
+
+        $payload = $review['payload'];
+        $replacedCount = 0;
+        $action = sanitize_key((string) ($_POST['localhost_action'] ?? 'replace'));
+        if ($action !== 'keep') {
+            try {
+                $rewritten = self::rewriteLocalhostUrls(
+                    $payload,
+                    (string) ($_POST['destination_url'] ?? '')
+                );
+            } catch (\InvalidArgumentException $exception) {
+                self::redirectReviewError($reviewToken, 'invalid_destination');
+            }
+            $payload = $rewritten['payload'];
+            $replacedCount = $rewritten['count'];
+        }
+
+        delete_transient(self::reviewKey($reviewToken));
+        self::completeImport($payload, $review['mode'], $replacedCount);
+    }
+
+    /**
+     * Replaces local-development URLs anywhere in the imported value tree.
+     *
+     * @param array<string,mixed> $payload
+     * @return array{payload:array<string,mixed>,count:int,replacements:array<string,string>}
+     */
+    public static function rewriteLocalhostUrls(array $payload, string $destinationUrl): array
+    {
+        $destination = self::normalizeDestinationOrigin($destinationUrl);
+        $count = 0;
+        $replacements = [];
+        $rewritten = self::rewriteLocalhostValue($payload, $destination, $count, $replacements);
+        if (!is_array($rewritten)) {
+            throw new \InvalidArgumentException('invalid_bundle');
+        }
+
+        return [
+            'payload' => $rewritten,
+            'count' => $count,
+            'replacements' => $replacements,
+        ];
+    }
+
+    /**
+     * @param mixed $value
+     * @param array<string,string> $replacements
+     * @return mixed
+     */
+    private static function rewriteLocalhostValue($value, string $destination, int &$count, array &$replacements)
+    {
+        if (is_array($value)) {
+            $rewritten = [];
+            foreach ($value as $key => $item) {
+                $rewritten[$key] = self::rewriteLocalhostValue($item, $destination, $count, $replacements);
+            }
+            return $rewritten;
+        }
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        $rewritten = preg_replace_callback(
+            self::LOCALHOST_URL_PATTERN,
+            static function (array $match) use ($destination, &$count, &$replacements): string {
+                $source = $match[0];
+                $suffix = preg_replace(self::LOCALHOST_ORIGIN_PATTERN, '', $source);
+                $replacement = $destination . (is_string($suffix) ? $suffix : '');
+                $count++;
+                $replacements[$source] = $replacement;
+                return $replacement;
+            },
+            $value
+        );
+
+        return is_string($rewritten) ? $rewritten : $value;
+    }
+
+    private static function normalizeDestinationOrigin(string $destinationUrl): string
+    {
+        $parts = parse_url(trim($destinationUrl));
+        if (
+            !is_array($parts)
+            || !isset($parts['scheme'], $parts['host'])
+            || !in_array(strtolower((string) $parts['scheme']), ['http', 'https'], true)
+            || trim((string) $parts['host']) === ''
+            || isset($parts['user'])
+            || isset($parts['pass'])
+        ) {
+            throw new \InvalidArgumentException('invalid_destination');
+        }
+
+        $scheme = strtolower((string) $parts['scheme']);
+        $host = strtolower((string) $parts['host']);
+        if (strpos($host, ':') !== false && $host[0] !== '[') {
+            $host = '[' . $host . ']';
+        }
+        $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+        return $scheme . '://' . $host . $port;
+    }
+
+    private static function currentSiteOrigin(): string
+    {
+        return self::normalizeDestinationOrigin(home_url('/'));
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private static function validateImportBundle(array $payload, string $mode): void
+    {
+        if (
+            ($payload['format'] ?? null) !== self::FORMAT
+            || (int) ($payload['schema_version'] ?? 0) !== self::SCHEMA_VERSION
+            || !is_array($payload['sections'] ?? null)
+            || !in_array($mode, ['merge', 'replace'], true)
+        ) {
+            throw new \InvalidArgumentException('invalid_bundle');
+        }
+
+        $catalog = self::catalog();
+        $supportedOptions = 0;
+        foreach ($payload['sections'] as $sectionKey => $sectionData) {
+            if (!is_string($sectionKey) || !isset($catalog[$sectionKey]) || !is_array($sectionData)) {
+                continue;
+            }
+            foreach ($catalog[$sectionKey]['options'] as $option => $strategy) {
+                if (!array_key_exists($option, $sectionData) || !is_array($sectionData[$option])) {
+                    continue;
+                }
+                self::validateTree($sectionData[$option]);
+                $supportedOptions++;
+            }
+        }
+        if ($supportedOptions === 0) {
+            throw new \InvalidArgumentException('empty_bundle');
+        }
+    }
+
+    /** @param array<string,mixed> $payload @return never */
+    private static function completeImport(array $payload, string $mode, int $replacedCount = 0): void
+    {
+        try {
             $result = self::importBundle($payload, $mode);
         } catch (\InvalidArgumentException $exception) {
             self::redirectError($exception->getMessage() === 'empty_bundle' ? 'empty_bundle' : 'invalid_bundle');
         }
 
-        wp_safe_redirect(AccountBuilders::url(AccountBuilders::TAB_MIGRATION, [
+        $arguments = [
             'migration_imported' => $result['sections'],
             'migration_mode' => $mode,
-        ]));
+        ];
+        if ($replacedCount > 0) {
+            $arguments['migration_urls_replaced'] = $replacedCount;
+        }
+        wp_safe_redirect(AccountBuilders::url(AccountBuilders::TAB_MIGRATION, $arguments));
         exit;
     }
 
@@ -300,16 +598,7 @@ final class TemplateMigration
      */
     public static function importBundle(array $payload, string $mode = 'merge'): array
     {
-        if (
-            ($payload['format'] ?? null) !== self::FORMAT
-            || (int) ($payload['schema_version'] ?? 0) !== self::SCHEMA_VERSION
-            || !is_array($payload['sections'] ?? null)
-        ) {
-            throw new \InvalidArgumentException('invalid_bundle');
-        }
-        if (!in_array($mode, ['merge', 'replace'], true)) {
-            throw new \InvalidArgumentException('invalid_bundle');
-        }
+        self::validateImportBundle($payload, $mode);
 
         $catalog = self::catalog();
         $sectionCount = 0;
@@ -395,6 +684,16 @@ final class TemplateMigration
     private static function redirectError(string $error): void
     {
         wp_safe_redirect(AccountBuilders::url(AccountBuilders::TAB_MIGRATION, [
+            'migration_error' => sanitize_key($error),
+        ]));
+        exit;
+    }
+
+    /** @return never */
+    private static function redirectReviewError(string $reviewToken, string $error): void
+    {
+        wp_safe_redirect(AccountBuilders::url(AccountBuilders::TAB_MIGRATION, [
+            'migration_review' => sanitize_key($reviewToken),
             'migration_error' => sanitize_key($error),
         ]));
         exit;

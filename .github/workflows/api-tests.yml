@@ -1,0 +1,37 @@
+name: API access regression tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+      - run: composer install --prefer-dist --no-interaction
+      - name: Authorization, contracts and dashboard
+        run: php tests/managed_api_test.php
+      - name: Registration and existing clinic verification flow
+        run: php tests/api_registration_test.php
+      - name: Patient-only API booking identity and creation
+        run: php tests/api_patient_booking_flow_test.php
+      - name: Linked booking structures and rules
+        run: |
+          php tests/api_booking_structure_test.php
+          php tests/shortcode_form_input_rules_test.php
+      - name: Legacy containment and booking regressions
+        run: |
+          php tests/request_guard_test.php
+          php tests/booking_attempt_flow_test.php
+          php tests/authenticated_patient_routes_test.php
+          php tests/patient_access_challenge_test.php
+          php tests/worker_flow_test.php
+          php tests/payment_endpoints_test.php

@@ -650,6 +650,48 @@ final class PatientOnboarding
         return is_array($modules) ? $modules : [];
     }
 
+    /**
+     * Read-only projections used by the managed API onboarding editor. These
+     * methods deliberately expose configuration only; patient values remain
+     * available through the authenticated patient service at request time.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    public static function apiSourceModules(): array
+    {
+        return self::modules();
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    public static function apiAvailableFieldDefinitions(): array
+    {
+        return self::editableFields();
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public static function apiSourceSteps(array $module): array
+    {
+        return self::effectiveSteps($module, self::editableFields());
+    }
+
+    /**
+     * Normalise API-only definitions with the same field rules used by the
+     * shortcode builder. Presentation settings are intentionally not included.
+     *
+     * @param array<int,mixed> $steps
+     * @return array<int,array<string,mixed>>
+     */
+    public static function apiNormaliseSteps(array $steps): array
+    {
+        $normalised = self::normaliseSteps($steps, self::editableFields());
+        foreach ($normalised as &$step) {
+            foreach ((array) ($step['fields'] ?? []) as &$field) unset($field['width']);
+            unset($field);
+        }
+        unset($step);
+        return $normalised;
+    }
+
     /** @param array<string,mixed> $module */
     private static function welcomeContent(array $module): string
     {
@@ -1092,7 +1134,12 @@ final class PatientOnboarding
                     'mask_prefix' => $maskPrefix,
                     'mask_suffix' => $maskSuffix,
                     'condition_switch' => $conditionSwitch,
-                    'condition_value' => (string) ($config['condition_value'] ?? 'on') === 'off' ? 'off' : 'on',
+                    // Older saved configurations may contain boolean, numeric
+                    // or textual values (false, 0, "false", "off"). Keep
+                    // those values semantically inverted instead of treating
+                    // every value other than the literal "off" as "on".
+                    'condition_value' => !array_key_exists('condition_value', $config)
+                        || self::isTruthyValue($config['condition_value']) ? 'on' : 'off',
                 ];
             }
 

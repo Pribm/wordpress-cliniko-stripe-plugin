@@ -87,6 +87,40 @@ class Runtime
      */
     public static function logException(string $event, \Throwable $error, array $context = []): void
     {
+        // API exceptions may carry useful upstream validation details. Keep
+        // only the safe error-shaped fields for administrator diagnostics;
+        // never persist serialized request payloads, which can contain
+        // patient identity or health information.
+        if (method_exists($error, 'getContext')) {
+            $exceptionContext = $error->getContext();
+            if (is_array($exceptionContext)) {
+                $upstream = [];
+                foreach (['status_code', 'error', 'errors'] as $key) {
+                    if (array_key_exists($key, $exceptionContext)) {
+                        $upstream[$key] = $exceptionContext[$key];
+                    }
+                }
+
+                if (isset($exceptionContext['response_data']) && is_array($exceptionContext['response_data'])) {
+                    // This is the complete structured response returned by
+                    // Cliniko. It contains the useful field-level error and
+                    // does not contain the submitted request payload.
+                    $upstream['response_data'] = $exceptionContext['response_data'];
+                }
+
+                if (isset($exceptionContext['raw_body']) && is_string($exceptionContext['raw_body'])) {
+                    $decodedBody = json_decode($exceptionContext['raw_body'], true);
+                    $upstream['raw_response'] = is_array($decodedBody)
+                        ? $decodedBody
+                        : $exceptionContext['raw_body'];
+                }
+
+                if ($upstream !== []) {
+                    $context['upstream'] = $upstream;
+                }
+            }
+        }
+
         $context['exception_class'] = get_class($error);
         $context['exception_code'] = $error->getCode();
         $context['exception_file'] = basename($error->getFile());

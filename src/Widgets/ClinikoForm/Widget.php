@@ -806,8 +806,8 @@ class Widget extends Widget_Base
           'limit' => $patientHistoryAccessLimit,
           'return_url' => $patientHistoryReturnUrl,
           'request_url' => get_site_url() . '/wp-json/v2/patient-access/request',
-          'request_status_url' => get_site_url() . '/wp-json/v2/patient-access/request-status',
-          'request_complete_url' => get_site_url() . '/wp-json/v2/patient-access/request-complete',
+          'request_status_url' => '', // Retired cross-device token handoff.
+          'request_complete_url' => '',
           'latest_url' => get_site_url() . '/wp-json/v2/patient-access/latest',
           'verify_url' => get_site_url() . '/wp-json/v2/patient-access/verify',
           'appointments_url' => get_site_url() . '/wp-json/v2/patient-access/appointments',

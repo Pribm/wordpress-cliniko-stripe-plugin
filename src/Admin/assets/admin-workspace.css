@@ -1,0 +1,60 @@
+/* Shared admin identity. Scoped to plugin workspaces, never patient-facing output. */
+.cliniko-admin-ui {
+    --cliniko-admin-accent: #007fa3;
+    --cliniko-admin-accent-hover: #006780;
+    --cliniko-admin-highlight: #cc3057;
+    --cliniko-admin-accent-soft: #f0f8fb;
+    --cliniko-admin-ink: #4b384c;
+    --cliniko-admin-muted: #706272;
+    --cliniko-admin-line: #d7e6eb;
+    --cliniko-admin-accent-border: #9fc7d4;
+    --cliniko-admin-surface: #f0f8fb;
+    --cliniko-admin-link: var(--cliniko-admin-accent-hover);
+    --wp-admin-theme-color: var(--cliniko-admin-accent);
+    --wp-admin-theme-color-darker-10: var(--cliniko-admin-accent-hover);
+    color: var(--cliniko-admin-ink);
+    font-size: 14px;
+    line-height: 1.65;
+}
+.cliniko-admin-ui *, .cliniko-admin-ui *::before, .cliniko-admin-ui *::after { box-sizing: border-box; }
+.cliniko-admin-ui a { color: var(--cliniko-admin-link); }
+.cliniko-admin-ui :is(h1, h2, h3, h4) { color: var(--cliniko-admin-ink); line-height: 1.4; }
+.cliniko-admin-ui p { font-size: inherit; line-height: 1.7; }
+.cliniko-admin-ui :is(a, button, input, select, textarea, summary):focus-visible { outline: 2px solid var(--cliniko-admin-accent); outline-offset: 3px; }
+.cliniko-admin-ui .button { min-height: 36px; padding: 4px 14px; border-color: var(--cliniko-admin-line); border-radius: 5px; color: var(--cliniko-admin-link); background: #fff; }
+.cliniko-admin-ui .button:hover { border-color: var(--cliniko-admin-accent-border); background: var(--cliniko-admin-surface); color: var(--cliniko-admin-accent-hover); }
+.cliniko-admin-ui .button-primary { color: #fff; background: var(--cliniko-admin-accent); border-color: var(--cliniko-admin-accent); box-shadow: none; }
+.cliniko-admin-ui .button-primary:hover { color: #fff; background: var(--cliniko-admin-accent-hover); border-color: var(--cliniko-admin-accent-hover); }
+.cliniko-admin-ui .button:disabled { opacity: .6; }
+.cliniko-admin-topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 4px 24px; }
+.cliniko-admin-topbar h1 { margin: 0; padding: 0; font-size: 30px; font-weight: 650; }
+.cliniko-admin-topbar p { margin: 4px 0; color: var(--cliniko-admin-muted); }
+.cliniko-admin-eyebrow { display: block; font-size: 11px; letter-spacing: .08em; font-weight: 650; color: var(--cliniko-admin-muted); text-transform: uppercase; }
+.cliniko-admin-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 720px; border: 1px solid var(--cliniko-admin-line); border-radius: 12px; background: var(--cliniko-admin-surface); overflow: clip; }
+.cliniko-admin-sidebar { min-width: 0; padding: 28px 14px; border-right: 1px solid var(--cliniko-admin-line); background: #fff; }
+.cliniko-admin-nav-label { margin: 0 14px 16px; color: var(--cliniko-admin-muted); font-size: 11px !important; letter-spacing: .08em; text-transform: uppercase; }
+.cliniko-admin-nav { display: flex; flex-direction: column; gap: 6px; }
+.cliniko-admin-nav a { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 6px; color: var(--cliniko-admin-muted); font-size: 13px; font-weight: 500; text-decoration: none; }
+.cliniko-admin-nav a:hover { background: var(--cliniko-admin-surface); color: var(--cliniko-admin-accent); }
+.cliniko-admin-nav a[aria-current="page"] { background: var(--cliniko-admin-accent-soft); color: var(--cliniko-admin-highlight); font-weight: 650; }
+.cliniko-admin-nav .dashicons { flex-shrink: 0; font-size: 18px; }
+.cliniko-admin-sidebar-note { margin-top: 28px; padding: 20px 12px 0; border-top: 1px solid var(--cliniko-admin-line); color: var(--cliniko-admin-muted); font-size: 12px; }
+.cliniko-admin-content { min-width: 0; padding: 28px 32px; }
+.cliniko-admin-ui [hidden] { display: none !important; }
+@media (max-width: 1100px) {
+    .cliniko-admin-shell { grid-template-columns: 190px minmax(0, 1fr); }
+    .cliniko-admin-content { padding: 24px; }
+}
+@media (max-width: 782px) {
+    .cliniko-admin-topbar { flex-wrap: wrap; }
+    .cliniko-admin-shell { display: block; }
+    .cliniko-admin-sidebar { padding: 12px; border-right: 0; border-bottom: 1px solid var(--cliniko-admin-line); overflow: hidden; }
+    .cliniko-admin-nav { flex-direction: row; overflow-x: auto; padding-bottom: 6px; }
+    .cliniko-admin-nav a { flex-shrink: 0; white-space: nowrap; }
+    .cliniko-admin-nav-label, .cliniko-admin-sidebar-note { display: none; }
+    .cliniko-admin-content { padding: 20px 14px; overflow-wrap: anywhere; }
+}
+@media print {
+    .cliniko-admin-sidebar { display: none; }
+    .cliniko-admin-shell { display: block; border: 0; }
+}

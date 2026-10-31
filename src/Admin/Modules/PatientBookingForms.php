@@ -686,14 +686,15 @@ final class PatientBookingForms
         $rawInputRules = isset($_POST['input_rules']) && is_array($_POST['input_rules'])
             ? wp_unslash($_POST['input_rules'])
             : [];
-        $forms = self::forms();
-        $forms[$id] = [
-            'name' => $name,
-            'booking_mode' => $bookingMode,
-            'appointment_type_id' => $appointmentTypeId,
-            'patient_form_template_id' => $templateId,
-            'gateway' => $gateway,
+        $parameters = \App\Service\PatientBookingConfiguration::parameters([
+            'name' => $name, 'appointment_type_id' => $appointmentTypeId, 'patient_form_template_id' => $templateId, 'gateway' => $gateway,
             'scheduling_mode' => in_array($_POST['scheduling_mode'] ?? '', ['manual', 'next_available'], true) ? sanitize_key((string) $_POST['scheduling_mode']) : 'manual',
+        ]);
+        if (is_wp_error($parameters)) wp_die(esc_html($parameters->get_error_message()));
+        $forms = self::forms();
+        $forms[$id] = $parameters + [
+            'flow_type' => 'web',
+            'booking_mode' => $bookingMode,
             'show_calendar' => ($_POST['show_calendar'] ?? 'yes') === 'no' ? 'no' : 'yes',
             'show_practitioner' => ($_POST['show_practitioner'] ?? 'yes') === 'no' ? 'no' : 'yes',
             'multistep' => ($_POST['multistep'] ?? 'yes') === 'no' ? 'no' : 'yes',
@@ -1253,13 +1254,7 @@ final class PatientBookingForms
                 ? 'yes'
                 : 'no';
         }
-        if (($form['show_calendar'] ?? 'yes') === 'no') {
-            $form['scheduling_mode'] = 'next_available';
-        } elseif (($form['scheduling_mode'] ?? 'manual') === 'next_available') {
-            // A visible calendar is authoritative: next-available mode cannot
-            // simultaneously provide calendar/date/time controls.
-            $form['scheduling_mode'] = 'manual';
-        }
+        $form['scheduling_mode'] = \App\Service\PatientBookingConfiguration::schedulingMode($form);
         if (!in_array((string) ($form['gateway'] ?? 'stripe'), ['stripe', 'tyrohealth', 'none'], true)) {
             $form['gateway'] = 'stripe';
         }
@@ -1294,7 +1289,7 @@ final class PatientBookingForms
                 }
             }
 
-            $automaticScheduling = ($form['scheduling_mode'] ?? 'manual') === 'next_available';
+            $automaticScheduling = $form['scheduling_mode'] === 'next_available';
             $nextSlot = $automaticScheduling
                 ? self::nextAvailableSlot((string) ($form['appointment_type_id'] ?? ''))
                 : null;
@@ -1358,7 +1353,7 @@ final class PatientBookingForms
                 'appointment_calendar_url' => rest_url('v1/appointment-calendar'),
                 'next_available_times_url' => rest_url('v1/next-available-times'),
                 'patient_update_url' => $showPatientDetailsReview ? rest_url('v2/patient/me') : '',
-                'scheduling_mode' => (string) ($form['scheduling_mode'] ?? 'manual'),
+                'scheduling_mode' => (string) $form['scheduling_mode'],
                 'success_message' => (string) ($form['success_message'] ?? 'Your appointment has been confirmed.'),
                 'success_action' => $successAction,
                 'success_redirect_url' => $specificRedirect,
@@ -1379,7 +1374,7 @@ final class PatientBookingForms
             ob_start();
             ?>
             <!-- cliniko-code-slot:before_form -->
-            <form id="<?php echo esc_attr('cliniko-' . $mode . '-booking-' . $id); ?>" class="cliniko-<?php echo esc_attr($mode); ?>-booking-form cliniko-patient-booking-form cliniko-component cliniko-component-form-fields<?php echo $isRenewal ? ' cliniko-renewal-mode cliniko-component-data-review' : ''; ?>" data-cliniko-<?php echo esc_attr($mode); ?>-booking-form data-scheduling-mode="<?php echo esc_attr((string) ($form['scheduling_mode'] ?? 'manual')); ?>" data-multistep="<?php echo esc_attr($isRenewal ? 'yes' : (string) ($form['multistep'] ?? 'yes')); ?>">
+            <form id="<?php echo esc_attr('cliniko-' . $mode . '-booking-' . $id); ?>" class="cliniko-<?php echo esc_attr($mode); ?>-booking-form cliniko-patient-booking-form cliniko-component cliniko-component-form-fields<?php echo $isRenewal ? ' cliniko-renewal-mode cliniko-component-data-review' : ''; ?>" data-cliniko-<?php echo esc_attr($mode); ?>-booking-form data-scheduling-mode="<?php echo esc_attr((string) $form['scheduling_mode']); ?>" data-multistep="<?php echo esc_attr($isRenewal ? 'yes' : (string) ($form['multistep'] ?? 'yes')); ?>">
                 <input type="hidden" name="module_id" value="<?php echo esc_attr((string) ($form['appointment_type_id'] ?? '')); ?>">
                 <input type="hidden" name="patient_form_template_id" value="<?php echo esc_attr($templateId); ?>">
                 <?php if ($isRenewal || ($form['multistep'] ?? 'yes') === 'yes') : ?><ol class="cliniko-booking-progress cliniko-component-steps" data-booking-progress aria-label="Booking progress"></ol><?php endif; ?>
@@ -1545,17 +1540,7 @@ final class PatientBookingForms
     /** @return array<string,bool> */
     private static function bookingRuleCapabilities(string $type): array
     {
-        $type = strtolower($type);
-        $isTextarea = in_array($type, ['textarea', 'paragraph', 'long_text', 'longtext', 'text_area', 'multiline'], true);
-        $isEmail = $type === 'email';
-        $isDate = $type === 'date';
-        return [
-            'text' => true,
-            'date' => !$isTextarea && !$isEmail,
-            'select' => !$isEmail,
-            'limit' => true,
-            'format' => !$isEmail && !$isDate,
-        ];
+        return \App\Service\PatientBookingConfiguration::ruleCapabilities($type);
     }
 
     private static function bookingQuestionRuleKey(int $sectionIndex, int $questionIndex): string
@@ -1711,23 +1696,7 @@ final class PatientBookingForms
             }
         }
 
-        if ($template !== null) {
-            foreach ($template->getSections() as $sectionIndex => $section) {
-                foreach ($section->questions as $questionIndex => $question) {
-                    $type = strtolower((string) $question->type);
-                    if (in_array($type, ['checkboxes', 'radiobuttons', 'signature'], true)) {
-                        continue;
-                    }
-                    $key = self::bookingQuestionRuleKey((int) $sectionIndex, (int) $questionIndex);
-                    $rawConfig = is_array($raw[$key] ?? null) ? $raw[$key] : [];
-                    if ($type === 'date' && !isset($rawConfig['input_type'])) {
-                        $rawConfig['input_type'] = 'date';
-                    }
-                    $rules[$key] = ShortcodeFormInputRules::normalise($rawConfig, self::bookingRuleCapabilities($type));
-                }
-            }
-        }
-        return $rules;
+        return array_merge($rules, \App\Service\PatientBookingConfiguration::questionRules($template, $raw));
     }
 
     /** @param array<string,array<string,mixed>> $rules */
@@ -1788,8 +1757,7 @@ final class PatientBookingForms
     /** @return array<string,array<string,mixed>> */
     private static function forms(): array
     {
-        $forms = get_option(self::OPTION_KEY, []);
-        return is_array($forms) ? $forms : [];
+        return \App\Service\PatientBookingConfiguration::all();
     }
 
     private static function numericId($value): string
@@ -1916,76 +1884,7 @@ final class PatientBookingForms
     /** @return array{practitioner_id:string,appointment_start:string,appointment_date:string,label:string}|null */
     private static function nextAvailableSlot(string $appointmentTypeId): ?array
     {
-        $appointmentTypeId = trim($appointmentTypeId);
-        if ($appointmentTypeId === '') {
-            return null;
-        }
-
-        try {
-            $timezone = function_exists('wp_timezone') ? wp_timezone() : new \DateTimeZone('UTC');
-            $fromDate = new \DateTimeImmutable('now', $timezone);
-            $toDate = $fromDate->add(new \DateInterval('P90D'));
-            $appointmentType = AppointmentType::find($appointmentTypeId, cliniko_client(false));
-            if (!$appointmentType) {
-                return null;
-            }
-
-            $client = cliniko_client(false);
-            $service = new ClinikoService();
-            $items = [];
-            $practitioners = $appointmentType->getPractitioners();
-            $visiblePractitioners = array_values(array_filter($practitioners, static function ($practitioner): bool {
-                $dto = $practitioner->getDTO();
-                return !($dto && property_exists($dto, 'active') && $dto->active === false)
-                    && !($dto && property_exists($dto, 'showInOnlineBookings') && $dto->showInOnlineBookings === false);
-            }));
-            if ($visiblePractitioners === []) {
-                $visiblePractitioners = $practitioners;
-            }
-
-            foreach ($visiblePractitioners as $practitioner) {
-                $dto = $practitioner->getDTO();
-                if ($dto && property_exists($dto, 'active') && $dto->active === false) {
-                    continue;
-                }
-                if ($dto && property_exists($dto, 'showInOnlineBookings') && $dto->showInOnlineBookings === false) {
-                    continue;
-                }
-
-                $start = $service->getNextAvailableTime(
-                    (string) get_option('wp_cliniko_business_id'),
-                    (string) $practitioner->getId(),
-                    $appointmentTypeId,
-                    $fromDate->format('Y-m-d'),
-                    $toDate->format('Y-m-d'),
-                    $client
-                );
-                if (!$start || empty($start->appointmentStart)) {
-                    continue;
-                }
-                $items[] = [
-                    'practitioner_id' => (string) $practitioner->getId(),
-                    'appointment_start' => (string) $start->appointmentStart,
-                ];
-            }
-
-            usort($items, static fn(array $a, array $b): int => strtotime($a['appointment_start']) <=> strtotime($b['appointment_start']));
-            $selected = $items[0] ?? null;
-            if (!$selected) {
-                return null;
-            }
-
-            $start = new \DateTimeImmutable($selected['appointment_start']);
-            return [
-                'practitioner_id' => $selected['practitioner_id'],
-                'appointment_start' => $selected['appointment_start'],
-                'appointment_date' => $start->format('Y-m-d'),
-                'label' => $start->setTimezone($timezone)->format('F j, Y \a\t g:i A (T)'),
-            ];
-        } catch (\Throwable $exception) {
-            error_log('Cliniko patient booking next-available lookup failed: ' . $exception->getMessage());
-            return null;
-        }
+        return \App\Service\PatientBookingScheduling::nextAvailableSlot($appointmentTypeId);
     }
 
     /** @param array<string,int|string> $args */

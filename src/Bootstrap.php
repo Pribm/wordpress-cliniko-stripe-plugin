@@ -16,6 +16,7 @@ use App\Support\UltimateMemberDependency;
 if (!defined('ABSPATH')) exit;
 
 use App\Routes\ApiRoutes;
+use App\Routes\ManagedApiRoutes;
 
 class Bootstrap {
     public static function init() {
@@ -32,6 +33,7 @@ class Bootstrap {
         PatientLinkService::registerHooks();
 
         new ApiRoutes();
+        new ManagedApiRoutes();
         PluginFacade::init();
     }
 }

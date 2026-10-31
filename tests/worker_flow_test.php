@@ -497,6 +497,7 @@ namespace App\Service {
 }
 
 namespace {
+    require __DIR__ . '/../src/DTO/Patients/PatientPhoneNumberDTO.php';
     require __DIR__ . '/../src/Workers/ClinikoSchedulingWorker.php';
     require __DIR__ . '/../src/Service/BookingAttemptStore.php';
     require __DIR__ . '/../src/Infra/JobDispatcher.php';

@@ -2,6 +2,8 @@
 
 namespace App\Admin\Modules;
 
+use App\Admin\AdminWorkspace;
+
 use App\Admin\Modules\Settings\Credentials;
 
 use App\Client\Cliniko\CachedClientDecorator;
@@ -35,9 +37,9 @@ class Tools
     }
 public static function renderPage(): void
 {
+    AdminWorkspace::begin('wp-cliniko-tools', 'Tools & maintenance', 'Refresh cached data, check service connections and review your site information.');
     ?>
-    <div class="wrap">
-        <h1>Cliniko Plugin Tools</h1>
+    <div class="cliniko-admin-page cliniko-tools-page">
 
         <?php if (isset($_GET['cache_cleared'])): ?>
             <div class="notice notice-success is-dismissible">
@@ -73,30 +75,39 @@ public static function renderPage(): void
             </div>
         <?php endif; ?>
 
-        <div class="postbox" style="padding: 20px; margin-top: 20px;">
-            <h2>Maintenance Tools</h2>
-            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom: 10px;">
+        <div class="cliniko-admin-card">
+            <h2>Maintenance tools</h2>
+            <p>Choose an action below. Service checks and data sync run only when you click their buttons.</p>
+            <div class="cliniko-admin-tool-grid">
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <h3>Refresh cached data</h3>
+                <p>Remove saved Cliniko API responses so the next request loads fresh data.</p>
                 <?php wp_nonce_field('wp_cliniko_clear_cache'); ?>
                 <input type="hidden" name="action" value="wp_cliniko_clear_cache">
                 <button class="button button-primary">Clear API Cache</button>
             </form>
 
-            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom: 10px;">
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <h3>Check service connections</h3>
+                <p>Check whether the configured Cliniko and Stripe credentials can reach their services.</p>
                 <?php wp_nonce_field('wp_cliniko_test_connectivity'); ?>
                 <input type="hidden" name="action" value="wp_cliniko_test_connectivity">
                 <button class="button">Test API Connectivity</button>
             </form>
 
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <h3>Update booking data</h3>
+                <p>Refresh the appointment types and form templates available from Cliniko.</p>
                 <?php wp_nonce_field('wp_cliniko_trigger_sync'); ?>
                 <input type="hidden" name="action" value="wp_cliniko_trigger_sync">
                 <button class="button">Trigger Data Sync</button>
             </form>
+            </div>
         </div>
 
-        <div class="postbox" style="padding: 20px; margin-top: 30px;">
+        <div class="cliniko-admin-card">
             <h2>System Information</h2>
-            <table class="widefat striped">
+            <table class="widefat striped cliniko-system-info">
                 <tbody>
                     <tr><th>Site URL</th><td><?php echo esc_html(site_url()); ?></td></tr>
                     <tr><th>Home URL</th><td><?php echo esc_html(home_url()); ?></td></tr>
@@ -131,6 +142,7 @@ public static function renderPage(): void
         </div>
     </div>
     <?php
+    AdminWorkspace::end();
 }
 
 

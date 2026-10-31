@@ -19,9 +19,24 @@ final class Auth
     private static bool $dataResolved = false;
     private static bool $clinikoUnavailable = false;
     private static ?ApiException $resolutionException = null;
+    private static int $resolvedUserId = -1;
+
+    private static function synchronizeUser(): void
+    {
+        $userId = function_exists('get_current_user_id') ? (int) get_current_user_id() : 0;
+        if (self::$resolvedUserId === $userId) return;
+        self::$resolvedUserId = $userId;
+        self::$patient = null;
+        self::$resolved = false;
+        self::$patientData = null;
+        self::$dataResolved = false;
+        self::$clinikoUnavailable = false;
+        self::$resolutionException = null;
+    }
 
     public static function user(): ?Patient
     {
+        self::synchronizeUser();
         self::protectPrivatePage();
         if (self::$resolved) {
             if (self::$resolutionException !== null) {
@@ -64,6 +79,7 @@ final class Auth
     /** @return array<string,mixed>|null */
     public static function patientData(): ?array
     {
+        self::synchronizeUser();
         self::protectPrivatePage();
         if (self::$dataResolved) {
             return self::$patientData;

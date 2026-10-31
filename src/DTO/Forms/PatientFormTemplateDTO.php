@@ -37,6 +37,12 @@ class PatientFormTemplateDTO
                 $question->name = $questionData['name'];
                 $question->type = $questionData['type'];
                 $question->required = $questionData['required'];
+                $question->customFieldToken = isset($questionData['custom_field_token'])
+                    ? (string) $questionData['custom_field_token']
+                    : null;
+                $question->patientFieldConnection = isset($questionData['patient_field_connection'])
+                    ? (string) $questionData['patient_field_connection']
+                    : null;
                 $question->answers = $questionData['answers'] ?? [];
 
                 if (!empty($questionData['other']) && is_array($questionData['other'])) {

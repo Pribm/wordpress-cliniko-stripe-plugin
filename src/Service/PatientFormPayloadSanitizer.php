@@ -68,6 +68,11 @@ class PatientFormPayloadSanitizer
                 if (isset($question['other']) && is_array($question['other'])) {
                     if (array_key_exists('selected', $question['other']) && $question['other']['selected'] === false) {
                         unset($question['other']['selected']);
+                        // Cliniko only accepts `other.value` when the Other
+                        // option is selected. The API structure includes an
+                        // empty value for client-side form state, so remove
+                        // it before sending the patient form payload.
+                        unset($question['other']['value']);
                     }
                 }
 

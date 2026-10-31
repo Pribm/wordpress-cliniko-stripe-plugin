@@ -90,7 +90,9 @@ Authenticated shortcodes resolve the linked Cliniko patient on the server. Patie
 
 Open `Cliniko + Stripe -> Template Builder -> Import / Export` to download a versioned JSON bundle or import one on another site. Exports can include patient forms, onboarding, booking forms and aliases, dashboard modules, component styles, redirects, email templates, and custom-code bundles.
 
-Merge mode preserves destination-only templates and replaces matching template IDs or fields. Replace mode overwrites each group included in the file and requires explicit confirmation. Credentials, patient records, patient-account settings, verification-page settings, and uploaded font files are never included. Review destination-specific URLs and external IDs after importing.
+Merge mode preserves destination-only templates and replaces matching template IDs or fields. Replace mode overwrites each group included in the file and requires explicit confirmation. If an import contains URLs pointing to `localhost`, a localhost subdomain, `127.0.0.1`, or `[::1]`, the plugin pauses before writing data, shows every detected URL, and lets an administrator replace them with the current site origin (or another HTTP/HTTPS destination) while preserving paths, queries, and fragments. The administrator can also keep the original local URLs.
+
+Credentials, patient records, patient-account settings, verification-page settings, and uploaded font files are never included. Review other destination-specific URLs and external IDs after importing.
 
 ## Elementor Widgets
 

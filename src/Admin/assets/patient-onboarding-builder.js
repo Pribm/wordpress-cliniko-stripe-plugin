@@ -20,6 +20,12 @@
     var welcomeSourceControl = form.querySelector('[data-onboarding-welcome-source]');
     var welcomeShortcodeField = form.querySelector('[data-onboarding-welcome-shortcode]');
     var welcomeHtmlFields = form.querySelectorAll('[data-onboarding-welcome-html]');
+    var apiOnboardingEditor = form.querySelector('[data-api-onboarding-editor]');
+    var apiOnboardingSources = form.querySelectorAll('[data-onboarding-source]');
+    var apiOnboardingMode = !!apiOnboardingEditor;
+    var apiShortcodeSchemesScript = form.querySelector('[data-api-shortcode-schemes]');
+    var apiLoadShortcodeButton = form.querySelector('[data-api-load-shortcode]');
+    var apiShortcodeSelect = form.querySelector('[name="shortcode_id"]');
     if (!stepsRoot || !configInput || !availableScript) return;
 
     var available = [];
@@ -35,6 +41,8 @@
     try { pages = JSON.parse(pagesScript ? pagesScript.textContent : '[]'); } catch (error) { pages = []; }
     try { conditionsInitial = JSON.parse(conditionsInput ? conditionsInput.value : '[]'); } catch (error) { conditionsInitial = []; }
     var conditionsState = Array.isArray(conditionsInitial) ? conditionsInitial : [];
+    var apiShortcodeSchemes = {};
+    try { apiShortcodeSchemes = JSON.parse(apiShortcodeSchemesScript ? apiShortcodeSchemesScript.textContent : '{}') || {}; } catch (error) { apiShortcodeSchemes = {}; }
 
     function selectTab(name) {
         form.querySelectorAll('[data-onboarding-tab]').forEach(function (button) {
@@ -74,6 +82,25 @@
         welcomeHtmlFields.forEach(function (field) { field.hidden = source !== 'html'; });
     }
 
+    function syncApiOnboardingSource() {
+        if (!apiOnboardingEditor) return;
+        var selected = form.querySelector('[data-onboarding-source]:checked');
+        apiOnboardingEditor.hidden = !!selected && selected.value !== 'api';
+    }
+
+    function loadShortcodeSchemeIntoApi() {
+        if (!apiShortcodeSelect || !apiShortcodeSelect.value || !apiShortcodeSchemes[apiShortcodeSelect.value]) return;
+        var copied = JSON.parse(JSON.stringify(apiShortcodeSchemes[apiShortcodeSelect.value]));
+        state = Array.isArray(copied) ? copied : [];
+        configInput.value = JSON.stringify(state);
+        var apiSource = form.querySelector('[data-onboarding-source="api"]');
+        if (apiSource) apiSource.checked = true;
+        render();
+        read();
+        syncApiOnboardingSource();
+        if (apiOnboardingEditor) apiOnboardingEditor.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+
     if (tabsRoot) {
         tabsRoot.addEventListener('click', function (event) {
             var button = event.target.closest('[data-onboarding-tab]');
@@ -89,6 +116,8 @@
     if (customColorsControl) customColorsControl.addEventListener('change', syncColorControls);
     if (welcomeEnabledControl) welcomeEnabledControl.addEventListener('change', syncWelcomeControls);
     if (welcomeSourceControl) welcomeSourceControl.addEventListener('change', syncWelcomeControls);
+    apiOnboardingSources.forEach(function (source) { source.addEventListener('change', syncApiOnboardingSource); });
+    if (apiLoadShortcodeButton) apiLoadShortcodeButton.addEventListener('click', loadShortcodeSchemeIntoApi);
 
     function uid() {
         return 'onboarding-step-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
@@ -189,11 +218,38 @@
         return labels[type] || 'Original control';
     }
 
+    function definitionOptions(definition) {
+        var raw = definition && Array.isArray(definition.options) ? definition.options : [];
+        var options = [];
+        raw.forEach(function (option) {
+            var value = option && typeof option === 'object'
+                ? (option.name || option.label || option.value || '')
+                : option;
+            value = String(value == null ? '' : value).trim();
+            if (value && options.indexOf(value) === -1) options.push(value);
+        });
+        return options;
+    }
+
+    function usesDefaultDropdown(inputType, definition) {
+        var type = String(definition && definition.type || '').toLowerCase();
+        var clinikoType = String(definition && definition.cliniko_field_type || '').toLowerCase();
+        return inputType === 'default' && (
+            ['select', 'radio', 'radiobuttons'].indexOf(type) !== -1
+            || ['select', 'radio', 'radiobuttons'].indexOf(clinikoType) !== -1
+        );
+    }
+
     function renderInputTypeSettings(field, definition) {
         var capabilities = inputTypeCapabilities(definition);
         var inputType = normaliseInputType(field.input_type || 'default', definition);
         var dateFormat = ['dmy_slash', 'mdy_slash', 'ymd_dash', 'dmy_dash'].indexOf(field.date_format) !== -1 ? field.date_format : 'dmy_slash';
-        var selectOptions = Array.isArray(field.select_options) && field.select_options.length ? field.select_options : [''];
+        var defaultDropdown = usesDefaultDropdown(inputType, definition);
+        var nativeOptions = definitionOptions(definition);
+        var selectOptions = defaultDropdown
+            ? nativeOptions
+            : (Array.isArray(field.select_options) && field.select_options.length ? field.select_options : ['']);
+        var showSelectOptions = inputType === 'select' || defaultDropdown;
         var typeOptions = '<option value="default"' + (inputType === 'default' ? ' selected' : '') + '>Use field default (' + escapeHtml(fieldTypeLabel(capabilities.type)) + ')</option>';
         if (capabilities.text) typeOptions += '<option value="text"' + (inputType === 'text' ? ' selected' : '') + '>Text input</option>';
         if (capabilities.date) typeOptions += '<option value="date"' + (inputType === 'date' ? ' selected' : '') + '>Formatted date</option>';
@@ -210,9 +266,13 @@
                     '<option value="dmy_dash"' + (dateFormat === 'dmy_dash' ? ' selected' : '') + '>DD-MM-YYYY - 31-12-2026</option>' +
                 '</select><small>This changes only the patient-facing input. Cliniko still receives YYYY-MM-DD.</small></label>' +
             '</div>' +
-            '<div class="cliniko-onboarding-select-settings" data-field-select-settings' + (inputType === 'select' ? '' : ' hidden') + '>' +
-                '<div><strong>Dropdown options</strong><span>Enter one option per line. The line order is the order patients will see.</span></div>' +
-                '<label>Options <textarea rows="7" maxlength="15000" data-field-select-options placeholder="First option&#10;Second option&#10;Third option">' + escapeHtml(selectOptions.join('\n')) + '</textarea><small>Empty lines and duplicate options are ignored.</small></label>' +
+            '<div class="cliniko-onboarding-select-settings" data-field-select-settings' + (showSelectOptions ? '' : ' hidden') + '>' +
+                '<div><strong>Dropdown options</strong><span>' + (defaultDropdown
+                    ? 'These options come from the field definition in Cliniko.'
+                    : 'Enter one option per line. The line order is the order patients will see.') + '</span></div>' +
+                '<label>Options <textarea rows="7" maxlength="15000" data-field-select-options' + (defaultDropdown ? ' readonly' : '') + ' placeholder="First option&#10;Second option&#10;Third option">' + escapeHtml(selectOptions.join('\n')) + '</textarea><small>' + (defaultDropdown
+                    ? 'The API will return these choices and validate submitted values against them.'
+                    : 'Empty lines and duplicate options are ignored.') + '</small></label>' +
             '</div>' +
         '</section>';
     }
@@ -226,16 +286,19 @@
         var inputType = normaliseInputType(inputTypeControl ? inputTypeControl.value : 'default', definition);
         var dateSettings = settings.querySelector('[data-field-date-settings]');
         var selectSettings = settings.querySelector('[data-field-select-settings]');
+        var defaultDropdown = usesDefaultDropdown(inputType, definition);
+        var showSelectOptions = inputType === 'select' || defaultDropdown;
         if (dateSettings) {
             dateSettings.hidden = inputType !== 'date';
             dateSettings.querySelectorAll('select, input').forEach(function (control) { control.disabled = inputType !== 'date'; });
         }
         if (selectSettings) {
-            selectSettings.hidden = inputType !== 'select';
+            selectSettings.hidden = !showSelectOptions;
             var optionsControl = selectSettings.querySelector('[data-field-select-options]');
             if (optionsControl) {
-                optionsControl.disabled = inputType !== 'select';
-                optionsControl.setCustomValidity(inputType === 'select' && optionsControl.value.split(/\r?\n/).every(function (option) { return option.trim() === ''; })
+                optionsControl.disabled = !showSelectOptions;
+                optionsControl.readOnly = defaultDropdown;
+                optionsControl.setCustomValidity(showSelectOptions && !defaultDropdown && optionsControl.value.split(/\r?\n/).every(function (option) { return option.trim() === ''; })
                     ? 'Add at least one dropdown option.'
                     : '');
             }
@@ -423,6 +486,7 @@
             var onLabel = field.on_label || 'Yes';
             var offLabel = field.off_label || 'No';
             var defaultValue = field.default_value === 'on' ? 'on' : 'off';
+            var switchWidthControl = apiOnboardingMode ? '' : '<label>Width <select data-field-width><option value="50"' + ((field.width || 100) === 50 ? ' selected' : '') + '>50%</option><option value="100"' + ((field.width || 100) === 100 ? ' selected' : '') + '>100%</option></select></label>';
             article.classList.add('cliniko-onboarding-builder-field--switch');
             article.innerHTML = '<span class="dashicons dashicons-randomize cliniko-onboarding-builder-field__drag" data-onboarding-field-drag-handle aria-label="Drag to reorder" title="Drag to reorder"></span>' +
                 '<div class="cliniko-onboarding-builder-field__main cliniko-onboarding-builder-switch__main">' +
@@ -436,17 +500,18 @@
                             '<option value="off"' + (defaultValue === 'off' ? ' selected' : '') + '>' + escapeHtml(offLabel) + '</option>' +
                         '</select><small>The patient can change this selection.</small></label>' +
                     '</div>' +
-                    '<label>Width <select data-field-width><option value="50"' + ((field.width || 100) === 50 ? ' selected' : '') + '>50%</option><option value="100"' + ((field.width || 100) === 100 ? ' selected' : '') + '>100%</option></select></label>' +
+                    switchWidthControl +
                     '<label class="cliniko-onboarding-builder-field__required"><input type="checkbox" data-field-required' + (field.required !== false ? ' checked' : '') + '> Require the patient to submit this choice before onboarding is complete</label>' +
                 '</div>' + actions;
             return article;
         }
         var definition = byKey[field.key] || {};
+        var widthControl = apiOnboardingMode ? '' : '<label>Width <select data-field-width><option value="25"' + ((field.width || 100) === 25 ? ' selected' : '') + '>25%</option><option value="50"' + ((field.width || 100) === 50 ? ' selected' : '') + '>50%</option><option value="75"' + ((field.width || 100) === 75 ? ' selected' : '') + '>75%</option><option value="100"' + ((field.width || 100) === 100 ? ' selected' : '') + '>100%</option></select></label>';
         article.innerHTML = '<span class="dashicons dashicons-menu cliniko-onboarding-builder-field__drag" data-onboarding-field-drag-handle aria-label="Drag to reorder" title="Drag to reorder"></span>' +
             '<div class="cliniko-onboarding-builder-field__main">' +
                 '<label>Patient field <select data-field-key>' + fieldOptions(field.key) + '</select></label>' +
                 '<label>Visible label <input type="text" data-field-label value="' + escapeHtml(field.label || definition.label || field.key || '') + '"></label>' +
-                '<label>Width <select data-field-width><option value="25"' + ((field.width || 100) === 25 ? ' selected' : '') + '>25%</option><option value="50"' + ((field.width || 100) === 50 ? ' selected' : '') + '>50%</option><option value="75"' + ((field.width || 100) === 75 ? ' selected' : '') + '>75%</option><option value="100"' + ((field.width || 100) === 100 ? ' selected' : '') + '>100%</option></select></label>' +
+                widthControl +
                 '<label class="cliniko-onboarding-builder-field__required"><input type="checkbox" data-field-required' + (field.required ? ' checked' : '') + '> Required for onboarding completion</label>' +
                 renderInputTypeSettings(field, definition) +
                 renderInputRules(field, definition) +
@@ -464,6 +529,7 @@
             var fields = [];
             section.querySelectorAll('[data-field-index]').forEach(function (field) {
                 if (field.dataset.fieldKind === 'switch') {
+                    var switchWidth = field.querySelector('[data-field-width]');
                     fields.push({
                         kind: 'switch',
                         key: field.dataset.fieldKey || (state[stepIndex] && state[stepIndex].fields[field.dataset.fieldIndex] && state[stepIndex].fields[field.dataset.fieldIndex].key) || switchUid(),
@@ -472,7 +538,7 @@
                         off_label: field.querySelector('[data-field-switch-off-label]').value || 'No',
                         default_value: field.querySelector('[data-field-switch-default]').value === 'on' ? 'on' : 'off',
                         required: field.querySelector('[data-field-required]').checked,
-                        width: parseInt(field.querySelector('[data-field-width]').value, 10) || 100
+                        width: switchWidth ? (parseInt(switchWidth.value, 10) || 100) : 100
                     });
                     return;
                 }
@@ -495,11 +561,12 @@
                 var maskSuffix = field.querySelector('[data-field-mask-suffix]');
                 var conditionControl = field.querySelector('[data-field-condition]');
                 var conditionParts = conditionControl && conditionControl.value ? conditionControl.value.split(':') : [];
+                var fieldWidth = field.querySelector('[data-field-width]');
                 fields.push({
                     key: key,
                     label: field.querySelector('[data-field-label]').value || definition.label || key,
                     required: field.querySelector('[data-field-required]').checked,
-                    width: parseInt(field.querySelector('[data-field-width]').value, 10) || 100,
+                    width: fieldWidth ? (parseInt(fieldWidth.value, 10) || 100) : 100,
                     input_type: inputType,
                     date_format: dateFormatControl ? dateFormatControl.value : 'dmy_slash',
                     select_options: selectOptions,
@@ -763,4 +830,5 @@
     syncPlacementControls();
     syncColorControls();
     syncWelcomeControls();
+    syncApiOnboardingSource();
 }());

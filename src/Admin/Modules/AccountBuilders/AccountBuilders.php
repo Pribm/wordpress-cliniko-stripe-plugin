@@ -69,12 +69,13 @@ final class AccountBuilders
         }
 
         $assetDirectory = dirname(__DIR__, 2) . '/assets';
+        wp_enqueue_style('cliniko-admin-workspace', plugins_url('../../assets/admin-workspace.css', __FILE__), [], (string) filemtime($assetDirectory . '/admin-workspace.css'));
         $path = $assetDirectory . '/template-builder-admin.css';
         $scriptPath = $assetDirectory . '/template-builder-admin.js';
         wp_enqueue_style(
             'cliniko-template-builder-admin',
             plugins_url('../../assets/template-builder-admin.css', __FILE__),
-            [],
+            ['cliniko-admin-workspace'],
             file_exists($path) ? (string) filemtime($path) : null
         );
         wp_enqueue_script(
@@ -113,83 +114,88 @@ final class AccountBuilders
             $tab = self::TAB_PATIENT_FORMS;
         }
 
+        echo '<div class="wrap cliniko-admin-ui cliniko-template-builder">';
         self::renderNavigation($tab);
-        ShortcodeCatalog::renderStyleGuideModal();
-        if ($tab === self::TAB_COMPONENTS) {
-            ComponentStyles::renderPage();
-            return;
-        }
-        if ($tab === self::TAB_SHORTCODES) {
-            self::renderShortcodeNavigation();
-            ShortcodeCatalog::renderPage();
-            return;
-        }
-        if ($tab === self::TAB_REDIRECTS) {
-            ShortcodeCatalog::renderRedirectPage();
-            return;
-        }
-        if ($tab === self::TAB_EMAILS) {
-            PatientVerificationEmails::renderPage();
-            return;
-        }
-        if ($tab === self::TAB_CUSTOM_CODE) {
-            CustomCode::renderPage();
-            return;
-        }
-        if ($tab === self::TAB_MIGRATION) {
-            TemplateMigration::renderPage();
-            return;
-        }
-        if ($tab === self::TAB_BOOKING_FORMS) {
-            $bookingSection = sanitize_key((string) ($_GET['booking_section'] ?? 'guest'));
-            if (!in_array($bookingSection, ['guest', 'patient', 'dynamic', 'aliases'], true)) {
-                $bookingSection = 'guest';
-            }
-            self::renderBookingNavigation($bookingSection);
-            PatientBookingForms::renderPage($bookingSection);
-            return;
-        }
-        if ($tab === self::TAB_ONBOARDING) {
-            PatientOnboarding::renderPage();
-            return;
-        }
-        if ($tab === self::TAB_DASHBOARD_MODULES) {
-            $section = sanitize_key((string) ($_GET['dashboard_section'] ?? self::DASHBOARD_APPOINTMENT_TYPES));
-            self::renderDashboardNavigation($section);
-            if ($section === self::DASHBOARD_APPOINTMENT_FORMS) {
-                self::renderPlaceholder('Appointment Forms');
+        try {
+            ShortcodeCatalog::renderStyleGuideModal();
+            if ($tab === self::TAB_COMPONENTS) {
+                ComponentStyles::renderPage();
                 return;
             }
-            if ($section === self::DASHBOARD_PATIENT_DETAILS) {
-                DashboardPatientDetails::renderPage();
+            if ($tab === self::TAB_SHORTCODES) {
+                self::renderShortcodeNavigation();
+                ShortcodeCatalog::renderPage();
                 return;
             }
-            if ($section === self::DASHBOARD_PATIENT_ATTACHMENTS) {
-                PatientAttachmentsModule::renderPage();
+            if ($tab === self::TAB_REDIRECTS) {
+                ShortcodeCatalog::renderRedirectPage();
                 return;
             }
-            if ($section === self::DASHBOARD_PATIENT_COMMUNICATIONS) {
-                PatientCommunicationsModule::renderPage();
+            if ($tab === self::TAB_EMAILS) {
+                PatientVerificationEmails::renderPage();
                 return;
             }
-            DashboardModules::renderPage();
-            return;
-        }
+            if ($tab === self::TAB_CUSTOM_CODE) {
+                CustomCode::renderPage();
+                return;
+            }
+            if ($tab === self::TAB_MIGRATION) {
+                TemplateMigration::renderPage();
+                return;
+            }
+            if ($tab === self::TAB_BOOKING_FORMS) {
+                $bookingSection = sanitize_key((string) ($_GET['booking_section'] ?? 'guest'));
+                if (!in_array($bookingSection, ['guest', 'patient', 'dynamic', 'aliases'], true)) {
+                    $bookingSection = 'guest';
+                }
+                self::renderBookingNavigation($bookingSection);
+                PatientBookingForms::renderPage($bookingSection);
+                return;
+            }
+            if ($tab === self::TAB_ONBOARDING) {
+                PatientOnboarding::renderPage();
+                return;
+            }
+            if ($tab === self::TAB_DASHBOARD_MODULES) {
+                $section = sanitize_key((string) ($_GET['dashboard_section'] ?? self::DASHBOARD_APPOINTMENT_TYPES));
+                self::renderDashboardNavigation($section);
+                if ($section === self::DASHBOARD_APPOINTMENT_FORMS) {
+                    self::renderPlaceholder('Appointment Forms');
+                    return;
+                }
+                if ($section === self::DASHBOARD_PATIENT_DETAILS) {
+                    DashboardPatientDetails::renderPage();
+                    return;
+                }
+                if ($section === self::DASHBOARD_PATIENT_ATTACHMENTS) {
+                    PatientAttachmentsModule::renderPage();
+                    return;
+                }
+                if ($section === self::DASHBOARD_PATIENT_COMMUNICATIONS) {
+                    PatientCommunicationsModule::renderPage();
+                    return;
+                }
+                DashboardModules::renderPage();
+                return;
+            }
 
-        $section = sanitize_key((string) ($_GET['forms_section'] ?? self::FORMS_PATIENT_DETAILS));
-        if (!in_array($section, [self::FORMS_PATIENT_DETAILS, self::FORMS_PATIENT_FORMS, self::FORMS_PATIENT_FORM_TEMPLATES], true)) {
-            $section = self::FORMS_PATIENT_DETAILS;
+            $section = sanitize_key((string) ($_GET['forms_section'] ?? self::FORMS_PATIENT_DETAILS));
+            if (!in_array($section, [self::FORMS_PATIENT_DETAILS, self::FORMS_PATIENT_FORMS, self::FORMS_PATIENT_FORM_TEMPLATES], true)) {
+                $section = self::FORMS_PATIENT_DETAILS;
+            }
+            self::renderFormsNavigation($section);
+            if ($section === self::FORMS_PATIENT_FORMS) {
+                PatientFormHistoryForms::renderPage();
+                return;
+            }
+            if ($section === self::FORMS_PATIENT_FORM_TEMPLATES) {
+                PatientFormTemplateForms::renderPage();
+                return;
+            }
+            PatientAccountForms::renderPage();
+        } finally {
+            echo '</div></div></div>';
         }
-        self::renderFormsNavigation($section);
-        if ($section === self::FORMS_PATIENT_FORMS) {
-            PatientFormHistoryForms::renderPage();
-            return;
-        }
-        if ($section === self::FORMS_PATIENT_FORM_TEMPLATES) {
-            PatientFormTemplateForms::renderPage();
-            return;
-        }
-        PatientAccountForms::renderPage();
     }
 
     public static function renderNavigation(string $activeTab): void

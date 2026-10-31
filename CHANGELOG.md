@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+- Template imports now detect URLs pointing to localhost, loopback IPv4, or loopback IPv6 values anywhere in imported template data, including redirects and embedded HTML, CSS, or JavaScript.
+- Before writing an affected import, administrators can review the detected URLs and replace them with the current site origin or another HTTP/HTTPS destination while preserving each URL path, query, and fragment.
+
 ## [2.1.2] - 2026-10-29
 ### Fixed
 - Active Stripe booking attempts now use PaymentIntents linked to a reused or created Stripe Customer, with the patient's name, contact details, and address recorded on the Customer.

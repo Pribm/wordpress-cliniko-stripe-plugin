@@ -135,4 +135,63 @@ try {
 }
 assert_template_migration_same(true, $invalidRejected, 'Unknown bundle formats must be rejected.');
 
+$localhostBundle = [
+    'format' => 'wp-cliniko-template-bundle',
+    'schema_version' => 1,
+    'sections' => [
+        'redirects' => [
+            'wp_cliniko_shortcode_default_redirects' => [
+                'success' => 'http://localhost:8080/thanks?booking=1#done',
+                'account' => '//app.localhost:5173/account',
+                'ipv6' => 'https://[::1]/complete',
+            ],
+        ],
+        'custom_code' => [
+            'wp_cliniko_custom_code_bundles' => [
+                'bundle_a' => [
+                    'html' => '<a href="https://127.0.0.1/finish">Finish</a>',
+                    'css' => '.hero{background:url("http://localhost:3000/image.jpg")}',
+                    'js' => "fetch('http://localhost:8080/api'); fetch('http://localhost:8080/api');",
+                    'safe' => 'https://localhost.example.com/keep-this',
+                ],
+            ],
+        ],
+    ],
+];
+$localhostRewrite = TemplateMigration::rewriteLocalhostUrls($localhostBundle, 'https://clinic.example.com/ignored-path');
+assert_template_migration_same(7, $localhostRewrite['count'], 'Every localhost URL occurrence must be detected, including repeated URLs.');
+assert_template_migration_same(
+    'https://clinic.example.com/thanks?booking=1#done',
+    $localhostRewrite['payload']['sections']['redirects']['wp_cliniko_shortcode_default_redirects']['success'],
+    'The destination origin must replace localhost while preserving the URL suffix.'
+);
+assert_template_migration_same(
+    "fetch('https://clinic.example.com/api'); fetch('https://clinic.example.com/api');",
+    $localhostRewrite['payload']['sections']['custom_code']['wp_cliniko_custom_code_bundles']['bundle_a']['js'],
+    'Localhost URLs embedded in JavaScript must be replaced.'
+);
+assert_template_migration_same(
+    'https://localhost.example.com/keep-this',
+    $localhostRewrite['payload']['sections']['custom_code']['wp_cliniko_custom_code_bundles']['bundle_a']['safe'],
+    'Hosts that merely begin with localhost must not be changed.'
+);
+assert_template_migration_same(
+    'https://clinic.example.com/account',
+    $localhostRewrite['replacements']['//app.localhost:5173/account'],
+    'Subdomains of the reserved localhost domain must be detected.'
+);
+assert_template_migration_same(
+    'https://clinic.example.com/complete',
+    $localhostRewrite['replacements']['https://[::1]/complete'],
+    'The IPv6 loopback address must be detected.'
+);
+
+$invalidDestinationRejected = false;
+try {
+    TemplateMigration::rewriteLocalhostUrls($localhostBundle, 'javascript:alert(1)');
+} catch (InvalidArgumentException $exception) {
+    $invalidDestinationRejected = true;
+}
+assert_template_migration_same(true, $invalidDestinationRejected, 'Only HTTP and HTTPS destination URLs may be used.');
+
 echo "Template migration tests passed.\n";

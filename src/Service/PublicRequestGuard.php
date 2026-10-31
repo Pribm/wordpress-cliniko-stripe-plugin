@@ -42,6 +42,9 @@ class PublicRequestGuard
      */
     public function allowPublicMutation(WP_REST_Request $request)
     {
+        if (in_array(rtrim((string) $request->get_route(), '/'), ['/v1/send-patient-form', '/v1/tyrohealth/charge'], true)) {
+            return $this->deny('This legacy operation has been retired. Use the verified booking-attempt flow.', 410);
+        }
         return $this->authorize($request, 'public-mutation', 40, 600, false);
     }
 
@@ -82,6 +85,7 @@ class PublicRequestGuard
      */
     public function allowPatientAccessRequest(WP_REST_Request $request)
     {
+        if (rtrim((string) $request->get_route(), '/') === '/v2/patient-access/request-status') return $this->deny('Cross-device patient access handoff has been retired. Use email code verification.', 410);
         if (!$this->isSameOriginOrMissing($request)) {
             return $this->deny('Forbidden origin.');
         }
@@ -107,6 +111,7 @@ class PublicRequestGuard
      */
     public function allowPatientAccessRead(WP_REST_Request $request)
     {
+        if (rtrim((string) $request->get_route(), '/') === '/v2/patient-access/request-complete') return $this->deny('Cross-device patient access handoff has been retired. Use email code verification.', 410);
         if (!$this->isSameOriginOrMissing($request)) {
             return $this->deny('Forbidden origin.');
         }
@@ -163,6 +168,7 @@ class PublicRequestGuard
         }
 
         $attempt = $this->store->get($attemptId);
+        if (!empty($attempt['api_namespace'])) return $this->deny('Use the API Access namespace for this managed attempt.');
         $storedHash = trim((string) ($attempt['attempt_token_hash'] ?? ''));
         if ($storedHash === '' || !hash_equals($storedHash, self::hashAttemptToken($attemptToken))) {
             return $this->deny('Invalid booking attempt token.');
@@ -259,18 +265,14 @@ class PublicRequestGuard
 
     private function clientFingerprint(): string
     {
-        $ip = $_SERVER['HTTP_CF_CONNECTING_IP']
-            ?? $_SERVER['HTTP_X_FORWARDED_FOR']
-            ?? $_SERVER['REMOTE_ADDR']
-            ?? 'unknown';
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
         if (is_string($ip) && strpos($ip, ',') !== false) {
             $parts = explode(',', $ip);
             $ip = trim($parts[0]);
         }
 
-        $ua = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
-        return strtolower((string) $ip) . '|' . substr(hash('sha256', $ua), 0, 16);
+        return strtolower((string) $ip);
     }
 
     /**

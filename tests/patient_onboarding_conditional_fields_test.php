@@ -248,6 +248,32 @@ assert_onboarding_same(
     'An Off-state required field must be waived while its switch is On.'
 );
 
+$booleanOffSteps = onboarding_private('normaliseSteps', [[[ 
+    'id' => 'boolean-condition',
+    'title' => 'Boolean condition',
+    'fields' => [
+        ['kind' => 'switch', 'key' => 'switch_boolean', 'label' => 'Use alternative details?', 'required' => true],
+        [
+            'key' => 'ihi_number',
+            'label' => 'IHI number',
+            'required' => true,
+            'condition_switch' => 'switch_boolean',
+            'condition_value' => false,
+        ],
+    ],
+]], $available]);
+assert_onboarding_same('off', $booleanOffSteps[0]['fields'][1]['condition_value'] ?? null, 'Boolean false conditions must remain inverted during normalisation.');
+assert_onboarding_same(
+    [['key' => 'ihi_number', 'label' => 'IHI number']],
+    onboarding_private('missingRequiredFields', [$booleanOffSteps, [], ['switch_boolean' => false]]),
+    'A boolean false condition must activate its dependent field.'
+);
+assert_onboarding_same(
+    [],
+    onboarding_private('missingRequiredFields', [$booleanOffSteps, [], ['switch_boolean' => true]]),
+    'A boolean false condition must be inactive when the controller is true.'
+);
+
 $renderOnboarding = static function (array $renderSwitchValues) use ($steps, $available): string {
     $id = 'identifier-flow';
     $module = ['mode' => 'multistep', 'placement' => 'inline'];

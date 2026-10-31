@@ -16,7 +16,9 @@
 
         content.querySelectorAll(".cliniko-template-builder-page .um-admin-notice").forEach(function (notice) {
             notice.classList.add("cliniko-template-builder-notice");
-            content.insertBefore(notice, navigation);
+            var workspace = navigation.closest('.cliniko-template-builder');
+            var anchor = workspace || navigation;
+            anchor.parentNode.insertBefore(notice, anchor);
         });
     }
 
@@ -36,6 +38,7 @@
 
             if (
                 page.classList.contains("cliniko-template-builder-nav") ||
+                page.classList.contains("cliniko-template-builder") ||
                 page.classList.contains("cliniko-template-builder-subnav") ||
                 page.closest(".cliniko-form-builder__preview-modal") ||
                 page.querySelector("form[data-cliniko-onboarding-builder]") ||
@@ -57,7 +60,7 @@
 
     function activeBuilderName() {
         var active = document.querySelector(".cliniko-template-builder-subnav a.current, .cliniko-template-builder-nav__tabs a.is-active");
-        var primaryLabel = active && active.querySelector("span");
+        var primaryLabel = active && active.querySelector("span:not(.dashicons)");
         var label = primaryLabel && primaryLabel.textContent
             ? primaryLabel.textContent.trim()
             : (active && active.textContent ? active.textContent.trim() : "Shortcode");
@@ -320,6 +323,14 @@
         moveAdminNotices();
         enhanceBuilderPages();
     }
+
+    // Preview dialogs live outside their editor forms, so close controls belong here.
+    document.addEventListener('click', function (event) {
+        if (!(event.target instanceof Element)) return;
+        var close = event.target.closest('[data-close-preview]');
+        var modal = close && close.closest('.cliniko-template-builder [data-preview-modal]');
+        if (modal) modal.hidden = true;
+    });
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initialiseAdminExperience);

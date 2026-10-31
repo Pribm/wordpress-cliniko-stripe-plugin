@@ -3,6 +3,7 @@
 namespace App\Admin\Modules\Settings;
 
 use App\Support\AdminView;
+use App\Admin\AdminWorkspace;
 
 if (!defined('ABSPATH')) exit;
 
@@ -37,6 +38,11 @@ class Settings
             $currentTab = 'credentials';
         }
 
-        echo AdminView::render('Settings/Views/page', compact('currentTab', 'tabs'));
+        AdminWorkspace::begin('wp-cliniko-stripe-settings', 'Settings', 'Connect your services and configure how patient accounts work.');
+        try {
+            echo AdminView::render('Settings/Views/page', compact('currentTab', 'tabs'));
+        } finally {
+            AdminWorkspace::end();
+        }
     }
 }

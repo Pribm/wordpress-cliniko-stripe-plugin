@@ -547,6 +547,7 @@ abstract class AbstractModel
             'error' => $response->error,
             'status_code' => $response->statusCode,
             'response_data' => $response->data,
+            'raw_body' => $response->rawBody,
         ];
     }
 }
