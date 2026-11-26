@@ -179,7 +179,7 @@ class PatientSubmissionSanitizer
     /**
      * @param mixed $value
      */
-    private static function normalizeDateYmd($value): string
+    public static function normalizeDateYmd($value): string
     {
         $raw = trim((string) $value);
         if ($raw === '') {

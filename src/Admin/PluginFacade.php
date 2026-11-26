@@ -22,6 +22,7 @@ use App\Admin\Modules\Settings\Settings;
 use App\Admin\Modules\Tools;
 use App\Admin\Modules\UserGuide;
 use App\Workers\BookingAttemptCleanupWorker;
+use App\Workers\BookingReturnHistoryWorker;
 use App\Workers\ClinikoPatientFormWorker;
 use App\Workers\ClinikoSchedulingWorker;
 use App\Widgets\ClinikoForm\Webhooks\WebhookDeliveryWorker;
@@ -60,6 +61,7 @@ class PluginFacade
 
         add_action('init', function () {
             BookingAttemptCleanupWorker::register();
+            BookingReturnHistoryWorker::register();
             ClinikoSchedulingWorker::register();
             ClinikoPatientFormWorker::register();
             WebhookDeliveryWorker::register();

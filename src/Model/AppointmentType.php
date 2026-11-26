@@ -7,6 +7,7 @@ use App\Core\Framework\AbstractModel;
 use App\DTO\AppointmentTypeDTO;
 use App\DTO\AppointmentTypeBillableItemDTO;
 use App\DTO\PractitionerDTO;
+use App\Exception\ApiException;
 
 if (!defined('ABSPATH')) exit;
 
@@ -41,12 +42,17 @@ class AppointmentType extends AbstractModel
         return (string) $this->dto->category;
     }
 
+    public function isArchived(): bool
+    {
+        return !empty($this->dto->archivedAt);
+    }
+
     /**
      * @return AppointmentTypeBillableItem[]
      */
-    public function getAppointmentTypeBillableItems(): array
+    public function getAppointmentTypeBillableItems(bool $throwOnError = false): array
     {
-        if ($this->appointmentTypeBillableItems !== null) {
+        if ($this->appointmentTypeBillableItems !== null && !$throwOnError) {
             return $this->appointmentTypeBillableItems;
         }
 
@@ -55,7 +61,10 @@ class AppointmentType extends AbstractModel
             return $this->appointmentTypeBillableItems;
         }
 
-        $data = $this->safeGetLinkedEntity($this->dto->billableItemsUrl);
+        $data = $this->safeGetLinkedEntity($this->dto->billableItemsUrl, $throwOnError);
+        if ($throwOnError && !is_array($data['appointment_type_billable_items'] ?? null)) {
+            throw new ApiException('Cliniko returned an invalid appointment price list.');
+        }
 
         if (empty($data)) {
             $this->appointmentTypeBillableItems = [];
@@ -99,20 +108,16 @@ class AppointmentType extends AbstractModel
         return $this->practitioners;
     }
 
-    public function getBillableItemsFinalPrice(): int
+    public function getBillableItemsFinalPrice(bool $throwOnError = false): int
     {
-        $billableItems = $this->getAppointmentTypeBillableItems();
-
-        if (empty($billableItems)) {
-            return 0;
-        }
-
-        return array_reduce($billableItems, function ($carry, AppointmentTypeBillableItem $item) {
-            if ($item->getBillableItem() === null) {
-                return $carry;
+        $price = 0;
+        foreach ($this->getAppointmentTypeBillableItems($throwOnError) as $item) {
+            $billable = $item->getBillableItem($throwOnError);
+            if ($billable !== null) {
+                $price += $billable->getPriceInCents();
             }
-            return $carry + $item->getBillableItem()->getPriceInCents();
-        }, 0);
+        }
+        return $price;
     }
 
     public function requiresPayment(): bool

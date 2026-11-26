@@ -6,6 +6,7 @@ use App\Contracts\ApiClientInterface;
 use App\Core\Framework\AbstractModel;
 use App\DTO\AppointmentTypeBillableItemDTO;
 use App\DTO\BillableItemDTO;
+use App\Exception\ApiException;
 
 if (!defined('ABSPATH')) exit;
 
@@ -22,9 +23,12 @@ class AppointmentTypeBillableItem extends AbstractModel
      *
      * @return BillableItem|null
      */
-    public function getBillableItem(): ?BillableItem
+    public function getBillableItem(bool $throwOnError = false): ?BillableItem
     {
         if (!$this->dto->billableItemUrl) {
+            if ($throwOnError) {
+                throw new ApiException('A Cliniko billable item is missing.');
+            }
             return null;
         }
 
@@ -32,7 +36,10 @@ class AppointmentTypeBillableItem extends AbstractModel
             return $this->billableItem;
         }
 
-        $data = $this->safeGetLinkedEntity($this->dto->billableItemUrl);
+        $data = $this->safeGetLinkedEntity($this->dto->billableItemUrl, $throwOnError);
+        if ($throwOnError && !is_numeric($data['price'] ?? null)) {
+            throw new ApiException('Cliniko returned an invalid billable item price.');
+        }
 
         if (empty($data)) {
             return null;

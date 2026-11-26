@@ -29,21 +29,27 @@ class PatientAccessController
     {
         $body = json_decode($request->get_body(), true) ?: $request->get_params();
         $result = $this->service->requestAccessCode(is_array($body) ? $body : []);
-        return new WP_REST_Response($this->withoutStatus($result), (int) ($result['status'] ?? 500));
+        return $this->verificationResponse($result);
     }
 
     public function requestLink(WP_REST_Request $request): WP_REST_Response
     {
-        $body = json_decode($request->get_body(), true) ?: $request->get_params();
-        $result = $this->service->requestAccessCode(is_array($body) ? $body : []);
-        return new WP_REST_Response($this->withoutStatus($result), (int) ($result['status'] ?? 500));
+        return $this->requestCode($request);
     }
 
     public function verifyCode(WP_REST_Request $request): WP_REST_Response
     {
         $body = json_decode($request->get_body(), true) ?: $request->get_params();
         $result = $this->service->verifyAccessCode(is_array($body) ? $body : []);
-        return new WP_REST_Response($this->withoutStatus($result), (int) ($result['status'] ?? 500));
+        return $this->verificationResponse($result);
+    }
+
+    /** @param array<string,mixed> $result */
+    private function verificationResponse(array $result): WP_REST_Response
+    {
+        $response = new WP_REST_Response($this->withoutStatus($result), (int) ($result['status'] ?? 500));
+        $response->header('Cache-Control', 'private, no-store');
+        return $response;
     }
 
     public function requestStatus(WP_REST_Request $request): WP_REST_Response

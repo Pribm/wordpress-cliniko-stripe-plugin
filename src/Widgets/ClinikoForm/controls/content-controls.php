@@ -4,7 +4,10 @@ if (!defined('ABSPATH'))
 
 use App\Model\PatientFormTemplate;
 use App\Model\AppointmentType;
+use App\Service\PatientCustomFieldService;
+use App\Widgets\ClinikoForm\ReturnPolicySettingsRegistry;
 use Elementor\Controls_Manager;
+use Elementor\Plugin;
 use Elementor\Repeater;
 
 if (!function_exists('cliniko_headless_option_field_types')) {
@@ -275,10 +278,9 @@ function register_content_controls($widget)
     $widget->end_controls_section();
 }
 
-function get_cliniko_form_templates()
+function get_cliniko_form_templates(?array $patientFormTemplates = null)
 {
-    $client = cliniko_client(true, 21600);
-    $patientFormTemplates = PatientFormTemplate::all($client);
+    $patientFormTemplates ??= PatientFormTemplate::all(cliniko_client(true, 21600));
 
     $templates = [];
     if (!empty($patientFormTemplates)) {
@@ -291,7 +293,9 @@ function get_cliniko_form_templates()
 
 function register_cliniko_form_controls($widget)
 {
-    $templates = get_cliniko_form_templates();
+    $client = cliniko_client(true, 21600);
+    $templateModels = PatientFormTemplate::all($client);
+    $templates = get_cliniko_form_templates($templateModels);
 
     $widget->start_controls_section('cliniko_form_section', [
         'label' => 'Settings',
@@ -690,10 +694,18 @@ function register_cliniko_form_controls($widget)
 
     // Appointment Types
     $module_options = ['' => 'Select an appointment type'];
-    $client = cliniko_client(true, 21600);
+    $showPrices = is_admin() || Plugin::$instance->editor->is_edit_mode();
     $modules = AppointmentType::all($client);
     foreach ($modules as $mod) {
-        $module_options[$mod->getId()] = $mod->getName() . ' (' . $mod->getDurationInMinutes() . ' min)';
+        $label = $mod->getName() . ' (' . $mod->getDurationInMinutes() . ' min)';
+        if ($showPrices) {
+            try {
+                $label .= ' · $' . number_format($mod->getBillableItemsFinalPrice(true) / 100, 2) . ' AUD';
+            } catch (\Throwable $error) {
+                $label .= ' · Price unavailable';
+            }
+        }
+        $module_options[$mod->getId()] = $label;
     }
 
     $widget->add_control('module_id', [
@@ -728,6 +740,84 @@ function register_cliniko_form_controls($widget)
         'label_off' => __('No', 'plugin-name'),
         'return_value' => 'yes',
         'default' => 'no',
+    ]);
+
+    $widget->end_controls_section();
+
+    register_cliniko_return_policy_controls($widget, $templateModels, $module_options);
+}
+
+/**
+ * @param PatientFormTemplate[] $templates
+ * @param array<string,string> $appointmentTypes
+ */
+function register_cliniko_return_policy_controls($widget, array $templates, array $appointmentTypes): void
+{
+    $widget->start_controls_section('cliniko_return_policy_section', [
+        'label' => 'Return Policy',
+        'tab' => Controls_Manager::TAB_CONTENT,
+        'condition' => ['appointment_source' => 'custom_form', 'enable_payment' => 'yes'],
+    ]);
+
+    $withTooltip = static function (string $label, string $help): array {
+        return [
+            'label' => $label . ' <span class="eicon-info-circle" aria-hidden="true" title="' . esc_attr($help) . '"></span>',
+            'description' => $help,
+        ];
+    };
+    $widget->add_control('return_policy_enabled', $withTooltip(
+        'Enable a return policy for this form',
+        'The return appointment type applies when the answer is in the patient’s Cliniko history. The server uses the signed-in patient’s verified link or matches a guest’s email, first name, last name, and date of birth to one Cliniko record. Otherwise the regular type applies.'
+    ) + [
+        'type' => Controls_Manager::SWITCHER,
+        'return_value' => 'yes',
+        'default' => 'no',
+    ]);
+
+    $enabled = ['return_policy_enabled' => 'yes'];
+    foreach ($templates as $template) {
+        $templateId = (string) $template->getId();
+        $questions = ['' => 'Select a form question'];
+        foreach (ReturnPolicySettingsRegistry::questions($template) as $id => $question) {
+            $questions[$id] = esc_html(
+                wp_strip_all_tags($question['section'] . ' → ' . $question['name'])
+            );
+        }
+        $widget->add_control(ReturnPolicySettingsRegistry::questionControl($templateId), $withTooltip(
+            'Form question',
+            'Choose the text question the patient will answer. Use a unique question label and one answer per booking. Keep the question separate from Cliniko’s automatic patient-field updates.'
+        ) + [
+            'type' => Controls_Manager::SELECT,
+            'options' => $questions,
+            'default' => '',
+            'condition' => $enabled + ['cliniko_form_template_id' => $templateId],
+        ]);
+    }
+
+    $fields = ['' => 'Select a paragraph field'];
+    foreach (PatientCustomFieldService::getPatientFieldDefinitions() as $field) {
+        if (in_array($field['cliniko_field_type'], ['paragraph', 'textarea'], true)) {
+            $fields[$field['cliniko_field_token']] = esc_html($field['cliniko_section_name'] . ' → ' . $field['label']);
+        }
+    }
+    $widget->add_control('return_policy_history_field', $withTooltip(
+        'Patient history field',
+        'Choose a Cliniko Paragraph field. A confirmed booking for a matched or newly created patient adds its answer on a new line if absent. Matching ignores case and extra spaces.'
+    ) + [
+        'type' => Controls_Manager::SELECT,
+        'options' => $fields,
+        'default' => '',
+        'condition' => $enabled,
+    ]);
+
+    $widget->add_control('return_policy_appointment_type', $withTooltip(
+        'Appointment type when matched',
+        'Choose a dedicated return type enabled for online bookings in Cliniko. Its availability and billable items determine the slots and price. This website’s checkout requires the return policy to book it.'
+    ) + [
+        'type' => Controls_Manager::SELECT,
+        'options' => array_map('esc_html', $appointmentTypes),
+        'default' => '',
+        'condition' => $enabled,
     ]);
 
     $widget->end_controls_section();

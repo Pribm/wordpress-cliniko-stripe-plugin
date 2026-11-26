@@ -54,9 +54,7 @@ class PatientAccessTokenService
             $latestContext,
             'patient-access-code',
             self::CHALLENGE_TOKEN_TTL,
-            [
-                'code' => $code,
-            ]
+            ['code' => $code]
         );
 
         return [
@@ -194,6 +192,7 @@ class PatientAccessTokenService
         }
 
         $this->clearChallengeFailures($challengeToken);
+
         return $payload;
     }
 

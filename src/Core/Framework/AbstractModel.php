@@ -522,20 +522,21 @@ abstract class AbstractModel
     /**
      * @phpstan-return array<string,mixed>
      */
-    protected function safeGetLinkedEntity(string $url): array
+    protected function safeGetLinkedEntity(string $url, bool $throwOnError = false): array
     {
         if ($url === '') {
             return [];
         }
 
         $response = $this->client->get($url);
-        if (!$response->isSuccessful()) {
+        if (!$response->isSuccessful() || !is_array($response->data)) {
+            if ($throwOnError) {
+                throw new ApiException('Failed to read a linked Cliniko resource.', self::buildResponseErrorContext($response));
+            }
             return [];
         }
 
-        /** @var array<string,mixed> $data */
-        $data = is_array($response->data) ? $response->data : [];
-        return $data;
+        return $response->data;
     }
 
     /**

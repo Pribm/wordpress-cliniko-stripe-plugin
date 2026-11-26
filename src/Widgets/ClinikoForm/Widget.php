@@ -505,11 +505,12 @@ class Widget extends Widget_Base
 
     $is_editor = Plugin::$instance->editor->is_edit_mode();
     $form_template_id = $settings['cliniko_form_template_id'] ?? null;
+    $returnPolicyEnabled = ReturnPolicySettingsRegistry::isEnabled($settings);
 
     $appointment_source = (string) ($settings['appointment_source'] ?? '');
     $use_patient_data_if_logged_in =
       $appointment_source === 'custom_form'
-      && (($settings['use_patient_data_if_logged_in'] ?? '') === 'yes');
+      && (($settings['use_patient_data_if_logged_in'] ?? '') === 'yes' || $returnPolicyEnabled);
 
     // This is deliberately only a capability boolean. Patient data is never
     // resolved or serialized into the page while rendering the widget.
@@ -574,6 +575,7 @@ class Widget extends Widget_Base
 
     $sections = [];
     $sections_loaded = false;
+    $templateModel = null;
     try {
       $templateModel = PatientFormTemplate::find($form_template_id, cliniko_client(true, $cliniko_cache_ttl), false);
       $sections = $templateModel ? $templateModel->getSections() : [];
@@ -582,6 +584,28 @@ class Widget extends Widget_Base
       new ApiException($e->getMessage());
       $sections = [];
       $sections_loaded = false;
+    }
+
+    $returnPolicyConfig = null;
+    if ($returnPolicyEnabled) {
+      $document = Plugin::$instance->documents->get_current();
+      $postId = $document ? (int) $document->get_main_id() : (int) get_the_ID();
+      $contextId = ReturnPolicySettingsRegistry::contextId($postId, $this->get_id());
+      $policy = ReturnPolicySettingsRegistry::find($contextId);
+      $question = $policy && $templateModel
+        ? (ReturnPolicySettingsRegistry::questions($templateModel)[$policy['question_key']] ?? null)
+        : null;
+      $returnPolicyConfig = [
+        'id' => $policy ? $contextId : '',
+        'quote_url' => rest_url('v2/booking-attempts/return-policy-quote'),
+        'module_id' => (string) ($settings['module_id'] ?? ''),
+        'return_type_id' => (string) ($policy['return_type_id'] ?? ''),
+        'template_id' => (string) $form_template_id,
+        'question' => $question,
+      ];
+      if ($is_editor && !$question) {
+        echo '<p>Please select the return policy question, history field, and return appointment type, then save the page.</p>';
+      }
     }
 
     wp_enqueue_script(
@@ -795,6 +819,7 @@ class Widget extends Widget_Base
         'cliniko_embed' => $settings['appointment_source'],
         'form_type' => $form_type,
         'is_headless' => $is_headless,
+        'return_policy' => $returnPolicyConfig,
         // expose gateway selection for frontend handlers (keeps original casing if present)
         'custom_form_payment' => $settings['custom_form_payment'] ?? 'stripe',
         'appointment_time_selection' => $settings['appointment_time_selection'] ?? 'calendar',

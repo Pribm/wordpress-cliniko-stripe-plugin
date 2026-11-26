@@ -49,6 +49,12 @@ class WebhookSettingsRegistry
         return isset($registry[$id]) && is_array($registry[$id]) ? $registry[$id] : null;
     }
 
+    /** @return array<string,mixed>|null */
+    public static function findForWidget(int $postId, string $widgetId, string $moduleId, string $templateId): ?array
+    {
+        return self::find(self::contextId($postId, $widgetId, $moduleId, $templateId));
+    }
+
     /**
      * @return array<string,mixed>|null
      */

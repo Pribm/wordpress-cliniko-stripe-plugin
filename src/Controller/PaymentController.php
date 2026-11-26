@@ -10,6 +10,7 @@ use App\Service\SchedulingDispatchService;
 use App\Service\StripeService;
 use App\Validator\AppointmentRequestValidator;
 use App\Validator\PatientFormValidator;
+use App\Widgets\ClinikoForm\ReturnPolicySettingsRegistry;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -79,6 +80,9 @@ class PaymentController
 
         if (!$apptType) {
             return new WP_REST_Response(['status' => 'error', 'message' => 'Appointment type not found.'], 404);
+        }
+        if (ReturnPolicySettingsRegistry::reservesType((string) $apptType->getId())) {
+            return new WP_REST_Response(['status' => 'error', 'message' => 'This appointment type requires a return policy booking.'], 403);
         }
 
         $amount = $apptType->getBillableItemsFinalPrice();

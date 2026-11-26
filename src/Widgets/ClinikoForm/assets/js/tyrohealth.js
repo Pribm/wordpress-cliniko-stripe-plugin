@@ -203,7 +203,10 @@
       data = text ? JSON.parse(text) : {};
     } catch (_) {}
     window.ClinikoConnectionNotice?.inspectResponse(res, data);
-    if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
+    if (!res.ok) {
+      if (typeof showUpdatedReturnPolicyQuote === "function") showUpdatedReturnPolicyQuote(data);
+      throw new Error(data?.message || `Request failed (${res.status})`);
+    }
     return data;
   }
 
@@ -304,9 +307,10 @@
   }
 
   async function createBookingAttempt() {
+    const useReturnPolicy = !!window.formHandlerData?.return_policy;
     const activeModuleId = String(window.formHandlerData?.module_id || "").trim();
     if (
-      cachedAttempt?.attempt?.id &&
+      !useReturnPolicy && cachedAttempt?.attempt?.id &&
       cachedAttemptModuleId !== "" &&
       cachedAttemptModuleId === activeModuleId
     ) {
@@ -320,7 +324,18 @@
       : window.TyroHealthData.attempt_preflight_url;
     if (!url) throw new Error("TyroHealth booking preflight URL missing.");
 
-    const resp = await postJson(url, buildAttemptPayload());
+    const payload = buildAttemptPayload();
+    if (useReturnPolicy) {
+      const fields = getReturnPolicyBookingFields();
+      const quote = getReviewedReturnPolicyQuote(payload) || await prepareReturnPolicyQuote(payload);
+      if (!sameReturnPolicyPrice(fields.return_policy_quote, quote)) {
+        throw new Error("Review the booking price, then continue.");
+      }
+      payload.patient = await resolveReturnPolicyNextTime(payload.patient, quote);
+      Object.assign(payload, getReturnPolicyBookingFields());
+    }
+
+    const resp = await postJson(url, payload);
     if (!resp?.ok || !resp?.attempt?.id || !resp?.attempt?.token || !resp?.payment) {
       throw new Error(resp?.message || "Failed to prepare booking attempt.");
     }
@@ -339,7 +354,8 @@
     showLoader();
 
     try {
-      await ensureConfigured();
+      const useReturnPolicy = !!window.formHandlerData?.return_policy;
+      if (!useReturnPolicy) await ensureConfigured();
 
       const patient = collectPatient();
       const useAuthenticatedPatientBooking =
@@ -354,6 +370,14 @@
       }
 
       const attempt = await createBookingAttempt();
+      if (useReturnPolicy && attempt.payment.required === false) {
+        await window.submitBookingForm(null, ensureErrorEl(), false, {
+          attemptId: attempt.attempt.id,
+          attemptToken: attempt.attempt.token,
+        });
+        return;
+      }
+      if (useReturnPolicy) await ensureConfigured();
       const chargeAmount = normalizeChargeAmount(
         ((attempt?.payment?.amount || 0) / 100).toFixed(2)
       );

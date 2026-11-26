@@ -1,6 +1,8 @@
 <?php
 namespace App\Service;
 
+use App\Widgets\ClinikoForm\ReturnPolicySettingsRegistry;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -25,6 +27,7 @@ class PatientFormPayloadSanitizer
             return $content;
         }
 
+        $protectedFields = array_map('strtolower', ReturnPolicySettingsRegistry::protectedFieldTokens());
         foreach ($content['sections'] as $sectionIndex => $section) {
             if (!is_array($section) || !isset($section['questions']) || !is_array($section['questions'])) {
                 continue;
@@ -33,6 +36,11 @@ class PatientFormPayloadSanitizer
             foreach ($section['questions'] as $questionIndex => $question) {
                 if (!is_array($question)) {
                     continue;
+                }
+                $fieldToken = $question['custom_field_token'] ?? '';
+                if (is_string($fieldToken) && in_array(strtolower(trim($fieldToken)), $protectedFields, true)) {
+                    unset($question['custom_field_token'], $question['patient_field_connection']);
+                    $section['questions'][$questionIndex] = $question;
                 }
 
                 $type = strtolower((string) ($question['type'] ?? ''));

@@ -20,6 +20,11 @@ let patientHistoryStandaloneActive = false;
 let patientHistoryHandoffListenerBound = false;
 let patientHistoryRequestStatusStop = null;
 let patientHistoryAttentionTitle = "";
+let returnPolicyQuote = null;
+let returnPolicyRequest = null;
+let updateReturnPolicySchedule = null;
+const returnPolicyContactFields = ["email", "first_name", "last_name", "date_of_birth"];
+const returnPolicyQuoteLifetime = 60000;
 const patientHistoryTabId = `esph_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 
 function reportClinikoConnection(response, payload) {
@@ -55,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initHeadlessPaymentWatcher();
   }
 
+  initReturnPolicyQuotePrefetch();
   initPatientHistoryAccess();
 });
 
@@ -66,6 +72,261 @@ document.addEventListener("visibilitychange", () => {
 
 function getSelectedGateway() {
   return String(formHandlerData?.custom_form_payment || "stripe").toLowerCase();
+}
+
+function updateBookingPaymentSummary(appointmentType) {
+  const display = {
+    "summary-name": appointmentType.name,
+    "summary-description": appointmentType.description,
+    "summary-duration": appointmentType.duration_in_minutes ?? appointmentType.duration_minutes,
+    "summary-price": Number.isFinite(Number(appointmentType.amount_cents))
+      ? (Number(appointmentType.amount_cents) / 100).toFixed(2)
+      : appointmentType.amount,
+  };
+  Object.entries(display).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element && value !== undefined && value !== null) {
+      element.textContent = String(value);
+    }
+  });
+}
+
+function getReturnPolicyBookingFields() {
+  const config = formHandlerData?.return_policy;
+  if (!config) return {};
+  return {
+    moduleId: config.module_id,
+    patient_form_template_id: config.template_id,
+    return_policy_id: config.id,
+    return_policy_quote: returnPolicyQuote && {
+      appointment_type_id: returnPolicyQuote.appointment_type_id,
+      amount_cents: returnPolicyQuote.amount_cents,
+    },
+  };
+}
+
+function updateReturnPolicyStatus(message, pending = false) {
+  const status = document.getElementById("return-policy-status");
+  if (status) {
+    status.textContent = message;
+    status.hidden = !message;
+  }
+  if (pending) {
+    const price = document.getElementById("summary-price");
+    if (price) price.textContent = "—";
+  }
+}
+
+function applyReturnPolicyQuote(quote, previousQuote = returnPolicyQuote) {
+  returnPolicyQuote = quote;
+  updateBookingPaymentSummary(quote);
+  const priceChanged = previousQuote && previousQuote.amount_cents !== quote.amount_cents;
+  updateReturnPolicyStatus(quote.return_pricing_applied ? "Return price applied." : priceChanged ? "Price updated." : "");
+  updateReturnPolicySchedule?.(quote.appointment_type_id);
+  document.dispatchEvent(new CustomEvent("es:booking:quote", { detail: quote }));
+}
+
+function getReturnPolicyQuoteInput({ content, patient } = {}) {
+  const config = formHandlerData?.return_policy;
+  if (!config?.id || !config.question) return null;
+
+  const matchingSections = (content?.sections || [])
+    .filter((section) => section.name === config.question.section)
+    .map((section) => ({
+      name: section.name,
+      questions: (section.questions || []).filter((question) =>
+        question.name === config.question.name && question.type === config.question.type
+      ),
+    }));
+  const answers = matchingSections.flatMap((section) => section.questions);
+  const answer = answers.length === 1 ? String(answers[0].answer || "").trim() : "";
+  const nonce = shouldUseAuthenticatedPatientBooking() ? getAuthenticatedPatientBookingConfig().nonce : "";
+  let guestDetails = null;
+  if (!nonce) {
+    const normalized = normalizePatientForSubmission(patient);
+    guestDetails = Object.fromEntries(returnPolicyContactFields.map((field) => [field, normalized[field] ?? ""]));
+  }
+  const hasGuestDetails = guestDetails && Object.values(guestDetails).every(Boolean) &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestDetails.email);
+  return {
+    answer,
+    key: JSON.stringify([config.id, answer, nonce, guestDetails]),
+    ready: Boolean(answer && (nonce || hasGuestDetails)),
+    body: {
+      moduleId: config.module_id,
+      patient_form_template_id: config.template_id,
+      return_policy_id: config.id,
+      content: { sections: matchingSections },
+      ...(nonce ? { authenticated_booking_nonce: nonce } : { patient: guestDetails }),
+    },
+  };
+}
+
+function canReuseReturnPolicyQuote(key, refresh = false) {
+  return returnPolicyRequest?.key === key &&
+    (returnPolicyRequest.pending || (!refresh && returnPolicyRequest.expiresAt > Date.now()));
+}
+
+async function prepareReturnPolicyQuote(payload, { refresh = false, background = false } = {}) {
+  if (!formHandlerData?.return_policy) return null;
+  const input = getReturnPolicyQuoteInput(payload);
+  if (!input) throw new Error("This booking form needs to be updated. Please contact the clinic.");
+  const { answer, key, body } = input;
+  if (!answer) {
+    returnPolicyRequest = null;
+    returnPolicyQuote = null;
+    updateReturnPolicySchedule?.("");
+    const message = "Answer the booking question to check your price and availability.";
+    updateReturnPolicyStatus(message, true);
+    throw new Error(message);
+  }
+  if (canReuseReturnPolicyQuote(key, refresh)) {
+    return returnPolicyRequest.promise;
+  }
+
+  const previousQuote = returnPolicyQuote;
+  const request = { key, pending: true, expiresAt: 0 };
+  returnPolicyRequest = request;
+  returnPolicyQuote = null;
+  if (!background) updateReturnPolicyStatus("Checking your booking price…", true);
+  request.promise = (async () => {
+    try {
+      const { response, result } = await postJsonExpectJson(formHandlerData.return_policy.quote_url, body);
+      if (returnPolicyRequest !== request) return null;
+      if (!response.ok || !result?.ok || !result.quote) {
+        throw new Error(result?.message || "We could not check your booking price.");
+      }
+      request.expiresAt = Date.now() + returnPolicyQuoteLifetime;
+      applyReturnPolicyQuote(result.quote, previousQuote);
+      return result.quote;
+    } catch (error) {
+      if (returnPolicyRequest !== request) return null;
+      returnPolicyRequest = null;
+      if (!background) {
+        updateReturnPolicySchedule?.("");
+        updateReturnPolicyStatus(error.message, true);
+      }
+      throw error;
+    } finally {
+      request.pending = false;
+    }
+  })();
+  return request.promise;
+}
+
+function readReturnPolicyPayload() {
+  if (isHeadless) return getHeadlessPayload() || {};
+  const form = document.getElementById("prepayment-form");
+  return form ? parseFormToStructuredBody(form) : {};
+}
+
+function initReturnPolicyQuotePrefetch() {
+  const config = formHandlerData?.return_policy;
+  if (!config?.id || !config.question) return;
+
+  let timer;
+  const queueQuote = () => {
+    clearTimeout(timer);
+    const payload = readReturnPolicyPayload();
+    const input = getReturnPolicyQuoteInput(payload);
+    if (returnPolicyRequest && returnPolicyRequest.key !== input?.key) returnPolicyRequest = null;
+    if (!input?.ready || canReuseReturnPolicyQuote(input.key)) return;
+
+    timer = setTimeout(() => {
+      prepareReturnPolicyQuote(payload, { background: true }).catch(() => {});
+    }, 350);
+  };
+
+  if (isHeadless) {
+    document.addEventListener("es:headless:payload-updated", queueQuote);
+  } else {
+    const form = document.getElementById("prepayment-form");
+    const onInput = ({ target }) => {
+      if (target.name === config.question.name || returnPolicyContactFields.some((field) => target.name === `patient[${field}]`)) {
+        queueQuote();
+      }
+    };
+    form?.addEventListener("input", onInput);
+    form?.addEventListener("change", onInput);
+    document.addEventListener("es:patient-history:prefill-applied", queueQuote);
+    document.addEventListener("restoreform", queueQuote);
+  }
+  queueQuote();
+}
+
+async function quoteReturnPolicyForNextStep() {
+  const button = nextBtn;
+  if (!button) return prepareReturnPolicyQuote(readReturnPolicyPayload());
+  if (button.getAttribute("aria-busy") === "true") return null;
+
+  const label = button.querySelector("span") || button;
+  const text = label.textContent;
+  const disabled = button.disabled;
+  label.textContent = "Checking your price…";
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    return await prepareReturnPolicyQuote(readReturnPolicyPayload());
+  } finally {
+    label.textContent = text;
+    button.disabled = disabled;
+    button.removeAttribute("aria-busy");
+  }
+}
+
+function sameReturnPolicyPrice(left, right) {
+  return !!left && !!right && left.appointment_type_id === right.appointment_type_id && left.amount_cents === right.amount_cents;
+}
+
+function getReviewedReturnPolicyQuote(payload) {
+  const input = getReturnPolicyQuoteInput(payload);
+  return input && returnPolicyRequest?.key === input.key ? returnPolicyQuote : null;
+}
+
+function showUpdatedReturnPolicyQuote(result) {
+  if (result?.code !== "return_policy_quote_changed" || !result.quote) return;
+  const typeChanged = returnPolicyQuote?.appointment_type_id !== result.quote.appointment_type_id;
+  applyReturnPolicyQuote(result.quote);
+  if (returnPolicyRequest) {
+    returnPolicyRequest = {
+      key: returnPolicyRequest.key,
+      pending: false,
+      promise: Promise.resolve(result.quote),
+      expiresAt: Date.now() + returnPolicyQuoteLifetime,
+    };
+  }
+  if (typeChanged && !isHeadless && shouldUseCalendarTimes()) {
+    returnToBookingCalendar();
+    showToast("Your appointment type changed. Select a time for the updated booking.");
+  }
+}
+
+function returnToBookingCalendar() {
+  const form = document.getElementById("prepayment-form");
+  const payment = document.getElementById("payment_form");
+  const step = getStepIndexForElement(form?.querySelector("[data-appointment-selection]")?.closest(".form-step"));
+  if (form && payment && step >= 0) {
+    form.style.display = "block";
+    payment.style.display = "none";
+    window.currentStep = step;
+    showStep(step);
+  }
+}
+
+async function resolveReturnPolicyNextTime(patient, quote) {
+  if (!quote || isHeadless || shouldUseCalendarTimes() || patient.appointment_start) return patient;
+  const url = new URL(formHandlerData.next_available_times_url, window.location.origin);
+  url.searchParams.set("appointment_type_id", quote.appointment_type_id);
+  url.searchParams.set("refresh", "1");
+  if (patient.practitioner_id) {
+    url.searchParams.set("practitioner_ids", patient.practitioner_id);
+  }
+  const result = await fetchFreshCalendarJson(url.toString(), "Could not check the next available appointment.");
+  const slot = result.next_available_times?.find((item) => item.appointment_start);
+  if (!slot?.appointment_start || !slot?.practitioner_id) {
+    throw new Error("No appointment times are currently available.");
+  }
+  return { ...patient, appointment_start: slot.appointment_start, practitioner_id: String(slot.practitioner_id) };
 }
 
 function getAuthenticatedPatientBookingConfig() {
@@ -1093,32 +1354,6 @@ const fetchJson = async (url) => {
     }
   };
 
-  const updatePaymentSummary = (appointmentTypeData) => {
-    if (!appointmentTypeData || typeof appointmentTypeData !== "object") return false;
-
-    const nameEl = document.getElementById("summary-name");
-    if (nameEl) {
-      nameEl.textContent = String(appointmentTypeData.name || "");
-    }
-
-    const descriptionEl = document.getElementById("summary-description");
-    if (descriptionEl) {
-      descriptionEl.textContent = String(appointmentTypeData.description || "");
-    }
-
-    const priceEl = document.getElementById("summary-price");
-    if (priceEl) {
-      const cents = Number(appointmentTypeData.amount_cents);
-      if (Number.isFinite(cents) && cents >= 0) {
-        priceEl.textContent = (cents / 100).toFixed(2);
-      } else if (appointmentTypeData.amount !== undefined && appointmentTypeData.amount !== null) {
-        priceEl.textContent = String(appointmentTypeData.amount);
-      }
-    }
-
-    return true;
-  };
-
   const ensureHeadlessPayload = () => {
     if (typeof window.clinikoGetHeadlessPayload === "function") {
       try {
@@ -1198,6 +1433,19 @@ const fetchJson = async (url) => {
       throw new Error("appointmentTypeId is required.");
     }
 
+    if (formHandlerData?.return_policy) {
+      const quote = await prepareReturnPolicyQuote(readReturnPolicyPayload());
+      if (!quote || id !== quote.appointment_type_id) {
+        throw new Error("Use the appointment type returned by the booking quote.");
+      }
+      return {
+        module_id: id,
+        appointment_type: quote,
+        practitioners: await fetchPractitioners({ appointmentTypeId: id }),
+        payment: { ...quote, required: quote.amount_cents > 0 },
+      };
+    }
+
     let appointmentTypeData = null;
     if (endpoints.appointmentType) {
       appointmentTypeData = await fetchJson(
@@ -1234,8 +1482,8 @@ const fetchJson = async (url) => {
       window.clinikoResetTyroAttempt();
     }
 
-    if (updatePaymentStep) {
-      updatePaymentSummary(appointmentTypeData);
+    if (updatePaymentStep && appointmentTypeData) {
+      updateBookingPaymentSummary(appointmentTypeData);
     }
 
     let practitioners = [];
@@ -1264,6 +1512,9 @@ const fetchJson = async (url) => {
     const id = String(templateId || "").trim();
     if (!id) {
       throw new Error("templateId is required.");
+    }
+    if (formHandlerData?.return_policy && id !== formHandlerData.return_policy.template_id) {
+      throw new Error("This booking uses the form template configured for the return policy.");
     }
     if (!endpoints.patientFormTemplate) {
       throw new Error("Patient form template endpoint not configured.");
@@ -1618,6 +1869,15 @@ const fetchJson = async (url) => {
       : merged.filter((item) => !!item.appointment_start);
   };
 
+  if (formHandlerData?.return_policy) {
+    updateReturnPolicySchedule = (id) => {
+      if (!id || id === currentAppointmentTypeId) return;
+      currentAppointmentTypeId = id;
+      clearCalendarCache();
+      updateHeadlessPatient({ practitioner_id: "", appointment_start: "", appointment_date: "" });
+    };
+  }
+
   window.ClinikoHeadlessCalendar = {
     endpoints,
     getMonthKeyFromDate,
@@ -1650,28 +1910,77 @@ const fetchJson = async (url) => {
     updateFormtemplate,
     updateFormTemplate: updateFormtemplate,
     updateAppointmentType,
+    resolveBookingQuote: (payload, { refresh = false } = {}) => {
+      const { content, patient } = readReturnPolicyPayload();
+      return prepareReturnPolicyQuote({
+        content: payload?.content ?? payload ?? content,
+        patient: payload?.patient ?? patient,
+      }, { refresh });
+    },
   };
 }
 
 function initHeadlessPaymentWatcher() {
-  if (!isHeadless || !isPaymentEnabled || !isStripeSelected()) return;
+  if (!isHeadless || !isPaymentEnabled) return;
 
   const paymentForm = document.getElementById("payment_form");
   if (!paymentForm) return;
 
   const isVisible = (el) => {
-    if (!el) return false;
     const style = window.getComputedStyle(el);
-    return style.display !== "none" && style.visibility !== "hidden";
+    return el.getClientRects().length > 0 && style.visibility !== "hidden";
   };
 
-  const maybeInit = () => {
-    if (!isVisible(paymentForm)) return;
-    safeInitStripe();
+  const hasReturnPolicy = Boolean(formHandlerData?.return_policy);
+  let quoteRevision = 0;
+  const refreshQuote = async (refresh) => {
+    const revision = ++quoteRevision;
+    const button = paymentForm.querySelector("#payment-button");
+    if (button) button.disabled = true;
+    try {
+      await prepareReturnPolicyQuote(readReturnPolicyPayload(), { refresh });
+    } catch (error) {
+      if (revision === quoteRevision) updateReturnPolicyStatus(error.message, true);
+    } finally {
+      if (button && revision === quoteRevision) button.disabled = false;
+    }
+  };
+
+  let wasVisible = false;
+  const maybeInit = async () => {
+    const visible = isVisible(paymentForm);
+    if (!hasReturnPolicy) {
+      if (visible && isStripeSelected()) safeInitStripe();
+      return;
+    }
+    if (!visible) {
+      wasVisible = false;
+      return;
+    }
+    if (wasVisible) return;
+    wasVisible = true;
+    if (paymentForm.dataset.returnPolicyQuoteReady === "1") {
+      delete paymentForm.dataset.returnPolicyQuoteReady;
+      return;
+    }
+    await refreshQuote(false);
+    if (isVisible(paymentForm) && isStripeSelected()) safeInitStripe();
   };
 
   maybeInit();
   window.addEventListener("load", () => maybeInit());
+  if (hasReturnPolicy) {
+    const observer = new MutationObserver(maybeInit);
+    for (let element = paymentForm; element; element = element.parentElement) {
+      observer.observe(element, { attributes: true, attributeFilter: ["style", "class", "hidden"] });
+    }
+    document.addEventListener("change", () => {
+      if (isVisible(paymentForm)) refreshQuote(false);
+    });
+    window.addEventListener("pageshow", (event) => {
+      if (event.persisted && isVisible(paymentForm)) refreshQuote(true);
+    });
+  }
 }
 
 function getPatientHistoryAccessConfig() {
@@ -2381,7 +2690,8 @@ function getPatientHistoryContinueStepIndex(mode = "use") {
     return 0;
   }
 
-  if (!isHeadless && shouldUseCalendarTimes()) {
+  if (!isHeadless && shouldUseCalendarTimes()
+    && (!formHandlerData?.return_policy || shouldUseAuthenticatedPatientBooking())) {
     const calendarStep = document
       .querySelector("[data-appointment-selection]")
       ?.closest(".form-step");
@@ -3617,9 +3927,12 @@ async function initAvailableTimesPicker() {
   const endpoint = formHandlerData?.available_times_url;
   const practitionersEndpoint = formHandlerData?.practitioners_url;
   const calendarEndpoint = formHandlerData?.appointment_calendar_url;
-  const appointmentTypeId =
+  let appointmentTypeId =
     formEl.dataset.appointmentTypeId || formHandlerData?.module_id || "";
   let practitionerId = formEl.dataset.practitionerId || "";
+  const returnPolicy = formHandlerData?.return_policy;
+  let policyScheduleReady = !returnPolicy;
+  let scheduleRevision = 0;
 
   if (!appointmentTypeId) {
     if (statusEl) {
@@ -3728,8 +4041,9 @@ async function initAvailableTimesPicker() {
   }
 
   function updateNavState() {
+    if (returnPolicy && calendarNextBtn) calendarNextBtn.disabled = !policyScheduleReady;
     if (!calendarPrevBtn) return;
-    if (!currentMonthKey) {
+    if (!currentMonthKey || !policyScheduleReady) {
       calendarPrevBtn.disabled = true;
       return;
     }
@@ -3759,8 +4073,9 @@ async function fetchJson(url, fallbackMessage) {
 }
 
   async function fetchPractitioners() {
-    if (!practitionersEndpoint || !appointmentTypeId) return [];
-    const cacheKey = `cliniko:practitioners:${appointmentTypeId}`;
+    const typeId = appointmentTypeId;
+    if (!practitionersEndpoint || !typeId) return [];
+    const cacheKey = `cliniko:practitioners:${typeId}`;
     const cached = readCalendarCacheValue(frontendCache, cacheKey);
     if (cached) {
       return cached;
@@ -3768,7 +4083,7 @@ async function fetchJson(url, fallbackMessage) {
 
     return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
       const url = new URL(practitionersEndpoint, window.location.origin);
-      url.searchParams.set("appointment_type_id", appointmentTypeId);
+      url.searchParams.set("appointment_type_id", typeId);
       const payload = await fetchJson(url.toString(), "Failed to load practitioners.");
       const list = Array.isArray(payload.practitioners) ? payload.practitioners : [];
       writeCalendarCacheValue(frontendCache, cacheKey, list, frontendCacheTtlMs.practitioners);
@@ -3809,11 +4124,12 @@ async function fetchJson(url, fallbackMessage) {
   }
 
   async function fetchCalendarPayload(practitioner, monthKey = null, options = {}) {
-    if (!calendarEndpoint || !appointmentTypeId) {
+    const typeId = appointmentTypeId;
+    if (!calendarEndpoint || !typeId) {
       throw new Error("Calendar endpoint not configured.");
     }
     const month = monthKey || currentMonthKey || "";
-    const cacheKey = `cliniko:calendar:${appointmentTypeId}:${practitioner || ""}:${month}`;
+    const cacheKey = `cliniko:calendar:${typeId}:${practitioner || ""}:${month}`;
     const consumePreload = options.consume !== false;
 
     if (!options.forceFresh && calendarPreloaded.has(cacheKey)) {
@@ -3833,7 +4149,7 @@ async function fetchJson(url, fallbackMessage) {
 
     return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
       const url = new URL(calendarEndpoint, window.location.origin);
-      url.searchParams.set("appointment_type_id", appointmentTypeId);
+      url.searchParams.set("appointment_type_id", typeId);
       if (practitioner) url.searchParams.set("practitioner_id", practitioner);
       if (month) url.searchParams.set("month", month);
       url.searchParams.set("_ts", String(Date.now()));
@@ -3917,17 +4233,19 @@ async function fetchJson(url, fallbackMessage) {
   }
 
   async function fetchPage(from, to, page) {
-    const cacheKey = `cliniko:times:${appointmentTypeId}:${practitionerId || ""}:${from}:${to}:${perPage}:${page}`;
+    const typeId = appointmentTypeId;
+    const practitioner = practitionerId;
+    const cacheKey = `cliniko:times:${typeId}:${practitioner}:${from}:${to}:${perPage}:${page}`;
 
     return withPendingCalendarRequest(frontendCache, cacheKey, async () => {
       const url = new URL(endpoint, window.location.origin);
-      url.searchParams.set("appointment_type_id", appointmentTypeId);
+      url.searchParams.set("appointment_type_id", typeId);
       url.searchParams.set("from", from);
       url.searchParams.set("to", to);
       url.searchParams.set("per_page", String(perPage));
       url.searchParams.set("page", String(page));
-      if (practitionerId) {
-        url.searchParams.set("practitioner_id", practitionerId);
+      if (practitioner) {
+        url.searchParams.set("practitioner_id", practitioner);
       }
       url.searchParams.set("_ts", String(Date.now()));
 
@@ -4111,7 +4429,7 @@ async function fetchJson(url, fallbackMessage) {
   }
 
   async function selectDay(cell, dateKey, preselectIso = null) {
-    if (!calendarReady) return;
+    if (!calendarReady || !policyScheduleReady) return;
     const requestSeq = ++dayRequestSeq;
     calendarGrid
       .querySelectorAll(".calendar-day.is-selected")
@@ -4179,10 +4497,13 @@ async function fetchJson(url, fallbackMessage) {
 
   async function initializePractitionerSelect() {
     if (!practitionerSelect || !practitionersEndpoint) return;
+    const revision = scheduleRevision;
     try {
       const list = await fetchPractitioners();
+      if (revision !== scheduleRevision) return;
       populatePractitionerSelect(list);
     } catch (e) {
+      if (revision !== scheduleRevision) return;
       populatePractitionerSelect([]);
       setStatus(e?.message || "Failed to load practitioners.", true);
     }
@@ -4252,9 +4573,56 @@ async function fetchJson(url, fallbackMessage) {
 
   clearDayTimes();
 
-  initializePractitionerSelect()
-    .then(initializeCalendarState)
-    .catch(() => initializeCalendarState());
+  if (returnPolicy) {
+    updateReturnPolicySchedule = (typeId) => {
+      if (policyScheduleReady && typeId === appointmentTypeId) return;
+      const revision = ++scheduleRevision;
+      const typeChanged = appointmentTypeId !== typeId;
+      appointmentTypeId = typeId;
+      policyScheduleReady = Boolean(typeId);
+      calendarRequestSeq++;
+      dayRequestSeq++;
+      timesCache.clear();
+      calendarPreloaded.clear();
+      if (typeChanged) {
+        practitionerId = "";
+        formEl.dataset.practitionerId = "";
+        resetSelectedTime();
+      }
+      clearDayTimes();
+      calendarGrid?.replaceChildren();
+      calendarGrid?.classList.remove("is-loading");
+      calendarGrid?.removeAttribute("aria-busy");
+      if (practitionerSelect) practitionerSelect.disabled = true;
+      updateNavState();
+      if (!policyScheduleReady) {
+        setStatus("Answer the booking question to see available times.");
+        return;
+      }
+      setStatus("Checking availability…");
+      initializePractitionerSelect().then(() => {
+        if (revision === scheduleRevision) return initializeCalendarState();
+      });
+    };
+    if (practitionerSelect) practitionerSelect.disabled = true;
+    setStatus("Answer the booking question to see available times.");
+    const refreshPolicy = () => {
+      prepareReturnPolicyQuote(readReturnPolicyPayload()).catch((error) => setStatus(error.message, true));
+    };
+    formEl.addEventListener("change", (event) => {
+      const name = event.target.name;
+      if (useCalendar && !isSingleStep() && !steps[window.currentStep]?.querySelector("[data-appointment-selection]")) return;
+      if (name === returnPolicy.question?.name || returnPolicyContactFields.some((field) => name === `patient[${field}]`)) {
+        refreshPolicy();
+      }
+    });
+    document.addEventListener("es:patient-history:prefill-applied", refreshPolicy);
+    document.addEventListener("restoreform", refreshPolicy);
+  } else {
+    initializePractitionerSelect()
+      .then(initializeCalendarState)
+      .catch(() => initializeCalendarState());
+  }
 
   if (calendarReady) {
     updateNavState();
@@ -5326,6 +5694,16 @@ async function handleNextStep() {
   }
 
   if (window.currentStep < steps.length - 1) {
+    const currentStep = window.currentStep;
+    if (formHandlerData?.return_policy && steps[currentStep + 1]?.querySelector("[data-appointment-selection]")) {
+      try {
+        const quote = await quoteReturnPolicyForNextStep();
+        if (!quote || currentStep !== window.currentStep) return;
+      } catch (error) {
+        showToast(error.message);
+        return;
+      }
+    }
     updateStepIndicator(window.currentStep + 1);
 
     // ✅ Pre-init Stripe ONLY if Stripe is selected
@@ -5394,10 +5772,28 @@ async function showStripePaymentForm() {
     return;
   }
 
+  if (formHandlerData?.return_policy) {
+    try {
+      if (!await quoteReturnPolicyForNextStep()) return;
+      if (preForm && shouldUseCalendarTimes() && !preForm.querySelector("#appointment-time")?.value) {
+        returnToBookingCalendar();
+        showToast("Choose a time for the quoted appointment before continuing.");
+        return;
+      }
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+  }
+
   if (preForm) {
     preForm.style.display = "none";
   }
+  const openingHeadlessPolicy = isHeadless && formHandlerData?.return_policy && !paymentForm.getClientRects().length;
   paymentForm.style.display = "flex";
+  if (openingHeadlessPolicy && paymentForm.getClientRects().length) {
+    paymentForm.dataset.returnPolicyQuoteReady = "1";
+  }
 
   // ✅ Only init Stripe if Stripe gateway is selected
   if (isStripeSelected()) {
@@ -5937,9 +6333,28 @@ async function submitBookingForm(
   const parsedPatient = normalizePatientForSubmission(parsed?.patient || {});
   // In authenticated mode, only scheduling information leaves the browser.
   // The server resolves every patient identity field from the verified account.
-  const patient = useAuthenticatedPatientBooking
+  let patient = useAuthenticatedPatientBooking
     ? getSchedulingPatientFields(parsedPatient)
     : parsedPatient;
+  if (formHandlerData?.return_policy && !opts?.attemptId) {
+    const reviewedQuote = returnPolicyQuote;
+    try {
+      const payload = { content, patient };
+      const quote = getReviewedReturnPolicyQuote(payload) || await prepareReturnPolicyQuote(payload);
+      if (!quote) return;
+      if (!sameReturnPolicyPrice(reviewedQuote, quote)) {
+        if (reviewedQuote?.appointment_type_id !== quote.appointment_type_id && !isHeadless && shouldUseCalendarTimes()) {
+          returnToBookingCalendar();
+        }
+        handleChargeErrors({ message: "Review the booking price, then continue." }, errorEl);
+        return;
+      }
+      patient = await resolveReturnPolicyNextTime(patient, quote);
+    } catch (error) {
+      handleChargeErrors({ message: error.message }, errorEl);
+      return;
+    }
+  }
   const headlessPatientFields = Array.isArray(parsed?.headless_patient_fields)
     ? parsed.headless_patient_fields
     : Array.isArray(formHandlerData?.headless_patient_fields)
@@ -5996,6 +6411,7 @@ async function submitBookingForm(
     moduleId: String(formHandlerData.module_id || ""),
     patient_form_template_id: String(formHandlerData.patient_form_template_id || ""),
     headless_patient_fields: headlessPatientFields.length ? headlessPatientFields : null,
+    ...getReturnPolicyBookingFields(),
 
     // ✅ NEW: unified payment object (recommended for backend going forward)
     payment: payment.gateway
@@ -6077,6 +6493,7 @@ async function submitBookingForm(
       );
 
       if (!preflightResponse.ok || !preflightResult?.ok) {
+        showUpdatedReturnPolicyQuote(preflightResult);
         handleChargeErrors(preflightResult, errorEl);
         return;
       }
