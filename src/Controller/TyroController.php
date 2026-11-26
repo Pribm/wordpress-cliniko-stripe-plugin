@@ -5,6 +5,7 @@ use App\Admin\Modules\Settings\Credentials;
 use App\Model\AppointmentType;
 use App\Service\PatientFormPayloadSanitizer;
 use App\Service\SchedulingDispatchService;
+use App\Widgets\ClinikoForm\ReturnPolicySettingsRegistry;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -90,6 +91,9 @@ class TyroController
                     'message' => 'Appointment type not found for moduleId.',
                 ], 404);
             }
+            if (ReturnPolicySettingsRegistry::reservesType((string) $appointmentType->getId())) {
+                return new WP_REST_Response(['success' => false, 'message' => 'This appointment type requires a return policy booking.'], 403);
+            }
 
             $priceInCents = (int) $appointmentType->getBillableItemsFinalPrice(); // you already have this
             if ($priceInCents <= 0) {
@@ -153,6 +157,9 @@ class TyroController
 
         if (!$apptType) {
             return new WP_REST_Response(['status' => 'error', 'message' => 'Appointment type not found.'], 404);
+        }
+        if (ReturnPolicySettingsRegistry::reservesType((string) $apptType->getId())) {
+            return new WP_REST_Response(['status' => 'error', 'message' => 'This appointment type requires a return policy booking.'], 403);
         }
 
         $amount = $apptType->getBillableItemsFinalPrice();

@@ -348,6 +348,7 @@ class Runtime
         $statusCode = $response instanceof ClientResponse ? (int) ($response->statusCode ?? 0) : 0;
         $hasError = $response instanceof ClientResponse && $response->error !== null;
         $level = self::levelForStatus($statusCode, $hasError);
+        $safeTarget = LogSanitizer::sanitizeUrl($target);
 
         self::logEvent([
             'trace_id' => TraceContext::currentTraceId(),
@@ -356,13 +357,13 @@ class Runtime
             'event' => 'api_client_call',
             'method' => strtoupper($method),
             'route' => TraceContext::currentRoute(),
-            'target' => LogSanitizer::sanitizeUrl($target),
+            'target' => $safeTarget,
             'request_kind' => $service,
             'status_code' => $statusCode > 0 ? $statusCode : null,
             'duration_ms' => $durationMs,
             'message' => $hasError
-                ? sprintf('%s %s failed after %dms: %s', strtoupper($method), $target, $durationMs, $response->error)
-                : sprintf('%s %s completed in %dms', strtoupper($method), $target, $durationMs),
+                ? sprintf('%s %s failed after %dms: %s', strtoupper($method), $safeTarget, $durationMs, $response->error)
+                : sprintf('%s %s completed in %dms', strtoupper($method), $safeTarget, $durationMs),
             'context' => [
                 'service' => $service,
                 'cache_enabled' => $cacheEnabled,

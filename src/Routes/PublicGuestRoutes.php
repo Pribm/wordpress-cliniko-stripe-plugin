@@ -102,6 +102,12 @@ final class PublicGuestRoutes
     ]);
 
         // New attempt-based booking flow
+        register_rest_route('v2', '/booking-attempts/return-policy-quote', [
+            'methods' => 'POST',
+            'callback' => [$bookingAttemptController, 'quoteReturnPolicy'],
+            'permission_callback' => [$guard, 'allowPublicMutation'],
+        ]);
+
         register_rest_route('v2', '/booking-attempts/preflight', [
             'methods' => 'POST',
             'callback' => [$bookingAttemptController, 'preflight'],

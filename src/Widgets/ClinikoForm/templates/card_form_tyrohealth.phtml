@@ -101,14 +101,17 @@ $payment_details = AppointmentType::find($settings['module_id'], cliniko_client(
       <strong>Description:</strong> <span id="summary-description"><?= esc_html($payment_details->getDescription()) ?></span>
     </p>
     <p style="color: <?php echo $summary_text_color; ?>; margin: 8px 0;">
-      <strong>Duration:</strong> <?= (int)$payment_details->getDurationInMinutes() ?> Minutes
+      <strong>Duration:</strong> <span id="summary-duration"><?= (int)$payment_details->getDurationInMinutes() ?></span> Minutes
     </p>
 
     <div style="margin-top:20px; padding:14px 12px; border-radius:12px; background:rgba(0,0,0,0.02); border:1px dashed rgba(0,0,0,0.06);">
       <p style="margin:0; font-size:14px; color:#4b5563;">Total</p>
       <p style="margin:4px 0 0; font-size:22px; font-weight:700; color: <?php echo $summary_price_color; ?>;">
-        $<span id="summary-price"><?= number_format($payment_details->getBillableItemsFinalPrice() / 100, 2) ?></span> AUD
+        $<span id="summary-price"><?= !empty($returnPolicyEnabled) ? '—' : number_format($payment_details->getBillableItemsFinalPrice() / 100, 2) ?></span> AUD
       </p>
+      <?php if (!empty($returnPolicyEnabled)): ?>
+        <p id="return-policy-status" role="status" hidden></p>
+      <?php endif; ?>
     </div>
 
     <?php if (!empty($settings['show_back_button']) && $settings['show_back_button'] === 'yes'): ?>

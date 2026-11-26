@@ -2,6 +2,7 @@
 
 namespace App\Admin\Modules\Integrations;
 
+use App\Widgets\ClinikoForm\ReturnPolicySettingsRegistry;
 use App\Widgets\ClinikoForm\Webhooks\WebhookSettingsRegistry;
 
 if (!defined('ABSPATH')) {
@@ -19,6 +20,7 @@ class ElementorTemplateSync
     public static function init(): void
     {
         add_action('elementor/editor/after_save', [self::class, 'handleAfterSave'], 10, 2);
+        add_action('deleted_post', [self::class, 'removeReturnPolicies']);
     }
 
     /**
@@ -30,7 +32,13 @@ class ElementorTemplateSync
     public static function handleAfterSave(int $post_id, array $editor_data): void
     {
         WebhookSettingsRegistry::syncElementorPage($post_id, $editor_data);
+        ReturnPolicySettingsRegistry::syncElementorPage($post_id, $editor_data);
         self::walkElements($editor_data);
+    }
+
+    public static function removeReturnPolicies(int $postId): void
+    {
+        ReturnPolicySettingsRegistry::syncElementorPage($postId, []);
     }
 
     /**

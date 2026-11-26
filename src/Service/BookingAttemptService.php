@@ -6,6 +6,7 @@ use App\Admin\Modules\Settings\Credentials;
 use App\Debug\Runtime;
 use App\DTO\CreatePatientDTO;
 use App\DTO\CreatePatientFormDTO;
+use App\Infra\JobDispatcher;
 use App\Model\AppointmentType;
 use App\Model\AvailableTimes;
 use App\Model\Booking;
@@ -17,8 +18,10 @@ use App\Support\Auth;
 use App\Exception\ApiException;
 use App\Validator\AppointmentRequestValidator;
 use App\Validator\PatientFormValidator;
+use App\Widgets\ClinikoForm\ReturnPolicySettingsRegistry;
 use App\Widgets\ClinikoForm\Webhooks\WebhookDispatchService;
 use App\Widgets\ClinikoForm\Webhooks\WebhookSettingsRegistry;
+use App\Workers\BookingReturnHistoryWorker;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -30,6 +33,7 @@ if (!defined('ABSPATH')) {
 class BookingAttemptService
 {
     private const CLEANUP_DELAY_SECONDS = 1800;
+    private const RETURN_HISTORY_RETRY_DELAYS = [60, 300, 900];
     private const ATTENDEE_RETRY_COUNT = 5;
     private const ATTENDEE_RETRY_DELAY_US = 400000;
     private const PATIENT_FORM_ATTACH_RETRY_COUNT = 6;
@@ -51,6 +55,10 @@ class BookingAttemptService
         $gateway = strtolower(trim((string) ($body['gateway'] ?? ($body['payment']['gateway'] ?? ''))));
         $moduleId = trim((string) ($body['moduleId'] ?? ''));
         $templateId = trim((string) ($body['patient_form_template_id'] ?? ''));
+        $hasReturnPolicy = array_key_exists('return_policy_id', $body);
+        if (ReturnPolicySettingsRegistry::reservesType($moduleId)) {
+            return $this->errorResponse(403, 'This appointment type requires a return policy booking.');
+        }
 
         $patientRaw = is_array($body['patient'] ?? null)
             ? $body['patient']
@@ -113,7 +121,32 @@ class BookingAttemptService
         }
 
         $client = cliniko_client(false, Credentials::getClinikoApiCacheTtl());
-        $apptType = AppointmentType::find($moduleId, $client);
+        $guestPatient = null;
+        $returnPolicy = null;
+        if ($hasReturnPolicy) {
+            $body['patient'] = $patientRaw;
+            $body['content'] = $content;
+            $result = (new BookingReturnPolicy())->resolve($body, $authenticatedPatientData['id'] ?? null, $client);
+            if (!$result['ok']) {
+                return $result;
+            }
+            $guestPatient = $result['guest_patient'];
+            $quote = $result['quote'];
+            $acceptedQuote = $body['return_policy_quote'] ?? [];
+            if (($acceptedQuote['appointment_type_id'] ?? null) !== $quote['appointment_type_id']
+                || ($acceptedQuote['amount_cents'] ?? null) !== $quote['amount_cents']
+            ) {
+                return $this->errorResponse(409, 'The booking quote changed. Review the updated details before paying.', [
+                    'code' => 'return_policy_quote_changed',
+                    'quote' => $quote,
+                ]);
+            }
+            $moduleId = $quote['appointment_type_id'];
+            $gateway = $result['policy']['gateway'];
+            $returnPolicy = $result;
+        }
+
+        $apptType = $returnPolicy['type'] ?? AppointmentType::find($moduleId, $client);
         if (!$apptType) {
             return $this->errorResponse(
                 404,
@@ -126,8 +159,11 @@ class BookingAttemptService
                 ]
             );
         }
+        if ($returnPolicy === null && ReturnPolicySettingsRegistry::reservesType((string) $apptType->getId())) {
+            return $this->errorResponse(403, 'This appointment type requires a return policy booking.');
+        }
 
-        $template = PatientFormTemplate::find($templateId, $client);
+        $template = $returnPolicy['template'] ?? PatientFormTemplate::find($templateId, $client);
         if (!$template) {
             return $this->errorResponse(
                 404,
@@ -141,7 +177,7 @@ class BookingAttemptService
             );
         }
 
-        $amount = $apptType->getBillableItemsFinalPrice();
+        $amount = $returnPolicy['quote']['amount_cents'] ?? $apptType->getBillableItemsFinalPrice();
         if ($amount > 0 && !in_array($gateway, ['stripe', 'tyrohealth'], true)) {
             return $this->errorResponse(
                 422,
@@ -178,7 +214,9 @@ class BookingAttemptService
         $patientForm = null;
 
         try {
-            if (is_array($authenticatedPatientData)) {
+            if ($guestPatient !== null) {
+                $resolvedPatient = $guestPatient;
+            } elseif (is_array($authenticatedPatientData)) {
                 $authenticatedPatientId = trim((string) ($authenticatedPatientData['id'] ?? ''));
                 $resolvedPatient = $authenticatedPatientId !== ''
                     ? Patient::find($authenticatedPatientId, $client)
@@ -215,13 +253,22 @@ class BookingAttemptService
             ];
         }
 
+        // A return-pricing match leaves the existing patient profile intact.
+        $preservePatientProfile = $returnPolicy !== null && $authenticatedPatientData === null && !$patientCreated;
         $gatewayForAttempt = $amount > 0 ? $gateway : 'free';
         $invoiceReference = $gatewayForAttempt === 'tyrohealth'
             ? $this->buildTyroInvoiceReference((string) $apptType->getName(), (string) $patientForm->getId())
             : null;
 
         $attemptToken = PublicRequestGuard::issueAttemptToken();
-        $webhookConfig = WebhookSettingsRegistry::findForBooking($moduleId, $templateId);
+        $webhookConfig = $returnPolicy
+            ? WebhookSettingsRegistry::findForWidget(
+                $returnPolicy['policy']['post_id'],
+                $returnPolicy['policy']['widget_id'],
+                $returnPolicy['policy']['default_type_id'],
+                $templateId
+            )
+            : WebhookSettingsRegistry::findForBooking($moduleId, $templateId);
         $attempt = $this->store->create([
             'status' => 'preflighted',
             'progress' => ['code' => 'preflighted', 'message' => 'Form validated with Cliniko.'],
@@ -234,6 +281,10 @@ class BookingAttemptService
             'patient' => $patient,
             'content' => $content,
             'patient_id' => (string) $resolvedPatient->getId(),
+            'return_policy_history' => $preservePatientProfile && $guestPatient === null
+                ? null
+                : ($returnPolicy['history_entry'] ?? null),
+            'preserve_patient_profile' => $preservePatientProfile,
             'patient_was_created' => $patientCreated,
             'patient_mode' => is_array($authenticatedPatientData) ? 'account' : 'guest',
             'user_id' => $authenticatedUserId > 0 ? $authenticatedUserId : null,
@@ -285,12 +336,12 @@ class BookingAttemptService
             }
             $patientName = trim($patientFirstName . ' ' . $patientLastName);
             $patientEmail = trim((string) $resolvedPatient->getEmail());
-            $patientPhone = trim((string) $resolvedPatient->getPhone());
+            $patientPhone = $preservePatientProfile ? '' : trim((string) $resolvedPatient->getPhone());
             $addressField = static function ($submitted, $existing): string {
                 $submitted = trim((string) ($submitted ?? ''));
                 return $submitted !== '' ? $submitted : trim((string) ($existing ?? ''));
             };
-            $customerAddress = array_filter([
+            $customerAddress = $preservePatientProfile ? [] : array_filter([
                 'line1' => $addressField($patient['address_1'] ?? null, $resolvedPatient->getAddress1()),
                 'line2' => $addressField($patient['address_2'] ?? null, $resolvedPatient->getAddress2()),
                 'city' => $addressField($patient['city'] ?? null, $resolvedPatient->getCity()),
@@ -299,7 +350,7 @@ class BookingAttemptService
             ], static fn (string $value): bool => $value !== '');
             $countryCode = PatientSubmissionSanitizer::countryCode($patient['country'] ?? null)
                 ?? PatientSubmissionSanitizer::countryCode($resolvedPatient->getCountry());
-            if ($countryCode !== null) {
+            if (!$preservePatientProfile && $countryCode !== null) {
                 $customerAddress['country'] = $countryCode;
             }
 
@@ -424,19 +475,49 @@ class BookingAttemptService
             return $this->errorResponse(403, 'You must be logged in.');
         }
 
-        $moduleId = preg_replace('/[^0-9]/', '', (string) ($body['moduleId'] ?? '')) ?: '';
-        $templateId = preg_replace('/[^0-9]/', '', (string) ($body['patient_form_template_id'] ?? '')) ?: '';
-        $nonce = trim((string) ($body['authenticated_booking_nonce'] ?? ''));
-        if (
-            $moduleId === ''
-            || $templateId === ''
-            || $nonce === ''
-            || !wp_verify_nonce($nonce, 'cliniko_form_authenticated_booking_' . $moduleId . '_' . $templateId)
-        ) {
+        if (!$this->hasAuthenticatedWidgetNonce($body)) {
             return $this->errorResponse(403, 'This booking form is no longer valid. Please reload the page.');
         }
 
         return $this->preflightWithAuthenticatedPatient($body);
+    }
+
+    /** @param array<string,mixed> $body */
+    private function hasAuthenticatedWidgetNonce(array $body): bool
+    {
+        $moduleId = preg_replace('/[^0-9]/', '', (string) ($body['moduleId'] ?? '')) ?: '';
+        $templateId = preg_replace('/[^0-9]/', '', (string) ($body['patient_form_template_id'] ?? '')) ?: '';
+        $nonce = trim((string) ($body['authenticated_booking_nonce'] ?? ''));
+        return $moduleId !== '' && $templateId !== '' && $nonce !== ''
+            && (bool) wp_verify_nonce($nonce, 'cliniko_form_authenticated_booking_' . $moduleId . '_' . $templateId);
+    }
+
+    /**
+     * @param array<string,mixed> $body
+     * @return array<string,mixed>
+     */
+    public function quoteReturnPolicy(array $body): array
+    {
+        $patientId = null;
+        $client = cliniko_client(false);
+        if (!empty($body['authenticated_booking_nonce'])) {
+            if (!is_user_logged_in() || !$this->hasAuthenticatedWidgetNonce($body)) {
+                return $this->errorResponse(403, 'This booking form is no longer valid. Please reload the page.');
+            }
+            try {
+                $patientId = Auth::patientData()['id'] ?? null;
+            } catch (ApiException $exception) {
+                return $this->errorResponse(503, 'Cliniko is temporarily unavailable. Please try again shortly.', [
+                    'code' => 'cliniko_connection_unavailable',
+                ]);
+            }
+            if ($patientId === null) {
+                return $this->errorResponse(403, 'A verified Cliniko patient account is required.');
+            }
+        }
+
+        $result = (new BookingReturnPolicy())->resolve($body, $patientId, $client);
+        return $result['ok'] ? ['ok' => true, 'status' => 200, 'quote' => $result['quote']] : $result;
     }
 
     /**
@@ -699,6 +780,7 @@ class BookingAttemptService
         }
 
         if (($attempt['status'] ?? '') === 'completed') {
+            $this->syncReturnPolicyHistory($attemptId);
             return [
                 'ok' => true,
                 'status' => 200,
@@ -733,7 +815,9 @@ class BookingAttemptService
                 throw new \RuntimeException('Booking attempt is incomplete.');
             }
 
-            Patient::update($patientId, $patient, $client);
+            if (empty($attempt['preserve_patient_profile'])) {
+                Patient::update($patientId, $patient, $client);
+            }
 
             $apptType = AppointmentType::find($moduleId, $client);
             if (!$apptType) {
@@ -806,7 +890,7 @@ class BookingAttemptService
                 }
             }
 
-            return [
+            $result = [
                 'ok' => true,
                 'status' => 200,
                 'result' => [
@@ -837,6 +921,55 @@ class BookingAttemptService
                 'status' => 500,
                 'message' => 'We could not complete your booking.',
             ];
+        }
+
+        $this->syncReturnPolicyHistory($attemptId);
+        return $result;
+    }
+
+    public function syncReturnPolicyHistory(string $attemptId): void
+    {
+        $attempt = $this->store->get($attemptId);
+        $entry = $attempt['return_policy_history'] ?? null;
+        $retry = $attempt['return_policy_history_retry'] ?? [];
+        if (!is_array($entry)
+            || ($attempt['status'] ?? '') !== 'completed'
+            || empty($attempt['booking']['appointment_id'])
+            || !empty($retry['failed'])
+            || (int) ($retry['at'] ?? 0) > time()
+        ) {
+            return;
+        }
+
+        try {
+            (new BookingReturnPolicy())->appendHistory(
+                $attempt['patient_id'],
+                $entry['field_token'],
+                $entry['answer'],
+                cliniko_client(false)
+            );
+            $this->store->update($attemptId, [
+                'return_policy_history' => null,
+                'return_policy_history_retry' => null,
+            ]);
+        } catch (\Throwable $error) {
+            $retryCount = (int) ($retry['count'] ?? 0);
+            $delay = self::RETURN_HISTORY_RETRY_DELAYS[$retryCount] ?? null;
+            if ($delay === null) {
+                $this->store->update($attemptId, ['return_policy_history_retry' => ['failed' => true]]);
+                error_log('[Cliniko] Could not save return policy history for booking attempt ' . $attemptId);
+                return;
+            }
+
+            try {
+                $retryAt = time() + $delay;
+                (new JobDispatcher())->enqueue(BookingReturnHistoryWorker::HOOK, ['attempt_id' => $attemptId], $delay);
+                $this->store->update($attemptId, [
+                    'return_policy_history_retry' => ['count' => $retryCount + 1, 'at' => $retryAt],
+                ]);
+            } catch (\Throwable $queueError) {
+                error_log('[Cliniko] Could not enqueue return policy history for booking attempt ' . $attemptId);
+            }
         }
     }
 
@@ -898,7 +1031,12 @@ class BookingAttemptService
         }
 
         $status = (string) ($attempt['status'] ?? '');
-        if (in_array($status, ['completed', 'cleaned'], true)) {
+        if ($status === 'completed') {
+            // Recover an append interrupted after the booking was confirmed.
+            $this->syncReturnPolicyHistory($attemptId);
+            return;
+        }
+        if ($status === 'cleaned') {
             return;
         }
 

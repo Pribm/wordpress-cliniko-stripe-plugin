@@ -38,6 +38,7 @@ jobs:
             --exclude=".git*" \
             --exclude=".distignore" \
             --exclude=".github" \
+            --exclude="/headless-*.html" \
             --exclude="CHANGELOG.md" \
             --exclude="README.md" \
             --exclude="tests" \

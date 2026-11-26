@@ -8,3 +8,4 @@ phpunit.*
 .git/
 .env
 .github/
+/headless-*.html

@@ -3,7 +3,7 @@
 Production-ready WordPress plugin that connects Cliniko bookings and patient forms with payment flows in Stripe and Tyro Health, with Elementor widgets for custom booking experiences.
 
 ## Version
-- Current plugin version: `2.1.2`
+- Current plugin version: `2.2.0`
 
 ## Overview
 This plugin supports two booking approaches:
@@ -129,6 +129,16 @@ Calendar mode behavior:
 Gateway behavior:
 - Final wizard action should continue to payment flow (not direct browser submit).
 - Wizard UI can be hidden while payment UI is active.
+
+## Custom Form Return Policy
+
+In the Elementor widget, open **Content → Return Policy** and enable the policy. Select a text question from the widget’s Cliniko template, a paragraph custom field, and a dedicated return appointment type. The regular appointment type is the default.
+
+A confirmed booking for a matched or newly created patient appends the answer to the patient's field if there is no matching line. The return type applies when the answer matches an entire line after normalizing spaces and case. Signed-in patients use their verified Cliniko link. For guests, the server compares their email, first name, last name, and date of birth with active Cliniko records. The regular price applies unless one record matches and its history contains the answer. The match applies only to pricing and requires no email code or account.
+
+The widget starts checking the price after the answer and matching details are complete. It reuses a quote for up to one minute for the same inputs. The server rechecks the quote before charging. For existing patients, a guest's return-policy booking preserves the saved profile. A confirmed guest booking adds to the existing history when the details match one record.
+
+In custom headless UIs, call `await window.ClinikoHeadlessCalendar.resolveBookingQuote({ content, patient })` after collecting the mapped answer and guest's booking details, before loading times. The helper can also read both values from the current headless payload when called with no argument. It reuses a recent quote for the same inputs and accepts `{ refresh: true }` as a second argument to request a fresh one. A shell that dispatches `es:headless:payload-updated` starts the quote in the background when the answer and matching details are complete. If your UI stores the selected slot separately, clear it and reload availability when the returned `appointment_type_id` changes.
 
 ## Custom Form Webhooks
 Custom-form widgets can send server-side webhook events to an external system without exposing webhook URLs, signing secrets, booking attempt tokens, payment tokens, or form payload templates to the browser.

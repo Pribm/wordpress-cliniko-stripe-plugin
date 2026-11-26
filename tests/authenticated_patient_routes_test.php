@@ -183,6 +183,7 @@ $expectedPublicRoutes = [
     ['v1', '/tyrohealth/sdk-token', 'POST', 'allowSdkToken'],
     ['v1', '/tyrohealth/charge', 'POST', 'allowPublicMutation'],
     ['v1', '/tyrohealth/invoice', 'POST', 'allowPublicMutation'],
+    ['v2', '/booking-attempts/return-policy-quote', 'POST', 'allowPublicMutation'],
     ['v2', '/booking-attempts/preflight', 'POST', 'allowPublicMutation'],
     ['v2', '/booking-attempts/charge-stripe', 'POST', 'allowAttemptMutation'],
     ['v2', '/booking-attempts/confirm-tyro', 'POST', 'allowAttemptMutation'],

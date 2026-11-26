@@ -26,6 +26,15 @@ class BookingAttemptController
         return new WP_REST_Response($this->withoutMeta($result), (int) ($result['status'] ?? 500));
     }
 
+    public function quoteReturnPolicy(WP_REST_Request $request): WP_REST_Response
+    {
+        $body = json_decode($request->get_body(), true) ?: $request->get_params();
+        $result = $this->service->quoteReturnPolicy(is_array($body) ? $body : []);
+        $response = new WP_REST_Response($this->withoutMeta($result), (int) ($result['status'] ?? 500));
+        $response->header('Cache-Control', 'private, no-store');
+        return $response;
+    }
+
     public function preflightAuthenticated(WP_REST_Request $request): WP_REST_Response
     {
         $body = json_decode($request->get_body(), true) ?: $request->get_params();

@@ -10,3 +10,4 @@ node_modules/
 *.zip
 dist
 custom_codes/
+/headless-*.html

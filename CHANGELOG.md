@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-26
+### Added
+- Added configurable return pricing to the Elementor booking widget. A form answer can select a dedicated appointment type when it matches the patient's Cliniko booking history.
+- Guests can qualify for return pricing when their email, first name, last name, and date of birth match a single active patient record.
+
+### Changed
+- The booking form checks the price before checkout, and the server validates the quote before payment. Successful bookings record eligible answers for future return pricing.
+
+### Fixed
+- Patient access code and verification responses now prevent caching.
+
 ## [2.1.2] - 2026-10-29
 ### Fixed
 - Active Stripe booking attempts now use PaymentIntents linked to a reused or created Stripe Customer, with the patient's name, contact details, and address recorded on the Customer.
